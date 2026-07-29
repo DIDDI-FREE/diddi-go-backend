@@ -1,4 +1,16 @@
 services:
+  init-db:
+    extends:
+      file: docker-compose.yml
+      service: app
+    command: alembic upgrade head
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   app:
     ports:
       - "8000:8000"
@@ -8,6 +20,9 @@ services:
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
       - ./tests:/app/tests
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
 
   db:
     ports:
