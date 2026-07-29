@@ -1,0 +1,18 @@
+services:
+  app:
+    ports:
+      - "8000:8000"
+    command: uvicorn app_base.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./app_base:/app/app_base
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+      - ./tests:/app/tests
+
+  db:
+    ports:
+      - "5433:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
