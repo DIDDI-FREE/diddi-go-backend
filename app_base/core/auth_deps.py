@@ -21,6 +21,12 @@ from fastapi.security import OAuth2PasswordBearer
 
 from app_base.core.deps import user_repo
 from app_base.core.errors import ApiError
+from app_base.core.identity import (
+    decode_identity_access_token,
+    fetch_identity_profile,
+    identity_mode_enabled,
+    identity_payload_to_user_model,
+)
 from app_base.core.security import decode_token, user_id_from_token
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.auth.infra.repositories import SqlAlchemyUserRepository
@@ -34,6 +40,11 @@ async def get_current_user(
 ) -> UserModel:
     if not token:
         raise ApiError(401, "TOKEN_MISSING", "Authentification requise.")
+    if identity_mode_enabled():
+        payload = decode_identity_access_token(token)
+        profile = await fetch_identity_profile(token)
+        return identity_payload_to_user_model(payload, profile)
+
     payload = decode_token(token, expected_typ="access")  # 401 TOKEN_EXPIRED / TOKEN_INVALID
     user_id = user_id_from_token(payload)
     user = await repo.find_by_id(user_id)

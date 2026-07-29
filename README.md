@@ -49,6 +49,10 @@ Dans Portainer :
 - renseigner `APP_NAME`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`,
   `DIDDIMAP_BASE_URL`, `POSTGRES_PASSWORD`, `BACKEND_PORT`, `POSTGRES_PORT`,
   `REDIS_PORT` et les autres variables si besoin
+- pour consommer DiddiFreeID en staging, renseigner
+  `IDENTITY_BASE_URL=https://auth-staging.diddifree.com`.
+  `IDENTITY_JWKS_URL` et `IDENTITY_PROFILE_URL` sont dérivées automatiquement,
+  mais restent disponibles si on doit les surcharger.
 - conserver `main` pour la production et `stage` pour QA / UI / intégration
 
 Important :
@@ -105,6 +109,12 @@ app_base/
 
 - Les variables de configuration sont lues depuis l'environnement.
 - Le fichier `.env` n'est pas requis par les stacks livrées ici.
+- Si `IDENTITY_BASE_URL` ou `IDENTITY_JWKS_URL` est défini, DiddiGo vérifie les
+  tokens DiddiFreeID en RS256 via JWKS. Sinon, le mode JWT local reste actif
+  pour dev/tests.
+- DiddiFreeID émet `role=user` pour un utilisateur standard ; DiddiGo le
+  normalise en `passenger` pour ses règles de course. Les rôles `driver` et
+  `admin` restent inchangés.
 - Les ports externes sont configurables via `BACKEND_PORT`, `POSTGRES_PORT`
   et `REDIS_PORT`.
 - Alembic reste propriétaire du DDL.

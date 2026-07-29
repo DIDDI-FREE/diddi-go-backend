@@ -40,5 +40,27 @@ class Settings(BaseSettings):
 
     diddimap_base_url: str = "http://localhost:4000"
 
+    identity_base_url: str | None = None
+    identity_jwks_url: str | None = None
+    identity_issuer: str = "diddifree-id"
+    identity_profile_url: str | None = None
+    identity_service_key: str | None = None
+
+    @property
+    def effective_identity_jwks_url(self) -> str | None:
+        if self.identity_jwks_url:
+            return self.identity_jwks_url
+        if self.identity_base_url:
+            return f"{self.identity_base_url.rstrip('/')}/.well-known/jwks.json"
+        return None
+
+    @property
+    def effective_identity_profile_url(self) -> str | None:
+        if self.identity_profile_url:
+            return self.identity_profile_url
+        if self.identity_base_url:
+            return f"{self.identity_base_url.rstrip('/')}/identity/v1/users/me"
+        return None
+
 
 settings = Settings()
