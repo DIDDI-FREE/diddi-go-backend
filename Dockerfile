@@ -26,7 +26,8 @@ FROM python:3.11-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/opt/venv/bin:$PATH"
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH="/app"
 
 # libpq is needed at runtime by psycopg; the compiler is not.
 RUN apt-get update \
@@ -40,6 +41,8 @@ WORKDIR /app
 COPY app_base ./app_base
 COPY alembic ./alembic
 COPY alembic.ini ./
+COPY docker ./docker
+RUN chmod +x /app/docker/start.sh
 
 USER diddigo
 
@@ -48,4 +51,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD curl -fsS http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "app_base.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "/app/docker/start.sh"]

@@ -39,6 +39,11 @@ Repères locaux :
 Elle est pensée pour recevoir les valeurs dans `Stack > Environment variables`.
 Aucun fichier `.env` n'est nécessaire.
 
+Le démarrage Portainer passe par `docker/start.sh`:
+- attente de la base PostgreSQL
+- `alembic upgrade head`
+- lancement de FastAPI
+
 Dans Portainer :
 - utiliser la stack `docker-compose.portainer.yml`
 - renseigner `APP_NAME`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`,
