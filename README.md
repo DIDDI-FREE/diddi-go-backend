@@ -14,7 +14,6 @@ Backend VTC de DiddiFree : monolithe modulaire FastAPI (modules `auth`, `ride`,
 Prérequis : Python 3.11+, [`uv`](https://docs.astral.sh/uv/), Docker.
 
 ```bash
-cp .env.example .env          # ajuster JWT_SECRET avant toute mise en ligne
 uv sync                       # installe les dépendances (runtime + dev)
 docker compose up -d db redis # PostGIS sur le port 5433, Redis sur 6379
 uv run alembic upgrade head   # crée les schémas auth / ride / payment
@@ -27,12 +26,32 @@ Documentation interactive : <http://localhost:8000/docs> · Santé : `/health`
 > conflit avec une instance PostgreSQL déjà présente sur la machine. À
 > l'intérieur du réseau Docker, les conteneurs communiquent sur 5432.
 
-### Tout dans Docker
+### Docker local
 
 ```bash
-docker compose up --build      # app + db + redis
-docker compose exec app alembic upgrade head
+docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+docker compose -f docker-compose.yml -f docker-compose.local.yml exec app alembic upgrade head
 ```
+
+### Portainer
+
+```bash
+docker stack deploy -c docker-compose.portainer.yml diddigo
+```
+
+Dans Portainer, renseigner les variables d'environnement directement dans
+`Stack > Environment variables`. Aucun fichier `.env` n'est requis.
+`docker-compose.portainer.yml` est la stack autonome pour le déploiement.
+`docker-compose.yml` sert de base commune, et `docker-compose.local.yml`
+apporte le confort du reload et des volumes de développement.
+
+### Convention de branches
+
+- `main` = production
+- `stage` = intégration, QA, UI/UX, validation
+- `feat/*` = branches de travail créées depuis `stage`
+
+Voir [BRANCHING.md](BRANCHING.md).
 
 ---
 
@@ -133,6 +152,14 @@ Deux points d'implémentation :
 
 Un chauffeur en course quitte le vivier (il continue d'émettre sa position
 pour le passager) et y revient à la fin de la course ou à son annulation.
+
+## Git flow
+
+La convention de branches du projet est documentée dans [BRANCHING.md](BRANCHING.md).
+
+- `main` = production
+- `stage` = intégration, QA, UI/UX, tests
+- `feat/*` = branches de travail créées depuis `stage`
 
 ### OTP en développement
 
