@@ -1,6 +1,9 @@
 #!/bin/sh
 set -eu
 
+cd /app
+export PYTHONPATH="/app:${PYTHONPATH:-}"
+
 DB_URL="${DATABASE_URL:?DATABASE_URL must be set}"
 REDIS_URL="${REDIS_URL:?REDIS_URL must be set}"
 JWT_SECRET_VALUE="${JWT_SECRET:?JWT_SECRET must be set}"
@@ -34,5 +37,6 @@ for attempt in range(60):
         time.sleep(2)
 PY
 
-alembic upgrade head
+python -c "import app_base"
+python -m alembic -c /app/alembic.ini upgrade head
 exec uvicorn app_base.main:app --host 0.0.0.0 --port 8000
