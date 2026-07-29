@@ -1,0 +1,35 @@
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtualenvs — the image builds its own at /opt/venv
+.venv/
+venv/
+env/
+
+# VCS
+.git/
+.gitignore
+
+# Secrets — the image must never bake these in; compose passes env at runtime
+.env
+.env.local
+
+# Tests and docs are not needed in the runtime image
+tests/
+*.md
+
+# Editor / OS noise
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

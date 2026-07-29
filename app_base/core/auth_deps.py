@@ -1,0 +1,66 @@
+"""FastAPI dependencies for authentication.
+
+`get_current_user` is the universal protected-route dependency. Routers declare:
+    `current_user: UserModel = Depends(get_current_user)`
+and the framework resolves:
+  1. Bearer token from the `Authorization` header (via `oauth2_scheme`)
+  2. Decodes it → `sub` user_id + `typ=access`
+  3. Loads the User from the DB via `UserRepository`
+  4. Returns the SQLAlchemy row (not the domain entity) — the row is what the
+     service layer passes into the response builder.
+
+Two convenience deps for role gating:
+    `get_current_active_user` — rejects suspended users
+    `require_role(*roles)`     — returns a dep that asserts role
+"""
+
+from __future__ import annotations
+
+from fastapi import Depends
+from fastapi.security import OAuth2PasswordBearer
+
+from app_base.core.deps import user_repo
+from app_base.core.errors import ApiError
+from app_base.core.security import decode_token, user_id_from_token
+from app_base.modules.auth.infra.models import UserModel
+from app_base.modules.auth.infra.repositories import SqlAlchemyUserRepository
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/otp/verify", auto_error=False)
+
+
+async def get_current_user(
+    token: str | None = Depends(oauth2_scheme),
+    repo: SqlAlchemyUserRepository = Depends(user_repo),
+) -> UserModel:
+    if not token:
+        raise ApiError(401, "TOKEN_MISSING", "Authentification requise.")
+    payload = decode_token(token, expected_typ="access")  # 401 TOKEN_EXPIRED / TOKEN_INVALID
+    user_id = user_id_from_token(payload)
+    user = await repo.find_by_id(user_id)
+    if user is None:
+        raise ApiError(401, "TOKEN_INVALID", "Utilisateur introuvable.")
+    if user.status != "active":
+        raise ApiError(403, "USER_SUSPENDED", "Compte suspendu.")
+    return user
+
+
+async def get_current_active_user(
+    user: UserModel = Depends(get_current_user),
+) -> UserModel:
+    if user.status != "active":
+        raise ApiError(403, "USER_SUSPENDED", "Compte suspendu.")
+    return user
+
+
+def require_role(*roles: str):
+    """Factory returning a dependency that enforces the current user's role.
+
+    Usage:
+        @router.get("/admin-only")
+        def admin_only(me: UserModel = Depends(require_role("admin"))): ...
+    """
+    async def _dep(user: UserModel = Depends(get_current_active_user)) -> UserModel:
+        if user.role not in roles:
+            raise ApiError(403, "FORBIDDEN_ROLE", "Rôle insuffisant pour cette action.")
+        return user
+    return _dep

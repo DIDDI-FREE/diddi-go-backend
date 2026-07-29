@@ -1,0 +1,61 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      # Inside the compose network the services resolve by name, so these
+      # override whatever localhost values .env carries for host-side work.
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/diddi_go
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # Source mount for live reload in development. Remove for production
+      # images — the code is already baked into the layer.
+      - ./app_base:/app/app_base
+      - ./alembic:/app/alembic
+    command: uvicorn app_base.main:app --host 0.0.0.0 --port 8000 --reload
+
+  db:
+    # `postgis/postgis` ships PostGIS preinstalled. The vanilla
+    # `postgres:16-alpine` image does not, and `CREATE EXTENSION postgis`
+    # fails during init on it.
+    image: postgis/postgis:16-3.4-alpine
+    environment:
+      POSTGRES_DB: diddi_go
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    # Published on 5433 so a Postgres already running on the host's 5432 is
+    # left alone. Containers still reach each other on 5432 internally.
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d diddi_go"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

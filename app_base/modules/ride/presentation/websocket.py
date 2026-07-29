@@ -1,0 +1,230 @@
+"""WebSocket endpoint — one multiplexed socket per app session.
+
+API contract §4: clients connect once to `/v1/ws?token=<access_token>` and
+everything is dispatched on `event.type`, rather than opening a socket per
+channel. The server never replays missed events — after a reconnect the
+client re-reads `GET /rides/{id}` to resynchronise.
+
+Events, server → passenger:
+    ride.status_changed    {ride_id, status, at}
+    ride.driver_location   {ride_id, location, heading, at}
+    ride.no_driver_found   {ride_id}
+
+Events, server → driver:
+    ride.new_request       {ride_id, pickup, dropoff_address, estimated_fare,
+                            expires_in_seconds}
+
+Events, client → server:
+    driver.location_push   {location: {lat, lng}, heading}
+    ride.subscribe         {ride_id}   — passenger follows one ride
+
+Dispatching a `ride.new_request` to drivers belongs to the matching engine,
+which is deferred (architecture doc §7 step 3). `ConnectionManager` already
+exposes the send methods that engine will call.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections import defaultdict
+from datetime import UTC, datetime
+from typing import Any
+from uuid import UUID
+
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+
+from app_base.core.errors import ApiError
+from app_base.core.security import decode_token, user_id_from_token
+from app_base.shared_kernel.types import GeoPoint
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["ride-ws"])
+
+# Close codes (RFC 6455 application range).
+WS_UNAUTHORIZED = 4401
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+class ConnectionManager:
+    """Tracks live sockets so the server can address a specific passenger,
+    driver, or everyone watching one ride.
+
+    Kept in process memory: correct for the single-process deployment the
+    architecture doc specifies today. When a second app instance appears,
+    this becomes a Redis pub/sub fan-out — the call sites stay identical.
+    """
+
+    def __init__(self) -> None:
+        self._by_user: dict[UUID, set[WebSocket]] = defaultdict(set)
+        self._by_ride: dict[UUID, set[WebSocket]] = defaultdict(set)
+        self._sockets: dict[WebSocket, UUID] = {}
+
+    async def connect(self, websocket: WebSocket, user_id: UUID) -> None:
+        await websocket.accept()
+        self._by_user[user_id].add(websocket)
+        self._sockets[websocket] = user_id
+
+    def disconnect(self, websocket: WebSocket) -> None:
+        user_id = self._sockets.pop(websocket, None)
+        if user_id is not None:
+            self._by_user[user_id].discard(websocket)
+            if not self._by_user[user_id]:
+                del self._by_user[user_id]
+        for ride_id, sockets in list(self._by_ride.items()):
+            sockets.discard(websocket)
+            if not sockets:
+                del self._by_ride[ride_id]
+
+    def subscribe_to_ride(self, websocket: WebSocket, ride_id: UUID) -> None:
+        self._by_ride[ride_id].add(websocket)
+
+    async def send_to_user(self, user_id: UUID, payload: dict[str, Any]) -> None:
+        await self._fan_out(self._by_user.get(user_id, set()), payload)
+
+    async def send_to_ride(self, ride_id: UUID, payload: dict[str, Any]) -> None:
+        await self._fan_out(self._by_ride.get(ride_id, set()), payload)
+
+    async def _fan_out(self, sockets: set[WebSocket], payload: dict[str, Any]) -> None:
+        for websocket in list(sockets):
+            try:
+                await websocket.send_json(payload)
+            except (WebSocketDisconnect, RuntimeError):
+                # The peer vanished mid-send; drop it and keep serving the rest.
+                self.disconnect(websocket)
+
+    # -- typed helpers used by the service layer ----------------------------
+
+    async def broadcast_status_changed(self, ride_id: UUID, status: str) -> None:
+        await self.send_to_ride(
+            ride_id,
+            {"event": "ride.status_changed", "ride_id": str(ride_id), "status": status, "at": _now_iso()},
+        )
+
+    async def broadcast_driver_location(
+        self, ride_id: UUID, location: GeoPoint, heading: int | None = None,
+    ) -> None:
+        await self.send_to_ride(
+            ride_id,
+            {
+                "event": "ride.driver_location",
+                "ride_id": str(ride_id),
+                "location": {"lat": location.lat, "lng": location.lng},
+                "heading": heading,
+                "at": _now_iso(),
+            },
+        )
+
+    async def broadcast_no_driver_found(self, ride_id: UUID) -> None:
+        await self.send_to_ride(
+            ride_id, {"event": "ride.no_driver_found", "ride_id": str(ride_id)},
+        )
+
+    async def send_new_request(self, driver_user_id: UUID, payload: dict[str, Any]) -> None:
+        """Used by the matching engine (deferred) to offer a ride to a driver."""
+        await self.send_to_user(driver_user_id, {"event": "ride.new_request", **payload})
+
+
+manager = ConnectionManager()
+
+
+@router.websocket("/ws")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    token: str | None = Query(default=None),
+) -> None:
+    """Single multiplexed socket. The access token arrives as a query
+    parameter because browsers cannot set headers on a WebSocket handshake."""
+    if not token:
+        await websocket.close(code=WS_UNAUTHORIZED, reason="Missing token")
+        return
+    try:
+        payload = decode_token(token, expected_typ="access")
+        user_id = user_id_from_token(payload)
+    except ApiError as exc:
+        await websocket.close(code=WS_UNAUTHORIZED, reason=exc.code)
+        return
+
+    role = payload.get("role", "passenger")
+    await manager.connect(websocket, user_id)
+
+    # The driver location service lives on app.state (mounted by the lifespan).
+    locations = getattr(websocket.app.state, "driver_locations", None)
+
+    try:
+        while True:
+            message = await websocket.receive_json()
+            await _handle_message(websocket, message, user_id=user_id, role=role, locations=locations)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        logger.exception("WebSocket handler failed for user_id=%s", user_id)
+    finally:
+        if role == "driver" and locations is not None:
+            await locations.go_offline(user_id)
+        manager.disconnect(websocket)
+
+
+async def _handle_message(
+    websocket: WebSocket,
+    message: Any,
+    *,
+    user_id: UUID,
+    role: str,
+    locations: Any,
+) -> None:
+    if not isinstance(message, dict):
+        await websocket.send_json({"event": "error", "code": "MALFORMED_MESSAGE"})
+        return
+
+    event = message.get("event")
+
+    if event == "driver.location_push":
+        if role != "driver":
+            await websocket.send_json({"event": "error", "code": "FORBIDDEN_ROLE"})
+            return
+        location = _parse_location(message.get("location"))
+        if location is None:
+            await websocket.send_json({"event": "error", "code": "INVALID_LOCATION"})
+            return
+        if locations is not None:
+            await locations.update_position(user_id, location)
+        ride_id = message.get("ride_id")
+        if ride_id:
+            try:
+                await manager.broadcast_driver_location(
+                    UUID(str(ride_id)), location, message.get("heading"),
+                )
+            except ValueError:
+                await websocket.send_json({"event": "error", "code": "INVALID_RIDE_ID"})
+                return
+        await websocket.send_json({"event": "ack", "received_event": event})
+        return
+
+    if event == "ride.subscribe":
+        try:
+            ride_id = UUID(str(message.get("ride_id")))
+        except (TypeError, ValueError):
+            await websocket.send_json({"event": "error", "code": "INVALID_RIDE_ID"})
+            return
+        manager.subscribe_to_ride(websocket, ride_id)
+        await websocket.send_json(
+            {"event": "ack", "received_event": event, "ride_id": str(ride_id)},
+        )
+        return
+
+    # Unknown events are acknowledged and ignored rather than fatal — the
+    # contract lets the API add event types without breaking older clients.
+    await websocket.send_json({"event": "ignored", "received_event": event})
+
+
+def _parse_location(raw: Any) -> GeoPoint | None:
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return GeoPoint(lat=float(raw["lat"]), lng=float(raw["lng"]))
+    except (KeyError, TypeError, ValueError):
+        return None

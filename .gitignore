@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments & packaging
+.venv/
+*.whl
+
+# uv lockfile is committed (dependency lock), local install artifacts aren't
+
+# Env files — .env itself is never committed; .env.example is.
+.env
+.env.local
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker-compose persistent volumes (local dev)
+.pgdata/
+
+# Logs
+*.log
