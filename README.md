@@ -27,8 +27,9 @@ Application : <http://localhost:8000/docs>
 Santé : <http://localhost:8000/health>
 
 Repères locaux :
-- PostgreSQL exposé sur `5433`
-- Redis exposé sur `6379`
+- Backend exposé sur `18000`
+- PostgreSQL exposé sur `15432`
+- Redis exposé sur `16379`
 
 ---
 
@@ -41,7 +42,8 @@ Aucun fichier `.env` n'est nécessaire.
 Dans Portainer :
 - utiliser la stack `docker-compose.portainer.yml`
 - renseigner `APP_NAME`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`,
-  `DIDDIMAP_BASE_URL`, `POSTGRES_PASSWORD` et les autres variables si besoin
+  `DIDDIMAP_BASE_URL`, `POSTGRES_PASSWORD`, `BACKEND_PORT`, `POSTGRES_PORT`,
+  `REDIS_PORT` et les autres variables si besoin
 - conserver `main` pour la production et `stage` pour QA / UI / intégration
 
 Important :
@@ -51,6 +53,8 @@ Important :
 - `depends_on` a été volontairement évité dans la stack Portainer, car il n'est
   pas fiable selon le mode de déploiement ; le backend vérifie lui-même sa
   connectivité au démarrage via le lifespan.
+- Redis ne publie pas de port hôte dans Portainer, pour limiter les collisions
+  sur un VPS déjà chargé.
 
 ---
 
@@ -96,4 +100,6 @@ app_base/
 
 - Les variables de configuration sont lues depuis l'environnement.
 - Le fichier `.env` n'est pas requis par les stacks livrées ici.
+- Les ports externes sont configurables via `BACKEND_PORT`, `POSTGRES_PORT`
+  et `REDIS_PORT`.
 - Alembic reste propriétaire du DDL.
