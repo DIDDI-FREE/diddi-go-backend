@@ -1,18 +1,33 @@
 services:
+  init-db:
+    extends:
+      file: docker-compose.yml
+      service: app
+    command: alembic upgrade head
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   app:
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-18000}:8000"
     command: uvicorn app_base.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ./app_base:/app/app_base
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
       - ./tests:/app/tests
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
 
   db:
     ports:
-      - "5433:5432"
+      - "${POSTGRES_PORT:-15432}:5432"
 
   redis:
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-16379}:6379"
