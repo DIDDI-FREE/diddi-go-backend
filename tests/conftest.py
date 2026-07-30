@@ -42,6 +42,10 @@ os.environ.setdefault("OTP_RATE_LIMIT_SECONDS", "0")
 os.environ.setdefault("DIDDIMAP_BASE_URL", "http://127.0.0.1:9")
 
 
+def _is_unit_only_session(request: pytest.FixtureRequest) -> bool:
+    return bool(request.session.items) and all(item.get_closest_marker("unit") for item in request.session.items)
+
+
 def _recreate_test_database() -> None:
     """Drop + create `diddi_go_test`, install extensions and schemas."""
     import psycopg
@@ -76,14 +80,18 @@ def _run_migrations() -> None:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def database() -> Iterator[None]:
+def database(request: pytest.FixtureRequest) -> Iterator[None]:
+    if _is_unit_only_session(request):
+        yield
+        return
+
     _recreate_test_database()
     _run_migrations()
     yield
 
 
 @pytest.fixture(autouse=True)
-async def clean_redis() -> AsyncIterator[None]:
+async def clean_redis(request: pytest.FixtureRequest) -> AsyncIterator[None]:
     """Wipe matching state between tests.
 
     Driver positions, availability markers and in-flight offers all live in
@@ -91,6 +99,10 @@ async def clean_redis() -> AsyncIterator[None]:
     in one test is still a matching candidate in the next, making results
     depend on execution order.
     """
+    if request.node.get_closest_marker("unit"):
+        yield
+        return
+
     from app_base.core.redis import create_redis_pool
     from app_base.core.settings import settings
 

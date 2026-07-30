@@ -48,7 +48,12 @@ Dans Portainer :
 - utiliser la stack `docker-compose.portainer.yml`
 - renseigner `APP_NAME`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`,
   `DIDDIMAP_BASE_URL`, `POSTGRES_PASSWORD`, `BACKEND_PORT`, `POSTGRES_PORT`,
-  `REDIS_PORT` et les autres variables si besoin
+  `REDIS_PORT`, `CORS_ORIGINS` et les autres variables si besoin
+- pour autoriser les frontends de test, renseigner `CORS_ORIGINS` avec une
+  liste sÃ©parÃ©e par des virgules, par exemple
+  `https://go-staging.diddifree.com,https://qa.diddifree.com`
+- `localhost` et `127.0.0.1` sont autorisÃ©s sur tous les ports par dÃ©faut via
+  `CORS_ORIGIN_REGEX`, ce qui couvre les testeurs en local
 - pour consommer DiddiFreeID en staging, renseigner
   `IDENTITY_BASE_URL=https://auth-staging.diddifree.com`.
   `IDENTITY_JWKS_URL` et `IDENTITY_PROFILE_URL` sont dérivées automatiquement,
@@ -84,6 +89,29 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml up -d db redis
 uv run pytest
 uv run ruff check .
 ```
+
+---
+
+## IntÃ©gration DiddiMap Core
+
+DiddiGo ne charge pas DiddiMap Core comme librairie Python. Il le consomme comme
+service HTTP via `DIDDIMAP_BASE_URL`.
+
+Au dÃ©marrage, `app_base.core.lifespan` crÃ©e un `DiddiMapRoutingClient` avec
+`settings.diddimap_base_url`, puis le monte dans `app.state.diddimap`. Les
+services de course le rÃ©cupÃ¨rent ensuite via l'injection `get_diddimap`.
+
+Configuration recommandÃ©e :
+- staging / Portainer : `DIDDIMAP_BASE_URL=http://abidjanmaps-backend-staging.diddifree.com`
+- local : garder la mÃªme URL staging, sauf si un DiddiMap local tourne vraiment
+  sur la machine de dev
+- local avec DiddiMap lancÃ© sur la machine hÃ´te :
+  `DIDDIMAP_BASE_URL=http://localhost:4000`
+- docker compose avec DiddiMap dans le mÃªme rÃ©seau : utiliser son vrai nom de
+  service, par exemple `DIDDIMAP_BASE_URL=http://abidjanmaps-backend:4000`
+
+Si DiddiMap Core est indisponible, l'estimation de course ne casse pas :
+DiddiGo retombe sur une estimation locale par coordonnÃ©es.
 
 ---
 
