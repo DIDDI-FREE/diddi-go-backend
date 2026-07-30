@@ -13,7 +13,7 @@ def test_cors_origins_accept_comma_separated_environment_value():
         cors_origins="https://go-staging.diddifree.com, http://localhost:5173",
     )
 
-    assert settings.cors_origins == ["https://go-staging.diddifree.com", "http://localhost:5173"]
+    assert settings.cors_origin_list == ["https://go-staging.diddifree.com", "http://localhost:5173"]
 
 
 def test_cors_localhost_regex_is_enabled_by_default():

@@ -11,7 +11,6 @@ Instantiated at module import time as `settings` — importers do
 
 from __future__ import annotations
 
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,7 +25,7 @@ class Settings(BaseSettings):
     app_name: str = "DiddiGo"
     environment: str = "development"
     api_prefix: str = "/v1"
-    cors_origins: list[str] = []
+    cors_origins: str = ""
     cors_origin_regex: str | None = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
     # The runtime async engine uses `database_url` (asyncpg driver).
@@ -49,14 +48,9 @@ class Settings(BaseSettings):
     identity_profile_url: str | None = None
     identity_service_key: str | None = None
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, value: object) -> object:
-        if value is None or value == "":
-            return []
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        return value
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
     def effective_identity_jwks_url(self) -> str | None:
