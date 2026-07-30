@@ -7,6 +7,8 @@ services:
       APP_NAME: ${APP_NAME:-DiddiGo}
       APP_ENV: ${APP_ENV:-development}
       API_PREFIX: ${API_PREFIX:-/v1}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      CORS_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:-^https?://(localhost|127\.0\.0\.1)(:\d+)?$}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/diddi_go}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-prod-at-least-32-characters-long}
@@ -14,7 +16,7 @@ services:
       JWT_REFRESH_LIFETIME_DAYS: ${JWT_REFRESH_LIFETIME_DAYS:-30}
       OTP_RATE_LIMIT_SECONDS: ${OTP_RATE_LIMIT_SECONDS:-60}
       OTP_CODE_LIFETIME_SECONDS: ${OTP_CODE_LIFETIME_SECONDS:-300}
-      DIDDIMAP_BASE_URL: ${DIDDIMAP_BASE_URL:-http://diddimap:4000}
+      DIDDIMAP_BASE_URL: ${DIDDIMAP_BASE_URL:-http://abidjanmaps-backend-staging.diddifree.com}
       IDENTITY_BASE_URL: ${IDENTITY_BASE_URL:-}
       IDENTITY_JWKS_URL: ${IDENTITY_JWKS_URL:-}
       IDENTITY_ISSUER: ${IDENTITY_ISSUER:-diddifree-id}
