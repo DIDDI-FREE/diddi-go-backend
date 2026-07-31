@@ -11,11 +11,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
-from app_base.core.auth_deps import get_current_user, require_role
+from app_base.core.auth_deps import get_current_user, require_business_driver
 from app_base.core.deps import payment_service
+from app_base.core.errors import ApiError
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.payment.application.services import PaymentService
 from app_base.modules.payment.presentation.schemas import CashConfirmationRequest
+from app_base.modules.ride.domain.entities import DriverProfile
 
 router = APIRouter(prefix="/payments", tags=["payment"])
 
@@ -25,12 +27,15 @@ async def confirm_cash(
     ride_id: UUID,
     payload: CashConfirmationRequest,
     service: PaymentService = Depends(payment_service),
-    current_user: UserModel = Depends(require_role("driver")),
+    current_user: UserModel = Depends(get_current_user),
+    driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
+    if driver_profile is None:
+        raise ApiError(403, "DRIVER_PROFILE_REQUIRED", "Un profil chauffeur est requis pour encaisser.")
     return await service.confirm_cash(
         ride_id,
         Decimal(payload.amount_collected),
-        collected_by=current_user.id,
+        collected_by=driver_profile.id,
     )
 
 

@@ -12,10 +12,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from app_base.core.auth_deps import require_role
+from app_base.core.auth_deps import get_current_active_user, require_business_driver
 from app_base.core.deps import driver_service, get_driver_locations
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.ride.application.driver_service import DriverService
+from app_base.modules.ride.domain.entities import DriverProfile
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.presentation.driver_schemas import (
     DriverProfileCreateRequest,
@@ -31,7 +32,7 @@ router = APIRouter(prefix="/drivers", tags=["driver"])
 async def create_profile(
     payload: DriverProfileCreateRequest,
     service: DriverService = Depends(driver_service),
-    current_user: UserModel = Depends(require_role("driver")),
+    current_user: UserModel = Depends(get_current_active_user),
 ) -> dict:
     return await service.create_profile(
         user_id=current_user.id,
@@ -43,7 +44,7 @@ async def create_profile(
 async def register_vehicle(
     payload: VehicleCreateRequest,
     service: DriverService = Depends(driver_service),
-    current_user: UserModel = Depends(require_role("driver")),
+    current_user: UserModel = Depends(get_current_active_user),
 ) -> dict:
     return await service.register_vehicle(
         user_id=current_user.id,
@@ -58,7 +59,7 @@ async def register_vehicle(
 @router.get("/me")
 async def get_my_profile(
     service: DriverService = Depends(driver_service),
-    current_user: UserModel = Depends(require_role("driver")),
+    current_user: UserModel = Depends(get_current_active_user),
 ) -> dict:
     return await service.get_profile(current_user.id)
 
@@ -68,7 +69,8 @@ async def go_online(
     payload: GoOnlineRequest,
     service: DriverService = Depends(driver_service),
     locations: RedisDriverLocationService = Depends(get_driver_locations),
-    current_user: UserModel = Depends(require_role("driver")),
+    current_user: UserModel = Depends(get_current_active_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
     """Enter the matching pool. Rejected unless the driver is verified and
     has an active vehicle — matching must never offer a ride to a driver who
@@ -88,7 +90,8 @@ async def go_online(
 @router.post("/offline")
 async def go_offline(
     locations: RedisDriverLocationService = Depends(get_driver_locations),
-    current_user: UserModel = Depends(require_role("driver")),
+    current_user: UserModel = Depends(get_current_active_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
     await locations.go_offline(current_user.id)
     return {"status": "offline"}

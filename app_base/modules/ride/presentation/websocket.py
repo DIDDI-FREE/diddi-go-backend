@@ -33,8 +33,16 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
+from app_base.core.database import async_session_factory
 from app_base.core.errors import ApiError
+from app_base.core.identity import (
+    decode_identity_access_token,
+    identity_mode_enabled,
+    user_id_from_identity_payload,
+)
 from app_base.core.security import decode_token, user_id_from_token
+from app_base.modules.ride.domain.entities import DriverStatus
+from app_base.modules.ride.infra.repositories import SqlAlchemyDriverProfileRepository
 from app_base.shared_kernel.types import GeoPoint
 
 logger = logging.getLogger(__name__)
@@ -131,6 +139,21 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+@router.get("/ws", status_code=426)
+def websocket_upgrade_required() -> dict[str, Any]:
+    """Helpful diagnostic when a proxy/client sends plain HTTP to the socket.
+
+    A proper WebSocket request reaches `websocket_endpoint`; a normal GET would
+    otherwise be a confusing 404 because HTTP and WebSocket routes are distinct
+    ASGI scopes.
+    """
+    return {
+        "code": "WEBSOCKET_UPGRADE_REQUIRED",
+        "message": "Use ws:// or wss:// with an Upgrade: websocket handshake.",
+        "path": "/v1/ws?token=<access_token>",
+    }
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -142,13 +165,11 @@ async def websocket_endpoint(
         await websocket.close(code=WS_UNAUTHORIZED, reason="Missing token")
         return
     try:
-        payload = decode_token(token, expected_typ="access")
-        user_id = user_id_from_token(payload)
+        user_id, role = _decode_ws_access_token(token)
     except ApiError as exc:
         await websocket.close(code=WS_UNAUTHORIZED, reason=exc.code)
         return
 
-    role = payload.get("role", "passenger")
     await manager.connect(websocket, user_id)
 
     # The driver location service lives on app.state (mounted by the lifespan).
@@ -168,6 +189,19 @@ async def websocket_endpoint(
         manager.disconnect(websocket)
 
 
+def _decode_ws_access_token(token: str) -> tuple[UUID, str]:
+    if identity_mode_enabled():
+        payload = decode_identity_access_token(token)
+        return user_id_from_identity_payload(payload), _normalise_role(payload.get("role"))
+
+    payload = decode_token(token, expected_typ="access")
+    return user_id_from_token(payload), _normalise_role(payload.get("role"))
+
+
+def _normalise_role(role: object) -> str:
+    return "passenger" if role in {None, "user"} else str(role)
+
+
 async def _handle_message(
     websocket: WebSocket,
     message: Any,
@@ -183,7 +217,7 @@ async def _handle_message(
     event = message.get("event")
 
     if event == "driver.location_push":
-        if role != "driver":
+        if role not in {"admin", "driver"} and not await _has_active_driver_profile(user_id):
             await websocket.send_json({"event": "error", "code": "FORBIDDEN_ROLE"})
             return
         location = _parse_location(message.get("location"))
@@ -228,3 +262,9 @@ def _parse_location(raw: Any) -> GeoPoint | None:
         return GeoPoint(lat=float(raw["lat"]), lng=float(raw["lng"]))
     except (KeyError, TypeError, ValueError):
         return None
+
+
+async def _has_active_driver_profile(user_id: UUID) -> bool:
+    async with async_session_factory() as session:
+        profile = await SqlAlchemyDriverProfileRepository(session).find_by_user_id(user_id)
+    return profile is not None and profile.status is DriverStatus.ACTIVE

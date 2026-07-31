@@ -115,6 +115,21 @@ DiddiGo retombe sur une estimation locale par coordonnÃ©es.
 
 ---
 
+## WebSocket
+
+Le temps rÃ©el des courses passe par :
+
+```text
+wss://<host>/v1/ws?token=<access_token>
+```
+
+Un appel HTTP classique sur `/v1/ws` retourne `426 WEBSOCKET_UPGRADE_REQUIRED`.
+Si les logs affichent `GET /v1/ws ... 404` ou `426`, le client/proxy n'a pas
+envoyÃ© un vrai handshake WebSocket. Avec Nginx Proxy Manager, activer
+`Websockets Support` sur le proxy host DiddiGo.
+
+---
+
 ## Architecture
 
 Monolithe modulaire : chaque module métier est une tranche verticale autonome
