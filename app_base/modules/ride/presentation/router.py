@@ -18,13 +18,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 
-from app_base.core.auth_deps import get_current_user, require_role
+from app_base.core.auth_deps import get_current_user, require_business_driver
 from app_base.core.deps import matching_service, ride_service
 from app_base.core.errors import ApiError
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.ride.application.matching_service import MatchingService
 from app_base.modules.ride.application.services import RideService, iso_utc, ride_creation_payload
-from app_base.modules.ride.domain.entities import RideStatus
+from app_base.modules.ride.domain.entities import DriverProfile, RideStatus
 from app_base.modules.ride.infra.offer_store import OFFER_TTL_SECONDS
 from app_base.modules.ride.presentation.schemas import (
     PricingEstimateRequest,
@@ -104,7 +104,8 @@ async def create_ride(
 async def accept_ride(
     ride_id: UUID,
     matching: MatchingService = Depends(matching_service),
-    current_user: UserModel = Depends(require_role("driver")),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
     """Driver accepts the ride they were offered (API contract §4).
 
@@ -127,7 +128,8 @@ async def decline_ride(
     ride_id: UUID,
     matching: MatchingService = Depends(matching_service),
     service: RideService = Depends(ride_service),
-    current_user: UserModel = Depends(require_role("driver")),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
     """Driver declines; the offer moves to the next-nearest candidate."""
     next_driver = await matching.decline(ride_id, current_user.id)
@@ -194,8 +196,9 @@ async def update_status(
     service: RideService = Depends(ride_service),
     matching: MatchingService = Depends(matching_service),
     current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
-    if current_user.role != "driver":
+    if current_user.role != "admin" and _driver_profile is None:
         raise ApiError(403, "FORBIDDEN_ROLE", "Seul le chauffeur peut mettre à jour l'état.")
     try:
         new_status = RideStatus(payload.status)

@@ -1,5 +1,5 @@
-from fastapi.middleware.cors import CORSMiddleware
 import pytest
+from fastapi.middleware.cors import CORSMiddleware
 
 from app_base.core.settings import Settings
 from app_base.main import app
