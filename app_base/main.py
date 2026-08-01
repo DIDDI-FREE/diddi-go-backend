@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app_base.core.errors import ApiError, api_error_handler
 from app_base.core.lifespan import lifespan
+from app_base.core.request_logging import RequestLoggingMiddleware
 from app_base.core.settings import settings
 from app_base.modules.auth.presentation.router import router as auth_router
 from app_base.modules.payment.presentation.router import router as payment_router
@@ -12,6 +13,7 @@ from app_base.modules.ride.presentation.router import router as ride_router
 from app_base.modules.ride.presentation.websocket import router as ride_ws_router
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,

@@ -16,7 +16,7 @@ Two convenience deps for role gating:
 
 from __future__ import annotations
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 
 from app_base.core.deps import driver_profile_repo, user_repo
@@ -37,6 +37,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/otp/verify", auto_error=
 
 
 async def get_current_user(
+    request: Request,
     token: str | None = Depends(oauth2_scheme),
     repo: SqlAlchemyUserRepository = Depends(user_repo),
 ) -> UserModel:
@@ -47,6 +48,7 @@ async def get_current_user(
         profile = await fetch_identity_profile(token)
         user = identity_payload_to_user_model(payload, profile)
         await _upsert_identity_shadow_user(user, repo)
+        request.state.current_user = user
         return user
 
     payload = decode_token(token, expected_typ="access")  # 401 TOKEN_EXPIRED / TOKEN_INVALID
@@ -56,6 +58,7 @@ async def get_current_user(
         raise ApiError(401, "TOKEN_INVALID", "Utilisateur introuvable.")
     if user.status != "active":
         raise ApiError(403, "USER_SUSPENDED", "Compte suspendu.")
+    request.state.current_user = user
     return user
 
 

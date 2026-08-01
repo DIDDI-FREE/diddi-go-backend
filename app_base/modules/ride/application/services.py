@@ -9,6 +9,7 @@ and ratings.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -33,6 +34,8 @@ from app_base.modules.ride.domain.interfaces import (
 )
 from app_base.shared_kernel.contracts.routing import RoutingProvider
 from app_base.shared_kernel.types import GeoPoint
+
+logger = logging.getLogger(__name__)
 
 # Default formula (XOF) — used only when no pricing rule has been seeded for
 # the city/category. Geographic data must still come from DiddiMap.
@@ -156,7 +159,19 @@ class RideService:
         ride = await self.ride_repo.find_by_id(ride_id)
         if ride is None:
             raise ApiError(404, "RIDE_NOT_FOUND", "Aucune course trouvée avec cet identifiant.")
-        if ride.passenger_user_id != actor_user_id and actor_role != "driver" and actor_role != "admin":
+
+        is_admin = actor_role == "admin"
+        is_passenger = ride.passenger_user_id == actor_user_id
+        is_assigned_driver = await self._is_assigned_driver(ride, actor_user_id)
+        if not is_passenger and not is_assigned_driver and not is_admin:
+            logger.warning(
+                "ride_detail_denied ride_id=%s actor_user_id=%s actor_role=%s passenger_user_id=%s driver_id=%s",
+                ride_id,
+                actor_user_id,
+                actor_role,
+                ride.passenger_user_id,
+                ride.driver_id,
+            )
             raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Cette course ne vous appartient pas.")
         driver = await self._driver_payload(ride)
         return _ride_detail_payload(ride, driver=driver)
@@ -213,11 +228,26 @@ class RideService:
         page: int = 1,
         page_size: int = 20,
     ) -> dict:
-        # Default filter: scope to the caller's rides. Admins can pass a
-        # different passenger_user_id / driver_id to browse.
-        if actor_role not in {"admin", "driver"}:
+        actor_role = _normalise_actor_role(actor_role)
+
+        # Default filter: scope to the caller's rides. Admins can pass explicit
+        # filters to browse globally. DiddiAuth users become business drivers
+        # through ride.driver_profiles, not through the token role.
+        if actor_role == "driver" and driver_id is None:
+            driver_id = await self._driver_profile_id_for_user(actor_user_id)
+            if driver_id is None:
+                passenger_user_id = None
+                rides: list[Ride] = []
+                total = 0
+                logger.info(
+                    "ride_list actor_user_id=%s actor_role=driver driver_profile_id=None total=0",
+                    actor_user_id,
+                )
+                return _paginated_rides(rides, total, page=page, page_size=page_size)
+        elif actor_role != "admin":
             passenger_user_id = actor_user_id
             driver_id = None
+
         rides, total = await self.ride_repo.list_by(
             passenger_user_id=passenger_user_id,
             driver_id=driver_id,
@@ -227,11 +257,19 @@ class RideService:
             page=page,
             page_size=page_size,
         )
-        total_pages = max(1, (total + page_size - 1) // page_size)
-        return {
-            "data": [_ride_summary_payload(r) for r in rides],
-            "pagination": {"page": page, "page_size": page_size, "total_items": total, "total_pages": total_pages},
-        }
+        logger.info(
+            "ride_list actor_user_id=%s actor_role=%s passenger_user_id=%s "
+            "driver_id=%s status=%s total=%s page=%s page_size=%s",
+            actor_user_id,
+            actor_role,
+            passenger_user_id,
+            driver_id,
+            status.value if status else None,
+            total,
+            page,
+            page_size,
+        )
+        return _paginated_rides(rides, total, page=page, page_size=page_size)
 
     async def update_status(
         self,
@@ -260,7 +298,7 @@ class RideService:
             await self.ride_repo.record_status_transition(transition)
         return _ride_detail_payload(ride, driver=None)
 
-    async def cancel(self, ride_id: UUID, reason: str, *, actor_role: str) -> dict:
+    async def cancel(self, ride_id: UUID, reason: str, *, actor_user_id: UUID, actor_role: str) -> dict:
         if reason not in VALID_CANCEL_REASONS:
             raise ApiError(422, "INVALID_CANCEL_REASON", "Motif d'annulation invalide.")
         ride = await self.ride_repo.find_by_id(ride_id)
@@ -276,8 +314,10 @@ class RideService:
             raise ApiError(
                 409, "RIDE_NOT_CANCELLABLE", "Cette course n'a pas trouvé de chauffeur.",
             )
+        is_driver = actor_role == "driver" or await self._is_assigned_driver(ride, actor_user_id)
         new_status = (
-            RideStatus.CANCELLED_BY_DRIVER if reason == CancelReason.DRIVER_UNAVAILABLE.value or actor_role == "driver"
+            RideStatus.CANCELLED_BY_DRIVER
+            if reason == CancelReason.DRIVER_UNAVAILABLE.value or is_driver
             else RideStatus.CANCELLED_BY_PASSENGER
         )
         ride.transition(new_status, metadata={"reason": reason})
@@ -316,6 +356,17 @@ class RideService:
         await self.ride_repo.save_rating(rating_entity)
         return {"id": str(rating_entity.id), "ride_id": str(ride_id), "rating": rating}
 
+    async def _driver_profile_id_for_user(self, user_id: UUID) -> UUID | None:
+        if self.driver_repo is None:
+            return None
+        profile = await self.driver_repo.find_by_user_id(user_id)
+        return profile.id if profile is not None else None
+
+    async def _is_assigned_driver(self, ride: Ride, user_id: UUID) -> bool:
+        if ride.driver_id is None:
+            return False
+        return ride.driver_id == await self._driver_profile_id_for_user(user_id)
+
 
 # ---------------------------------------------------------------------------
 # Payloads (private)
@@ -340,6 +391,18 @@ def _ride_summary_payload(ride: Ride) -> dict:
         "pickup_address": ride.pickup_address,
         "dropoff_address": ride.dropoff_address,
     }
+
+
+def _paginated_rides(rides: list[Ride], total: int, *, page: int, page_size: int) -> dict:
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    return {
+        "data": [_ride_summary_payload(r) for r in rides],
+        "pagination": {"page": page, "page_size": page_size, "total_items": total, "total_pages": total_pages},
+    }
+
+
+def _normalise_actor_role(role: str) -> str:
+    return "passenger" if role in {"user", "passenger"} else role
 
 
 def _ride_detail_payload(ride: Ride, driver: dict | None) -> dict:

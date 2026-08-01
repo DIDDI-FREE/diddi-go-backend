@@ -251,6 +251,7 @@ async def cancel_ride(
     result = await service.cancel(
         ride_id,
         payload.reason,
+        actor_user_id=current_user.id,
         actor_role=current_user.role,
     )
     # Frees an assigned driver and drops any outstanding offer, so a cancelled
