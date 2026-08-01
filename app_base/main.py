@@ -7,6 +7,7 @@ from app_base.core.settings import settings
 from app_base.modules.auth.presentation.router import router as auth_router
 from app_base.modules.payment.presentation.router import router as payment_router
 from app_base.modules.ride.presentation.driver_router import router as driver_router
+from app_base.modules.ride.presentation.router import places_router
 from app_base.modules.ride.presentation.router import router as ride_router
 from app_base.modules.ride.presentation.websocket import router as ride_ws_router
 
@@ -22,6 +23,7 @@ app.add_middleware(
 app.add_exception_handler(ApiError, api_error_handler)
 
 app.include_router(auth_router, prefix="/v1")
+app.include_router(places_router, prefix="/v1")
 app.include_router(ride_router, prefix="/v1")
 app.include_router(driver_router, prefix="/v1")
 app.include_router(payment_router, prefix="/v1")
