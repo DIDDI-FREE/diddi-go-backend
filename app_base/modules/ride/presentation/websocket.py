@@ -45,7 +45,8 @@ from app_base.modules.ride.domain.entities import DriverStatus
 from app_base.modules.ride.infra.repositories import SqlAlchemyDriverProfileRepository
 from app_base.shared_kernel.types import GeoPoint
 
-logger = logging.getLogger(__name__)
+# Uvicorn wires this logger to the Docker console.
+logger = logging.getLogger("uvicorn.error")
 
 router = APIRouter(tags=["ride-ws"])
 
@@ -91,10 +92,24 @@ class ConnectionManager:
         self._by_ride[ride_id].add(websocket)
 
     async def send_to_user(self, user_id: UUID, payload: dict[str, Any]) -> None:
-        await self._fan_out(self._by_user.get(user_id, set()), payload)
+        sockets = self._by_user.get(user_id, set())
+        logger.info(
+            "ws_send_to_user user_id=%s socket_count=%s event=%s",
+            user_id,
+            len(sockets),
+            payload.get("event"),
+        )
+        await self._fan_out(sockets, payload)
 
     async def send_to_ride(self, ride_id: UUID, payload: dict[str, Any]) -> None:
-        await self._fan_out(self._by_ride.get(ride_id, set()), payload)
+        sockets = self._by_ride.get(ride_id, set())
+        logger.info(
+            "ws_send_to_ride ride_id=%s socket_count=%s event=%s",
+            ride_id,
+            len(sockets),
+            payload.get("event"),
+        )
+        await self._fan_out(sockets, payload)
 
     async def _fan_out(self, sockets: set[WebSocket], payload: dict[str, Any]) -> None:
         for websocket in list(sockets):
@@ -133,6 +148,12 @@ class ConnectionManager:
 
     async def send_new_request(self, driver_user_id: UUID, payload: dict[str, Any]) -> None:
         """Used by the matching engine (deferred) to offer a ride to a driver."""
+        logger.info(
+            "ws_send_new_request driver_user_id=%s ride_id=%s socket_count=%s",
+            driver_user_id,
+            payload.get("ride_id"),
+            len(self._by_user.get(driver_user_id, set())),
+        )
         await self.send_to_user(driver_user_id, {"event": "ride.new_request", **payload})
 
 

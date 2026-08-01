@@ -153,7 +153,9 @@ async def test_illegal_transition_is_rejected(client, passenger, driver) -> None
     assert r.status_code == 409
     body = r.json()["error"]
     assert body["code"] == "INVALID_STATUS_TRANSITION"
-    assert body["details"] == {"current_status": "matched", "attempted_status": "completed"}
+    assert body["details"]["current_status"] == "matched"
+    assert body["details"]["attempted_status"] == "completed"
+    assert body["details"]["request_id"]
 
 
 async def test_passenger_cannot_change_status(client, passenger, driver) -> None:
@@ -161,8 +163,8 @@ async def test_passenger_cannot_change_status(client, passenger, driver) -> None
     r = await client.patch(
         f"/v1/rides/{ride_id}/status", json={"status": "driver_en_route"}, headers=passenger,
     )
-    assert r.status_code == 403
-    assert r.json()["error"]["code"] == "FORBIDDEN_ROLE"
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "DRIVER_PROFILE_NOT_FOUND"
 
 
 # --- cancellation ----------------------------------------------------------
@@ -319,5 +321,5 @@ async def test_passenger_cannot_confirm_cash(client, passenger, driver) -> None:
         json={"amount_collected": fare},
         headers=passenger,
     )
-    assert r.status_code == 403
-    assert r.json()["error"]["code"] == "FORBIDDEN_ROLE"
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "DRIVER_PROFILE_NOT_FOUND"

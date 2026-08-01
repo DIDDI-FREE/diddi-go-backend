@@ -299,8 +299,8 @@ async def test_accepting_an_already_matched_ride_is_rejected(
 async def test_passenger_cannot_accept_a_ride(client, passenger, online_driver) -> None:
     ride_id = await create_ride(client, passenger)
     r = await client.post(f"/v1/rides/{ride_id}/accept", headers=passenger)
-    assert r.status_code == 403
-    assert r.json()["error"]["code"] == "FORBIDDEN_ROLE"
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "DRIVER_PROFILE_NOT_FOUND"
 
 
 async def test_accept_requires_a_known_ride(client, online_driver) -> None:

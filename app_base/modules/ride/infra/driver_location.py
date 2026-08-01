@@ -29,7 +29,8 @@ from redis.asyncio import Redis
 
 from app_base.shared_kernel.types import GeoPoint
 
-logger = logging.getLogger(__name__)
+# Uvicorn wires this logger to the Docker console.
+logger = logging.getLogger("uvicorn.error")
 
 POSITIONS_KEY = "drivers:positions"
 SEEN_KEY_PREFIX = "drivers:seen:"
@@ -67,6 +68,13 @@ class RedisDriverLocationService:
         pipe.geoadd(POSITIONS_KEY, (location.lng, location.lat, member))
         pipe.set(f"{SEEN_KEY_PREFIX}{member}", "1", ex=self.presence_ttl_seconds)
         await pipe.execute()
+        logger.info(
+            "driver_position_updated user_id=%s lat=%s lng=%s presence_ttl_seconds=%s",
+            driver_id,
+            location.lat,
+            location.lng,
+            self.presence_ttl_seconds,
+        )
 
     async def set_available(self, driver_id: UUID, *, available: bool) -> None:
         """Add or remove a driver from the pool of candidates for new rides.
@@ -77,8 +85,14 @@ class RedisDriverLocationService:
         key = f"{AVAILABLE_KEY_PREFIX}{driver_id}"
         if available:
             await self.redis.set(key, "1", ex=self.availability_ttl_seconds)
+            logger.info(
+                "driver_available_set user_id=%s available=true availability_ttl_seconds=%s",
+                driver_id,
+                self.availability_ttl_seconds,
+            )
         else:
             await self.redis.delete(key)
+            logger.info("driver_available_set user_id=%s available=false", driver_id)
 
     async def is_available(self, driver_id: UUID) -> bool:
         return bool(await self.redis.exists(f"{AVAILABLE_KEY_PREFIX}{driver_id}"))
@@ -124,6 +138,14 @@ class RedisDriverLocationService:
             count=fetch,
         )
         if not candidates:
+            logger.info(
+                "driver_geo_search_empty lat=%s lng=%s radius_km=%s limit=%s require_available=%s",
+                location.lat,
+                location.lng,
+                radius_km,
+                limit,
+                require_available,
+            )
             return []
 
         members = [c if isinstance(c, str) else c.decode() for c in candidates]
@@ -133,12 +155,27 @@ class RedisDriverLocationService:
             if require_available:
                 pipe.exists(f"{AVAILABLE_KEY_PREFIX}{member}")
         flags = await pipe.execute()
+        logger.info(
+            "driver_geo_search_raw lat=%s lng=%s radius_km=%s limit=%s require_available=%s members=%s flags=%s",
+            location.lat,
+            location.lng,
+            radius_km,
+            limit,
+            require_available,
+            members,
+            [bool(flag) for flag in flags],
+        )
 
         stride = 2 if require_available else 1
         nearby: list[UUID] = []
         for index, member in enumerate(members):
             window = flags[index * stride : (index + 1) * stride]
             if not all(window):
+                logger.info(
+                    "driver_geo_candidate_rejected user_id=%s reason=%s",
+                    member,
+                    _missing_marker_reason(window, require_available=require_available),
+                )
                 continue
             try:
                 nearby.append(UUID(member))
@@ -146,6 +183,14 @@ class RedisDriverLocationService:
                 logger.warning("Ignoring non-UUID member in %s: %r", POSITIONS_KEY, member)
             if len(nearby) >= limit:
                 break
+        logger.info(
+            "driver_geo_search_result lat=%s lng=%s radius_km=%s count=%s candidates=%s",
+            location.lat,
+            location.lng,
+            radius_km,
+            len(nearby),
+            [str(driver_id) for driver_id in nearby],
+        )
         return nearby
 
     async def get_position(self, driver_id: UUID) -> GeoPoint | None:
@@ -168,3 +213,12 @@ class RedisDriverLocationService:
         pipe.delete(f"{SEEN_KEY_PREFIX}{member}")
         pipe.delete(f"{AVAILABLE_KEY_PREFIX}{member}")
         await pipe.execute()
+        logger.info("driver_offline user_id=%s", driver_id)
+
+
+def _missing_marker_reason(window: list[int], *, require_available: bool) -> str:
+    if not window or not bool(window[0]):
+        return "presence_expired"
+    if require_available and len(window) > 1 and not bool(window[1]):
+        return "not_available"
+    return "unknown_marker_state"

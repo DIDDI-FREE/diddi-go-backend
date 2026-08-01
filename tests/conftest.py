@@ -2,7 +2,7 @@
 
 Strategy:
   * Tests run against the real Postgres + PostGIS from docker-compose
-    (port 5433) using a dedicated `diddi_go_test` database, so PostGIS
+    (port 15432 by default) using a dedicated `diddi_go_test` database, so PostGIS
     geography columns and CHECK/UNIQUE constraints are exercised for real.
     SQLite cannot host `GEOGRAPHY(POINT, 4326)`, so an in-memory DB is not
     an option here.
@@ -27,11 +27,13 @@ import pytest
 # The app reads settings at import time, so the test DB URL must be in the
 # environment before any `app_base.*` module is imported.
 TEST_DB_NAME = "diddi_go_test"
-ADMIN_DSN = "postgresql://postgres:postgres@localhost:5433/postgres"
-TEST_DSN_SYNC = f"postgresql://postgres:postgres@localhost:5433/{TEST_DB_NAME}"
-TEST_DSN_ASYNC = f"postgresql+asyncpg://postgres:postgres@localhost:5433/{TEST_DB_NAME}"
+TEST_POSTGRES_PORT = os.environ.get("TEST_POSTGRES_PORT", os.environ.get("POSTGRES_PORT", "15432"))
+ADMIN_DSN = f"postgresql://postgres:postgres@localhost:{TEST_POSTGRES_PORT}/postgres"
+TEST_DSN_SYNC = f"postgresql://postgres:postgres@localhost:{TEST_POSTGRES_PORT}/{TEST_DB_NAME}"
+TEST_DSN_ASYNC = f"postgresql+asyncpg://postgres:postgres@localhost:{TEST_POSTGRES_PORT}/{TEST_DB_NAME}"
 
 os.environ["DATABASE_URL"] = TEST_DSN_ASYNC
+os.environ.setdefault("REDIS_URL", f"redis://localhost:{os.environ.get('REDIS_PORT', '16379')}/0")
 os.environ.setdefault("JWT_SECRET", "test-secret-at-least-32-characters-long!!")
 # Rate limit off by default so back-to-back OTP requests in tests don't 429.
 os.environ.setdefault("OTP_RATE_LIMIT_SECONDS", "0")
