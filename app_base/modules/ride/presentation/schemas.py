@@ -18,6 +18,12 @@ class PointPayload(BaseModel):
     address: str | None = None
 
 
+class PlaceSearchResponseItem(BaseModel):
+    label: str
+    lat: float
+    lng: float
+
+
 class PricingEstimateRequest(BaseModel):
     pickup: PointPayload
     dropoff: PointPayload

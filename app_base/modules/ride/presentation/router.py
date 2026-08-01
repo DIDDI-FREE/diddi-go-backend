@@ -19,14 +19,16 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from app_base.core.auth_deps import get_current_user, require_business_driver
-from app_base.core.deps import matching_service, ride_service
+from app_base.core.deps import get_diddimap, matching_service, ride_service
 from app_base.core.errors import ApiError
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.ride.application.matching_service import MatchingService
 from app_base.modules.ride.application.services import RideService, iso_utc, ride_creation_payload
 from app_base.modules.ride.domain.entities import DriverProfile, RideStatus
 from app_base.modules.ride.infra.offer_store import OFFER_TTL_SECONDS
+from app_base.modules.ride.infra.routing_client import DiddiMapRoutingClient
 from app_base.modules.ride.presentation.schemas import (
+    PlaceSearchResponseItem,
     PricingEstimateRequest,
     RideCancelRequest,
     RideCreateRequest,
@@ -37,6 +39,28 @@ from app_base.modules.ride.presentation.websocket import manager
 from app_base.shared_kernel.types import GeoPoint
 
 router = APIRouter(prefix="/rides", tags=["ride"])
+places_router = APIRouter(prefix="/places", tags=["places"])
+
+
+@places_router.get("/search", response_model=list[PlaceSearchResponseItem])
+async def search_places(
+    q: str = Query(..., min_length=2, max_length=120),
+    bias_lat: float | None = Query(default=None, ge=-90, le=90),
+    bias_lng: float | None = Query(default=None, ge=-180, le=180),
+    limit: int = Query(default=10, ge=1, le=20),
+    diddimap: DiddiMapRoutingClient = Depends(get_diddimap),
+) -> list[PlaceSearchResponseItem]:
+    """Search pickup/dropoff places through DiddiMap/AbidjanMaps.
+
+    `bias_lat` + `bias_lng` are optional and help rank results around the
+    user's current position. If only one is sent, the bias is ignored.
+    """
+    bias = GeoPoint(lat=bias_lat, lng=bias_lng) if bias_lat is not None and bias_lng is not None else None
+    results = await diddimap.geocode(q, bias=bias)
+    return [
+        PlaceSearchResponseItem(label=item.label, lat=item.point.lat, lng=item.point.lng)
+        for item in results[:limit]
+    ]
 
 
 @router.post("/pricing/estimate")
