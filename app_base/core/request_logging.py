@@ -18,7 +18,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-logger = logging.getLogger("app_base.access")
+# Uvicorn's access logger has a special formatter for its own
+# `"GET /path HTTP/1.1"` records. Use `uvicorn.error` for our app-level
+# structured lines so they are visible in Docker/Portainer without being
+# swallowed or reformatted by the access formatter.
+logger = logging.getLogger("uvicorn.error")
 
 REQUEST_ID_STATE_KEY = "request_id"
 

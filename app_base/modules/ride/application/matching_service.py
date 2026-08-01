@@ -1,24 +1,12 @@
-"""Ride matching engine — architecture doc §7 step 3.
+"""Ride matching engine.
 
-Model: **sequential offers**. The ride is offered to the nearest available
-driver, who has `OFFER_TTL_SECONDS` to answer. On decline or timeout it
-passes to the next-nearest, and so on until someone accepts or the candidate
-pool is exhausted — at which point the ride becomes `no_driver_found`.
+Model: sequential offers. A ride is offered to the nearest available driver,
+then to the next one on decline/timeout. If no eligible candidate remains, the
+ride becomes `no_driver_found`.
 
-Sequential rather than broadcast because it matches the contract's
-`expires_in_seconds: 15` per-driver window, and because it guarantees a ride
-is only ever promised to one driver at a time.
-
-The 15-second window is enforced by the TTL on the Redis offer key rather
-than by a background timer: whenever anything touches the ride (the driver
-answers, the passenger polls, a later match attempt runs) the engine asks
-Redis whether an offer is still outstanding. An expired key means the window
-lapsed and the next driver can be offered. Nothing is scheduled, so nothing
-is lost if the process restarts.
-
-Identity note: Redis and the JWT both key drivers by `auth.users.id`, while
-`ride.rides.driver_id` is a FK to `ride.driver_profiles.id`. The engine
-resolves one to the other via `DriverProfileRepository.find_by_user_id`.
+Redis and the JWT both key drivers by auth user_id. `ride.rides.driver_id`
+stores the local `ride.driver_profiles.id`, so the engine resolves user_id to
+driver_profile before assigning a ride.
 """
 
 from __future__ import annotations
@@ -42,13 +30,10 @@ from app_base.modules.ride.domain.interfaces import (
     VehicleRepository,
 )
 
-logger = logging.getLogger(__name__)
+# Uvicorn wires this logger to the Docker console.
+logger = logging.getLogger("uvicorn.error")
 
-# How far to look for a driver. Abidjan-scale: beyond this the pickup ETA is
-# long enough that the passenger is better served by no match than a match.
 SEARCH_RADIUS_KM = 5.0
-
-# Ceiling on how many drivers one ride is offered to before giving up.
 MAX_CANDIDATES = 10
 
 
@@ -63,18 +48,24 @@ class MatchingService:
     async def try_match(self, ride: Ride) -> UUID | None:
         """Offer `ride` to the next suitable driver.
 
-        Returns the `user_id` of the driver now holding the offer, or None if
-        nobody could be offered (in which case the ride is moved to
-        `no_driver_found`).
-
-        Safe to call repeatedly: if an offer is already outstanding and has
-        not expired, it is left alone and the current holder is returned.
+        Returns the driver auth user_id holding the offer, or None if the ride
+        has moved to `no_driver_found`.
         """
+        logger.info(
+            "matching_start ride_id=%s status=%s pickup_lat=%s pickup_lng=%s",
+            ride.id,
+            ride.status.value,
+            ride.pickup_location.lat if ride.pickup_location else None,
+            ride.pickup_location.lng if ride.pickup_location else None,
+        )
+
         if ride.status != RideStatus.REQUESTED:
+            logger.info("matching_skip ride_id=%s reason=status_not_requested status=%s", ride.id, ride.status.value)
             return None
 
         outstanding = await self.offers.current_offer(ride.id)
         if outstanding is not None:
+            logger.info("matching_existing_offer ride_id=%s driver_user_id=%s", ride.id, outstanding)
             return outstanding
 
         candidate = await self._next_candidate(ride)
@@ -83,45 +74,57 @@ class MatchingService:
             return None
 
         await self.offers.open_offer(ride.id, candidate)
-        logger.info("Ride %s offered to driver user_id=%s", ride.id, candidate)
+        logger.info("matching_offer_opened ride_id=%s driver_user_id=%s", ride.id, candidate)
         return candidate
 
     async def accept(self, ride_id: UUID, driver_user_id: UUID) -> Ride:
-        """A driver accepts the ride they were offered.
-
-        Raises if the offer is not theirs, has expired, or another driver has
-        already claimed it.
-        """
+        """A driver accepts the ride they were offered."""
         ride = await self._load_active_ride(ride_id)
 
         holder = await self.offers.current_offer(ride_id)
         if holder is None:
-            raise ApiError(
-                409, "OFFER_EXPIRED", "Cette demande n'est plus disponible.",
+            logger.info(
+                "matching_accept_rejected ride_id=%s driver_user_id=%s reason=offer_expired",
+                ride_id,
+                driver_user_id,
             )
+            raise ApiError(409, "OFFER_EXPIRED", "Cette demande n'est plus disponible.")
         if holder != driver_user_id:
-            raise ApiError(
-                403, "OFFER_NOT_YOURS", "Cette demande a été proposée à un autre chauffeur.",
+            logger.info(
+                "matching_accept_rejected ride_id=%s driver_user_id=%s reason=offer_not_yours holder=%s",
+                ride_id,
+                driver_user_id,
+                holder,
             )
+            raise ApiError(403, "OFFER_NOT_YOURS", "Cette demande a ete proposee a un autre chauffeur.")
 
-        # Resolve the driver before claiming so a driver who cannot actually
-        # take the ride does not consume the claim.
         profile = await self.driver_repo.find_by_user_id(driver_user_id)
         if profile is None or profile.status != DriverStatus.ACTIVE:
-            raise ApiError(
-                403, "DRIVER_NOT_VERIFIED", "Votre profil chauffeur n'est pas validé.",
+            logger.info(
+                "matching_accept_rejected ride_id=%s driver_user_id=%s reason=driver_not_verified profile_found=%s",
+                ride_id,
+                driver_user_id,
+                profile is not None,
             )
+            raise ApiError(403, "DRIVER_NOT_VERIFIED", "Votre profil chauffeur n'est pas valide.")
+
         vehicle = await self.vehicle_repo.find_active_for_driver(profile.id)
         if vehicle is None:
-            raise ApiError(
-                409, "NO_ACTIVE_VEHICLE", "Aucun véhicule actif n'est associé à ce chauffeur.",
+            logger.info(
+                "matching_accept_rejected ride_id=%s driver_user_id=%s reason=no_active_vehicle profile_id=%s",
+                ride_id,
+                driver_user_id,
+                profile.id,
             )
+            raise ApiError(409, "NO_ACTIVE_VEHICLE", "Aucun vehicule actif n'est associe a ce chauffeur.")
 
-        # Atomic: exactly one driver can win, even under simultaneous accepts.
         if not await self.offers.claim(ride_id, driver_user_id):
-            raise ApiError(
-                409, "RIDE_ALREADY_MATCHED", "Cette course a déjà été acceptée.",
+            logger.info(
+                "matching_accept_rejected ride_id=%s driver_user_id=%s reason=already_claimed",
+                ride_id,
+                driver_user_id,
             )
+            raise ApiError(409, "RIDE_ALREADY_MATCHED", "Cette course a deja ete acceptee.")
 
         try:
             ride.driver_id = profile.id
@@ -131,91 +134,124 @@ class MatchingService:
             for transition in ride.status_history:
                 await self.ride_repo.record_status_transition(transition)
         except Exception:
-            # Assignment failed after winning the race — release the claim so
-            # the ride can still go to somebody else.
             await self.offers.release_claim(ride_id)
             raise
 
         await self.offers.close_offer(ride_id)
-        # Out of the pool until this ride ends.
         await self.locations.set_available(driver_user_id, available=False)
-        logger.info("Ride %s accepted by driver %s (profile %s)", ride_id, driver_user_id, profile.id)
+        logger.info(
+            "matching_accept_success ride_id=%s driver_user_id=%s driver_profile_id=%s vehicle_id=%s",
+            ride_id,
+            driver_user_id,
+            profile.id,
+            vehicle.id,
+        )
         return ride
 
     async def decline(self, ride_id: UUID, driver_user_id: UUID) -> UUID | None:
-        """A driver declines. The offer moves on to the next candidate.
-
-        Returns the next driver offered, or None if the pool is exhausted.
-        """
+        """A driver declines. The offer moves on to the next candidate."""
         ride = await self._load_active_ride(ride_id)
 
         holder = await self.offers.current_offer(ride_id)
         if holder is not None and holder != driver_user_id:
-            raise ApiError(
-                403, "OFFER_NOT_YOURS", "Cette demande a été proposée à un autre chauffeur.",
+            logger.info(
+                "matching_decline_rejected ride_id=%s driver_user_id=%s reason=offer_not_yours holder=%s",
+                ride_id,
+                driver_user_id,
+                holder,
             )
+            raise ApiError(403, "OFFER_NOT_YOURS", "Cette demande a ete proposee a un autre chauffeur.")
 
-        # Withdraw immediately so `try_match` looks for someone new. The
-        # decliner stays in the tried-set, so they will not be re-offered.
         await self.offers.close_offer(ride_id)
-        logger.info("Ride %s declined by driver user_id=%s", ride_id, driver_user_id)
+        logger.info("matching_decline ride_id=%s driver_user_id=%s", ride_id, driver_user_id)
         return await self.try_match(ride)
 
     async def release_driver(self, ride: Ride) -> None:
-        """Return a driver to the pool once their ride ends (completed or
-        cancelled) and drop the ride's matching state."""
+        """Return a driver to the pool once their ride ends."""
         await self.offers.clear(ride.id)
         if ride.driver_id is None:
+            logger.info("matching_release_driver ride_id=%s driver_profile_id=None", ride.id)
             return
         profile = await self.driver_repo.find_by_id(ride.driver_id)
         if profile is not None:
             await self.locations.set_available(profile.user_id, available=True)
-
-    # -- internals ----------------------------------------------------------
+            logger.info(
+                "matching_release_driver ride_id=%s driver_profile_id=%s driver_user_id=%s",
+                ride.id,
+                ride.driver_id,
+                profile.user_id,
+            )
 
     async def _next_candidate(self, ride: Ride) -> UUID | None:
-        """Nearest available driver who has not already been offered this ride
-        and can legally take it."""
         if ride.pickup_location is None:
+            logger.info("matching_no_candidate ride_id=%s reason=no_pickup_location", ride.id)
             return None
 
         nearby = await self.locations.find_available_nearby(
-            ride.pickup_location, radius_km=SEARCH_RADIUS_KM, limit=MAX_CANDIDATES,
+            ride.pickup_location,
+            radius_km=SEARCH_RADIUS_KM,
+            limit=MAX_CANDIDATES,
+        )
+        logger.info(
+            "matching_nearby_candidates ride_id=%s count=%s candidates=%s",
+            ride.id,
+            len(nearby),
+            [str(user_id) for user_id in nearby],
         )
         if not nearby:
+            logger.info("matching_no_candidate ride_id=%s reason=no_available_nearby", ride.id)
             return None
 
         tried = await self.offers.already_tried(ride.id)
         for user_id in nearby:
             if user_id in tried:
+                logger.info(
+                    "matching_candidate_rejected ride_id=%s driver_user_id=%s reason=already_tried",
+                    ride.id,
+                    user_id,
+                )
                 continue
-            if await self._can_take_ride(user_id):
+
+            can_take, reason = await self._can_take_ride(user_id)
+            if can_take:
+                logger.info("matching_candidate_selected ride_id=%s driver_user_id=%s", ride.id, user_id)
                 return user_id
+
+            logger.info(
+                "matching_candidate_rejected ride_id=%s driver_user_id=%s reason=%s",
+                ride.id,
+                user_id,
+                reason,
+            )
+
+        logger.info("matching_no_candidate ride_id=%s reason=all_candidates_rejected", ride.id)
         return None
 
-    async def _can_take_ride(self, user_id: UUID) -> bool:
-        """A driver in the Redis pool may still be unusable — suspended since
-        going online, or without an active vehicle. Verify before offering."""
+    async def _can_take_ride(self, user_id: UUID) -> tuple[bool, str | None]:
         profile = await self.driver_repo.find_by_user_id(user_id)
-        if profile is None or profile.status != DriverStatus.ACTIVE:
-            return False
-        return await self.vehicle_repo.find_active_for_driver(profile.id) is not None
+        if profile is None:
+            return False, "driver_profile_not_found"
+        if profile.status != DriverStatus.ACTIVE:
+            return False, f"driver_profile_not_active:{profile.status.value}"
+        vehicle = await self.vehicle_repo.find_active_for_driver(profile.id)
+        if vehicle is None:
+            return False, "no_active_vehicle"
+        return True, None
 
     async def _give_up(self, ride: Ride) -> None:
-        """No candidate left: the passenger is told rather than left waiting."""
         ride.transition(RideStatus.NO_DRIVER_FOUND, when=datetime.now(UTC))
         await self.ride_repo.save(ride)
         for transition in ride.status_history:
             await self.ride_repo.record_status_transition(transition)
         await self.offers.clear(ride.id)
-        logger.info("Ride %s found no driver", ride.id)
+        logger.info("matching_no_driver_found ride_id=%s", ride.id)
 
     async def _load_active_ride(self, ride_id: UUID) -> Ride:
         ride = await self.ride_repo.find_by_id(ride_id)
         if ride is None:
-            raise ApiError(404, "RIDE_NOT_FOUND", "Aucune course trouvée avec cet identifiant.")
+            raise ApiError(404, "RIDE_NOT_FOUND", "Aucune course trouvee avec cet identifiant.")
         if ride.status == RideStatus.MATCHED:
-            raise ApiError(409, "RIDE_ALREADY_MATCHED", "Cette course a déjà été acceptée.")
+            raise ApiError(409, "RIDE_ALREADY_MATCHED", "Cette course a deja ete acceptee.")
         if ride.status != RideStatus.REQUESTED:
             raise ApiError(
                 409,

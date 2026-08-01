@@ -30,8 +30,8 @@ class Settings(BaseSettings):
 
     # The runtime async engine uses `database_url` (asyncpg driver).
     # Alembic and any sync-only tooling can coexist with a separate url later.
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5433/diddi_go"
-    redis_url: str = "redis://localhost:6379/0"
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:15432/diddi_go"
+    redis_url: str = "redis://localhost:16379/0"
 
     jwt_secret: str = "change-me-in-prod-at-least-32-characters-long"
     jwt_access_lifetime_minutes: int = 15

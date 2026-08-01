@@ -35,7 +35,8 @@ from app_base.modules.ride.domain.interfaces import (
 from app_base.shared_kernel.contracts.routing import RoutingProvider
 from app_base.shared_kernel.types import GeoPoint
 
-logger = logging.getLogger(__name__)
+# Uvicorn wires this logger to the Docker console.
+logger = logging.getLogger("uvicorn.error")
 
 # Default formula (XOF) — used only when no pricing rule has been seeded for
 # the city/category. Geographic data must still come from DiddiMap.

@@ -189,12 +189,20 @@ async def test_geocode_fails_loudly_when_unavailable() -> None:
 
 async def test_pricing_fails_when_diddimap_is_down(client, passenger_headers) -> None:
     """A ride estimate cannot invent distance/duration without DiddiMap."""
+    from app_base.main import app
+    from app_base.modules.ride.infra.routing_client import DiddiMapRoutingClient
+
+    previous_diddimap = app.state.diddimap
+    app.state.diddimap = DiddiMapRoutingClient(base_url="http://127.0.0.1:9")
     body = {
         "pickup": {"lat": 5.3599, "lng": -4.0083},
         "dropoff": {"lat": 5.3167, "lng": -4.0333},
         "vehicle_category": "standard",
     }
-    response = await client.post("/v1/rides/pricing/estimate", json=body, headers=passenger_headers)
-    assert response.status_code == 503
-    payload = response.json()
-    assert payload["error"]["code"] == "DIDDIMAP_UNAVAILABLE"
+    try:
+        response = await client.post("/v1/rides/pricing/estimate", json=body, headers=passenger_headers)
+        assert response.status_code == 503
+        payload = response.json()
+        assert payload["error"]["code"] == "DIDDIMAP_UNAVAILABLE"
+    finally:
+        app.state.diddimap = previous_diddimap

@@ -10,6 +10,8 @@ live position in the Redis pool.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends
 
 from app_base.core.auth_deps import get_current_active_user, require_business_driver
@@ -26,6 +28,7 @@ from app_base.modules.ride.presentation.driver_schemas import (
 from app_base.shared_kernel.types import GeoPoint
 
 router = APIRouter(prefix="/drivers", tags=["driver"])
+logger = logging.getLogger("uvicorn.error")
 
 
 @router.post("/profile", status_code=201)
@@ -79,6 +82,14 @@ async def go_online(
     position = GeoPoint(lat=payload.lat, lng=payload.lng)
     await locations.update_position(current_user.id, position)
     await locations.set_available(current_user.id, available=True)
+    logger.info(
+        "driver_online user_id=%s driver_profile_id=%s vehicle_id=%s lat=%s lng=%s",
+        current_user.id,
+        profile.id,
+        vehicle.id,
+        position.lat,
+        position.lng,
+    )
     return {
         "status": "online",
         "driver_id": str(profile.id),
@@ -94,4 +105,5 @@ async def go_offline(
     _driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
     await locations.go_offline(current_user.id)
+    logger.info("driver_offline_requested user_id=%s", current_user.id)
     return {"status": "offline"}
