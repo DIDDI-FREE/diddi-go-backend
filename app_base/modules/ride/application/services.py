@@ -34,9 +34,8 @@ from app_base.modules.ride.domain.interfaces import (
 from app_base.shared_kernel.contracts.routing import RoutingProvider
 from app_base.shared_kernel.types import GeoPoint
 
-# Default formula (XOF) — used as a fallback when no DiddiMap routing is
-# available AND no pricing rule has been seeded for the city/category.
-# Architecture doc §3.2 pricing_rules rows will supersede this once seeded.
+# Default formula (XOF) — used only when no pricing rule has been seeded for
+# the city/category. Geographic data must still come from DiddiMap.
 _DEFAULT_BASE_FARE = Decimal("250")
 _DEFAULT_PRICE_PER_KM = Decimal("240")
 
@@ -68,14 +67,13 @@ class RideService:
             raise ApiError(422, "INVALID_VEHICLE_CATEGORY", "Catégorie de véhicule invalide.")
         category = VehicleCategory(vehicle_category)
 
-        # 1) Real DiddiMap call (may return 0/0 when the external service is
-        # unavailable). If we get zero distance, fall back to coord-based haversine.
+        # DiddiMap is the single source of geographic truth. Pricing remains
+        # DiddiGo-owned, but distance/duration must come from DiddiMap.
         estimate = await self.routing.estimate(origin=pickup, destination=dropoff, profile="palh_vtc")
         distance_km = _coerce_decimal(estimate.distance_km)
         duration_seconds = int(estimate.duration_seconds)
         if distance_km <= 0:
-            distance_km = Decimal(str(_haversine_km(pickup, dropoff)))
-            duration_seconds = int(distance_km * 135)
+            raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Distance DiddiMap invalide.")
 
         # 2) Apply pricing rule if seeded — otherwise default formula.
         rule = await self.pricing_rules.find_active(city="Abidjan", vehicle_category=category)
@@ -372,18 +370,6 @@ def _ride_detail_payload(ride: Ride, driver: dict | None) -> dict:
         "started_at": iso_utc(ride.started_at),
         "completed_at": iso_utc(ride.completed_at),
     }
-
-
-def _haversine_km(a: GeoPoint, b: GeoPoint) -> float:
-    """Fallback distance when the routing provider returns 0 or is unreachable."""
-    from math import asin, cos, radians, sin, sqrt
-    R = 6371.0  # km
-    lat1, lng1 = radians(a.lat), radians(a.lng)
-    lat2, lng2 = radians(b.lat), radians(b.lng)
-    dlat = lat2 - lat1
-    dlng = lng2 - lng1
-    h = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlng / 2) ** 2
-    return 2 * R * asin(sqrt(h))
 
 
 def _coerce_decimal(value: object) -> Decimal:

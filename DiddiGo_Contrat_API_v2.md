@@ -286,6 +286,88 @@ admin.
 
 ## 6. Module Ride
 
+### `POST /rides/pricing/estimate`
+
+Estimer le prix d'une course avant creation.
+
+Source normale :
+
+```text
+AbidjanMaps /api/v1/route
+```
+
+DiddiGo utilise uniquement les donnees geographiques :
+
+```text
+route.distance_m -> distance_km
+route.duration_s -> duration_seconds
+```
+
+Politique importante :
+
+```text
+DiddiMap / AbidjanMaps = fournisseur unique distance, duree, lieux
+DiddiGo = proprietaire unique de la politique de pricing VTC
+```
+
+Si AbidjanMaps retourne aussi `price.amount`, DiddiGo l'ignore. Le prix final
+vient des regles DiddiGo :
+
+```text
+ride.pricing_rules si une regle active existe
+sinon formule DiddiGo documentee par defaut :
+estimated_fare = base_fare + distance_km * price_per_km
+```
+
+Valeurs par defaut actuelles si aucune regle n'est seedee :
+
+```text
+base_fare = 250 XOF
+price_per_km = 240 XOF
+surge_multiplier = 1.0
+```
+
+Il n'y a plus de fallback geographique silencieux. Si AbidjanMaps est
+indisponible ou repond avec une forme inattendue, DiddiGo retourne une erreur
+documentee.
+
+**Requete**
+
+```json
+{
+  "pickup": {
+    "lat": 5.3599,
+    "lng": -4.0083,
+    "address": "Carrefour Anador, Yopougon"
+  },
+  "dropoff": {
+    "lat": 5.3167,
+    "lng": -4.0333,
+    "address": "Plateau, Rue du Commerce"
+  },
+  "vehicle_category": "standard"
+}
+```
+
+**Reponse `200`**
+
+```json
+{
+  "estimated_fare": 3100,
+  "currency": "XOF",
+  "distance_km": 11.876,
+  "duration_seconds": 983,
+  "surge_multiplier": 1.0
+}
+```
+
+Erreurs DiddiMap :
+
+| HTTP | Code | Sens |
+|---|---|---|
+| `503` | `DIDDIMAP_UNAVAILABLE` | DiddiMap/AbidjanMaps indisponible ou timeout |
+| `502` | `DIDDIMAP_INVALID_RESPONSE` | reponse DiddiMap invalide ou non reconnue |
+
 ### `GET /places/search`
 
 Rechercher une adresse ou un lieu via DiddiMap/AbidjanMaps.
@@ -319,8 +401,16 @@ Reponse `200` :
 ]
 ```
 
-Si DiddiMap/AbidjanMaps est indisponible, DiddiGo retourne une liste vide
-plutot qu'une erreur serveur.
+Si DiddiMap/AbidjanMaps est indisponible ou repond avec un format invalide,
+DiddiGo retourne une erreur documentee. Il ne retourne pas une liste vide
+silencieuse.
+
+Erreurs DiddiMap :
+
+| HTTP | Code | Sens |
+|---|---|---|
+| `503` | `DIDDIMAP_UNAVAILABLE` | DiddiMap/AbidjanMaps indisponible ou timeout |
+| `502` | `DIDDIMAP_INVALID_RESPONSE` | reponse DiddiMap invalide ou non reconnue |
 
 ### `POST /rides`
 

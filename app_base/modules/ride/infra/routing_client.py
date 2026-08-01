@@ -1,19 +1,9 @@
-"""DiddiMap core HTTP client — the `RoutingProvider` adapter.
+"""DiddiMap/AbidjanMaps HTTP adapter.
 
-DiddiGo never talks to OSRM/GraphHopper directly (architecture doc §5):
-DiddiMap core owns the road graph, and this client is the only place in the
-codebase that knows its wire format. Swapping DiddiMap for another routing
-service means editing this file and nothing else.
-
-Endpoints consumed:
-    GET {base_url}/route?profile=palh_vtc&...   → distance_km, duration_seconds
-    GET {base_url}/geocode?q=...                → [{label, lat, lng}, ...]
-
-Failure policy — degrade, don't crash. If DiddiMap is unreachable, times out,
-or answers with an unexpected shape, `estimate()` returns a zero-distance
-result and the caller (`RideService.estimate_pricing`) falls back to its
-haversine formula. A ride request must never fail because the map service
-is down; the fare is approximate rather than absent.
+DiddiMap is the single provider of geographic truth for DiddiGo: route
+distance, duration, and place search. If DiddiMap is unavailable or returns an
+unexpected payload, this adapter raises an ApiError. It must never fabricate a
+silent fallback distance, duration, or geocode result.
 """
 
 from __future__ import annotations
@@ -23,22 +13,20 @@ from dataclasses import dataclass, field
 
 import httpx
 
+from app_base.core.errors import ApiError
 from app_base.shared_kernel.contracts.routing import GeoPoint
 from app_base.shared_kernel.types import GeoPoint as _GeoPoint
 
 logger = logging.getLogger(__name__)
 
-# `palh_vtc` is the VTC routing profile (palh_vtc.lua) — architecture doc §5
-# requires it to be passed explicitly on every /route call.
+# Business profile kept for DiddiGo callers. AbidjanMaps staging currently
+# supports "car", so we translate until it exposes a dedicated VTC profile.
 DEFAULT_PROFILE = "palh_vtc"
 DEFAULT_TIMEOUT_SECONDS = 3.0
 
 
 @dataclass(frozen=True)
 class RouteEstimateResult:
-    """Concrete `RouteEstimate`. Zero distance signals "no usable answer",
-    which tells the pricing layer to fall back to its own calculation."""
-
     distance_km: float
     duration_seconds: int
 
@@ -49,8 +37,6 @@ class RouteEstimateResult:
 
 @dataclass(frozen=True)
 class GeocodeResultItem:
-    """Concrete `GeocodeResult`."""
-
     label: str
     point: _GeoPoint
 
@@ -62,9 +48,6 @@ class DiddiMapRoutingClient:
     _client: httpx.AsyncClient | None = field(default=None, init=False, repr=False)
 
     def _http(self) -> httpx.AsyncClient:
-        """Lazily build the shared connection pool. Created on first use so
-        constructing the client (e.g. at import time in tests) never opens
-        sockets."""
         if self._client is None:
             self._client = httpx.AsyncClient(
                 base_url=self.base_url.rstrip("/"),
@@ -78,27 +61,21 @@ class DiddiMapRoutingClient:
         destination: GeoPoint,
         profile: str = DEFAULT_PROFILE,
     ) -> RouteEstimateResult:
-        """Distance + duration for a trip. Returns a zero-distance result if
-        DiddiMap cannot answer — never raises for transport-level problems."""
-        params = {
-            "profile": profile,
-            "origin": f"{origin.lat},{origin.lng}",
-            "destination": f"{destination.lat},{destination.lng}",
+        request_payload = {
+            "profile": _abidjanmaps_profile(profile),
+            "start": {"lat": origin.lat, "lng": origin.lng},
+            "end": {"lat": destination.lat, "lng": destination.lng},
         }
         try:
-            response = await self._http().get("/route", params=params)
+            response = await self._http().post("/api/v1/route", json=request_payload)
             response.raise_for_status()
             payload = response.json()
         except httpx.HTTPError as exc:
-            logger.warning(
-                "DiddiMap /route unavailable (%s: %s) — pricing falls back to the local formula.",
-                type(exc).__name__,
-                exc,
-            )
-            return RouteEstimateResult(distance_km=0.0, duration_seconds=0)
-        except ValueError as exc:  # malformed JSON
-            logger.warning("DiddiMap /route returned invalid JSON (%s).", exc)
-            return RouteEstimateResult(distance_km=0.0, duration_seconds=0)
+            logger.exception("DiddiMap route unavailable: %s", exc)
+            raise ApiError(503, "DIDDIMAP_UNAVAILABLE", "Service geographique indisponible.") from exc
+        except ValueError as exc:
+            logger.exception("DiddiMap route returned invalid JSON: %s", exc)
+            raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Reponse geographique invalide.") from exc
 
         return self._parse_route(payload)
 
@@ -107,43 +84,32 @@ class DiddiMapRoutingClient:
         query: str,
         bias: GeoPoint | None = None,
     ) -> list[GeocodeResultItem]:
-        """Address → coordinates via DiddiMap's PALH geocoder. Returns an
-        empty list when the service is unavailable."""
+        # `bias` is accepted at the DiddiGo boundary for future ranking, but
+        # AbidjanMaps staging does not expose it in OpenAPI yet.
         params: dict[str, str] = {"q": query}
-        if bias is not None:
-            params["bias"] = f"{bias.lat},{bias.lng}"
         try:
-            response = await self._http().get("/geocode", params=params)
+            response = await self._http().get("/api/v1/geocoding/search", params=params)
             response.raise_for_status()
             payload = response.json()
         except httpx.HTTPError as exc:
-            logger.warning(
-                "DiddiMap /geocode unavailable (%s: %s) — returning no results.",
-                type(exc).__name__,
-                exc,
-            )
-            return []
+            logger.exception("DiddiMap geocoding unavailable: %s", exc)
+            raise ApiError(503, "DIDDIMAP_UNAVAILABLE", "Service geographique indisponible.") from exc
         except ValueError as exc:
-            logger.warning("DiddiMap /geocode returned invalid JSON (%s).", exc)
-            return []
+            logger.exception("DiddiMap geocoding returned invalid JSON: %s", exc)
+            raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Reponse geographique invalide.") from exc
 
         return self._parse_geocode(payload)
 
     async def close(self) -> None:
-        """Release the connection pool. Called by the app lifespan on shutdown."""
         if self._client is not None:
             await self._client.aclose()
             self._client = None
 
-    # -- response parsing ---------------------------------------------------
-
     @staticmethod
     def _parse_route(payload: object) -> RouteEstimateResult:
-        """Tolerant of both a flat `{distance_km, duration_seconds}` body and
-        an OSRM-style `{routes: [{distance, duration}]}` body (meters/seconds),
-        since DiddiMap may proxy either shape."""
         if not isinstance(payload, dict):
-            return RouteEstimateResult(distance_km=0.0, duration_seconds=0)
+            logger.error("DiddiMap route returned non-object payload: %r", payload)
+            raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Format route DiddiMap non reconnu.")
 
         if "distance_km" in payload:
             try:
@@ -151,42 +117,62 @@ class DiddiMapRoutingClient:
                     distance_km=float(payload["distance_km"]),
                     duration_seconds=int(payload.get("duration_seconds", 0)),
                 )
-            except (TypeError, ValueError):
-                logger.warning("DiddiMap /route sent unparseable distance/duration: %r", payload)
-                return RouteEstimateResult(distance_km=0.0, duration_seconds=0)
+            except (TypeError, ValueError) as exc:
+                logger.exception("DiddiMap route sent invalid distance/duration: %r", payload)
+                raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Distance ou duree DiddiMap invalide.") from exc
+
+        route = payload.get("route")
+        if isinstance(route, dict):
+            try:
+                return RouteEstimateResult(
+                    distance_km=float(route["distance_m"]) / 1000.0,
+                    duration_seconds=int(float(route["duration_s"])),
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                logger.exception("DiddiMap route sent invalid AbidjanMaps route: %r", route)
+                raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Route DiddiMap invalide.") from exc
 
         routes = payload.get("routes")
         if isinstance(routes, list) and routes and isinstance(routes[0], dict):
             first = routes[0]
             try:
                 return RouteEstimateResult(
-                    distance_km=float(first.get("distance", 0)) / 1000.0,
-                    duration_seconds=int(float(first.get("duration", 0))),
+                    distance_km=float(first["distance"]) / 1000.0,
+                    duration_seconds=int(float(first["duration"])),
                 )
-            except (TypeError, ValueError):
-                logger.warning("DiddiMap /route sent an unparseable OSRM route: %r", first)
+            except (KeyError, TypeError, ValueError) as exc:
+                logger.exception("DiddiMap route sent invalid OSRM route: %r", first)
+                raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Route DiddiMap invalide.") from exc
 
-        logger.warning("DiddiMap /route returned an unrecognised shape: %r", payload)
-        return RouteEstimateResult(distance_km=0.0, duration_seconds=0)
+        logger.error("DiddiMap route returned unrecognised payload: %r", payload)
+        raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Format route DiddiMap non reconnu.")
 
     @staticmethod
     def _parse_geocode(payload: object) -> list[GeocodeResultItem]:
         raw = payload.get("results") if isinstance(payload, dict) else payload
         if not isinstance(raw, list):
-            logger.warning("DiddiMap /geocode returned an unrecognised shape: %r", payload)
-            return []
+            logger.error("DiddiMap geocoding returned unrecognised payload: %r", payload)
+            raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Format geocodage DiddiMap non reconnu.")
 
         results: list[GeocodeResultItem] = []
         for item in raw:
             if not isinstance(item, dict):
+                logger.warning("Skipping malformed DiddiMap geocode item: %r", item)
                 continue
+            location = item.get("location") if isinstance(item.get("location"), dict) else item
             try:
                 results.append(
                     GeocodeResultItem(
                         label=str(item.get("label") or item.get("name") or ""),
-                        point=_GeoPoint(lat=float(item["lat"]), lng=float(item["lng"])),
+                        point=_GeoPoint(lat=float(location["lat"]), lng=float(location["lng"])),
                     )
                 )
             except (KeyError, TypeError, ValueError):
-                logger.debug("Skipping unparseable geocode entry: %r", item)
+                logger.warning("Skipping malformed DiddiMap geocode item: %r", item)
         return results
+
+
+def _abidjanmaps_profile(profile: str) -> str:
+    if profile == DEFAULT_PROFILE:
+        return "car"
+    return profile
