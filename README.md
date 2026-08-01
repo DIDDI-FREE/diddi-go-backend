@@ -136,6 +136,29 @@ envoyÃ© un vrai handshake WebSocket. Avec Nginx Proxy Manager, activer
 
 ---
 
+## Logs et diagnostic
+
+DiddiGo emet une ligne JSON par requete HTTP avec :
+- `request_id` : identifiant unique de la requete, reutilisable avec
+  `X-Request-ID` si le frontend/proxy l'envoie
+- `hour` : bucket horaire UTC, utile pour compter les requetes par heure dans
+  Portainer
+- `client_ip` : source extraite de `X-Forwarded-For`, `X-Real-IP`, puis socket
+- `user_id` et `user_role` : utilisateur authentifie quand le token est valide
+- `path`, `query`, `status_code`, `duration_ms`, `user_agent`
+
+Les erreurs API retournent aussi `details.request_id`, pour relier une erreur
+vue par le frontend a la ligne correspondante dans les logs backend.
+
+Les WebSockets loggent aussi :
+- `ws_connected`
+- `ws_auth_failed`
+- `ws_ride_subscribe`
+- `ws_driver_location_push`
+- `ws_disconnected`
+
+---
+
 ## Architecture
 
 Monolithe modulaire : chaque module métier est une tranche verticale autonome

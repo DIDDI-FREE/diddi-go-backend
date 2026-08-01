@@ -29,7 +29,7 @@ import logging
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
@@ -167,10 +167,25 @@ async def websocket_endpoint(
     try:
         user_id, role = _decode_ws_access_token(token)
     except ApiError as exc:
+        logger.warning(
+            "ws_auth_failed client_ip=%s code=%s path=%s",
+            _ws_client_ip(websocket),
+            exc.code,
+            websocket.url.path,
+        )
         await websocket.close(code=WS_UNAUTHORIZED, reason=exc.code)
         return
 
+    connection_id = str(uuid4())
     await manager.connect(websocket, user_id)
+    logger.info(
+        "ws_connected connection_id=%s user_id=%s role=%s client_ip=%s path=%s",
+        connection_id,
+        user_id,
+        role,
+        _ws_client_ip(websocket),
+        websocket.url.path,
+    )
 
     # The driver location service lives on app.state (mounted by the lifespan).
     locations = getattr(websocket.app.state, "driver_locations", None)
@@ -180,9 +195,9 @@ async def websocket_endpoint(
             message = await websocket.receive_json()
             await _handle_message(websocket, message, user_id=user_id, role=role, locations=locations)
     except WebSocketDisconnect:
-        pass
+        logger.info("ws_disconnected connection_id=%s user_id=%s role=%s", connection_id, user_id, role)
     except Exception:
-        logger.exception("WebSocket handler failed for user_id=%s", user_id)
+        logger.exception("ws_failed connection_id=%s user_id=%s role=%s", connection_id, user_id, role)
     finally:
         if role == "driver" and locations is not None:
             await locations.go_offline(user_id)
@@ -236,6 +251,7 @@ async def _handle_message(
                 await websocket.send_json({"event": "error", "code": "INVALID_RIDE_ID"})
                 return
         await websocket.send_json({"event": "ack", "received_event": event})
+        logger.info("ws_driver_location_push user_id=%s ride_id=%s", user_id, ride_id)
         return
 
     if event == "ride.subscribe":
@@ -248,6 +264,7 @@ async def _handle_message(
         await websocket.send_json(
             {"event": "ack", "received_event": event, "ride_id": str(ride_id)},
         )
+        logger.info("ws_ride_subscribe user_id=%s role=%s ride_id=%s", user_id, role, ride_id)
         return
 
     # Unknown events are acknowledged and ignored rather than fatal — the
@@ -262,6 +279,16 @@ def _parse_location(raw: Any) -> GeoPoint | None:
         return GeoPoint(lat=float(raw["lat"]), lng=float(raw["lng"]))
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def _ws_client_ip(websocket: WebSocket) -> str | None:
+    forwarded_for = websocket.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    real_ip = websocket.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip
+    return websocket.client.host if websocket.client else None
 
 
 async def _has_active_driver_profile(user_id: UUID) -> bool:

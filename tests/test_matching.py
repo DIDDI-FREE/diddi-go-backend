@@ -54,12 +54,12 @@ async def test_driver_profile_is_unique_per_account(client, driver_headers) -> N
     assert r.json()["error"]["code"] == "DRIVER_PROFILE_ALREADY_EXISTS"
 
 
-async def test_passenger_cannot_create_a_driver_profile(client, passenger_headers) -> None:
+async def test_authenticated_user_can_create_a_driver_profile(client, passenger_headers) -> None:
     r = await client.post(
         "/v1/drivers/profile", json={"license_number": "CI-12345"}, headers=passenger_headers,
     )
-    assert r.status_code == 403
-    assert r.json()["error"]["code"] == "FORBIDDEN_ROLE"
+    assert r.status_code == 201
+    assert r.json()["license_number"] == "CI-12345"
 
 
 async def test_vehicle_requires_a_profile_first(client, driver_headers) -> None:
@@ -125,6 +125,50 @@ async def test_accepting_assigns_driver_and_vehicle_to_the_ride(
     assert detail["driver"]["rating_avg"] == 5.0
     assert detail["driver"]["vehicle"]["plate_number"]
     assert detail["driver"]["phone"], "passenger needs the driver's number to meet them"
+
+
+async def test_business_driver_with_user_role_can_find_assigned_rides(
+    client, passenger, passenger_factory,
+) -> None:
+    """DiddiAuth emits role=user; DiddiGo must use driver_profiles for driver
+    ride history and detail access."""
+    business_driver = await passenger_factory()
+    r = await client.post(
+        "/v1/drivers/profile",
+        json={"license_number": "CI-BUSINESS"},
+        headers=business_driver,
+    )
+    assert r.status_code == 201, r.text
+
+    r = await client.post(
+        "/v1/drivers/vehicle",
+        json={
+            "plate_number": "CI-BIZ-01",
+            "make": "Toyota",
+            "model": "Yaris",
+            "color": "gris",
+            "category": "standard",
+        },
+        headers=business_driver,
+    )
+    assert r.status_code == 201, r.text
+
+    r = await client.post("/v1/drivers/online", json=NEAR, headers=business_driver)
+    assert r.status_code == 200, r.text
+
+    ride_id = await create_ride(client, passenger)
+    r = await client.post(f"/v1/rides/{ride_id}/accept", headers=business_driver)
+    assert r.status_code == 200, r.text
+
+    r = await client.get(f"/v1/rides/{ride_id}", headers=business_driver)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "matched"
+
+    r = await client.get("/v1/rides?role=driver", headers=business_driver)
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["pagination"]["total_items"] == 1
+    assert payload["data"][0]["id"] == ride_id
 
 
 async def test_offer_goes_to_the_nearest_driver_first(
