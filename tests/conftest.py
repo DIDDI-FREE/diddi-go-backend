@@ -37,8 +37,8 @@ os.environ.setdefault("JWT_SECRET", "test-secret-at-least-32-characters-long!!")
 os.environ.setdefault("OTP_RATE_LIMIT_SECONDS", "0")
 # Point DiddiMap at a closed port so the unreachable-service path is taken
 # immediately (connection refused) instead of burning the full HTTP timeout
-# on every pricing call. The fallback behaviour is what we want to exercise;
-# `test_routing_client.py` covers the success paths with a stub transport.
+# on every pricing call. Tests that need DiddiMap success paths use a stub
+# transport; production code must fail loudly if DiddiMap is unavailable.
 os.environ.setdefault("DIDDIMAP_BASE_URL", "http://127.0.0.1:9")
 
 

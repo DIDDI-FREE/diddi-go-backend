@@ -111,8 +111,13 @@ Configuration recommandÃ©e :
 - docker compose avec DiddiMap dans le mÃªme rÃ©seau : utiliser son vrai nom de
   service, par exemple `DIDDIMAP_BASE_URL=http://abidjanmaps-backend:4000`
 
-Si DiddiMap Core est indisponible, l'estimation de course ne casse pas :
-DiddiGo retombe sur une estimation locale par coordonnÃ©es.
+Si DiddiMap Core est indisponible, DiddiGo retourne une erreur explicite
+`DIDDIMAP_UNAVAILABLE`. Il n'y a pas de fallback silencieux par coordonnÃ©es :
+DiddiMap reste le seul fournisseur des informations geographiques.
+
+DiddiGo garde en revanche sa propre politique de pricing : il utilise la
+distance/duree DiddiMap, puis applique `ride.pricing_rules` ou la formule
+tarifaire DiddiGo par defaut si aucune regle n'est encore seedee.
 
 ---
 
