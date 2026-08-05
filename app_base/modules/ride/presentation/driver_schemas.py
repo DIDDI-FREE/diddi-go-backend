@@ -27,6 +27,7 @@ class VehicleCreateRequest(BaseModel):
     model: str | None = Field(default=None, max_length=50)
     color: str | None = Field(default=None, max_length=30)
     category: str = Field(default="standard")
+    comfort_level: str = Field(default="standard")
     registration_document_file_id: UUID | None = None
 
 

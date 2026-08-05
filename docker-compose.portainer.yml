@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     environment:
       APP_NAME: ${APP_NAME:-DiddiGo}
-      APP_ENV: ${APP_ENV:?APP_ENV is required}
+      APP_ENV: ${APP_ENV:-production}
       API_PREFIX: ${API_PREFIX:-/v1}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       CORS_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:-^https?://(localhost|127\.0\.0\.1)(:\d+)?$}
@@ -16,8 +16,8 @@ services:
       JWT_REFRESH_LIFETIME_DAYS: ${JWT_REFRESH_LIFETIME_DAYS:-30}
       OTP_RATE_LIMIT_SECONDS: ${OTP_RATE_LIMIT_SECONDS:-60}
       OTP_CODE_LIFETIME_SECONDS: ${OTP_CODE_LIFETIME_SECONDS:-300}
-      DIDDIMAP_BASE_URL: ${DIDDIMAP_BASE_URL:?DIDDIMAP_BASE_URL is required}
-      IDENTITY_BASE_URL: ${IDENTITY_BASE_URL:?IDENTITY_BASE_URL is required}
+      DIDDIMAP_BASE_URL: ${DIDDIMAP_BASE_URL:-http://abidjanmaps-backend-staging.diddifree.com}
+      IDENTITY_BASE_URL: ${IDENTITY_BASE_URL:-https://auth-staging.diddifree.com}
       IDENTITY_JWKS_URL: ${IDENTITY_JWKS_URL:-}
       IDENTITY_ISSUER: ${IDENTITY_ISSUER:-diddifree-id}
       IDENTITY_PROFILE_URL: ${IDENTITY_PROFILE_URL:-}

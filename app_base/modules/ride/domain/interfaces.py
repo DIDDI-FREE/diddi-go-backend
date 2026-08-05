@@ -18,6 +18,7 @@ from app_base.modules.ride.domain.entities import (
     PricingRule,
     Ride,
     RideRating,
+    RideRoutePoint,
     RideStatus,
     RideStatusTransition,
     Vehicle,
@@ -30,6 +31,8 @@ class RideRepository(Protocol):
     async def save(self, ride: Ride) -> Ride: ...
 
     async def find_by_id(self, ride_id: UUID) -> Ride | None: ...
+
+    async def find_by_share_token(self, token: str) -> Ride | None: ...
 
     async def list_by(
         self,
@@ -55,6 +58,10 @@ class RideRepository(Protocol):
     async def save_rating(self, rating: RideRating) -> RideRating: ...
 
     async def has_rated(self, ride_id: UUID, rater_role: str) -> bool: ...
+
+    async def save_route_points(self, points: list[RideRoutePoint]) -> None: ...
+
+    async def latest_route_point(self, ride_id: UUID) -> RideRoutePoint | None: ...
 
 
 class DriverProfileRepository(Protocol):

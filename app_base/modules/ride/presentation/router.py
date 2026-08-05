@@ -33,6 +33,8 @@ from app_base.modules.ride.presentation.schemas import (
     PricingEstimateRequest,
     RideCancelRequest,
     RideCreateRequest,
+    RideEmergencyRequest,
+    RideLocationSamplesRequest,
     RideRatingRequest,
     RideStatusUpdateRequest,
 )
@@ -71,7 +73,7 @@ async def estimate_pricing(
 ) -> dict:
     pickup = GeoPoint(lat=payload.pickup.lat, lng=payload.pickup.lng)
     dropoff = GeoPoint(lat=payload.dropoff.lat, lng=payload.dropoff.lng)
-    return await service.estimate_pricing(pickup, dropoff, payload.vehicle_category)
+    return await service.estimate_pricing(pickup, dropoff, payload.vehicle_category, payload.comfort_level)
 
 
 @router.post("", status_code=201)
@@ -100,6 +102,8 @@ async def create_ride(
         dropoff=dropoff,
         dropoff_address=payload.dropoff.address,
         vehicle_category=payload.vehicle_category,
+        comfort_level=payload.comfort_level,
+        payment_method=payload.payment_method,
         scheduled_at=payload.scheduled_at,
     )
     response = ride_creation_payload(ride)
@@ -180,6 +184,11 @@ async def decline_ride(
     else:
         await manager.broadcast_no_driver_found(ride_id)
     return {"ride_id": str(ride_id), "reoffered": next_driver is not None}
+
+
+@router.get("/shared/{token}")
+async def get_shared_ride(token: str, service: RideService = Depends(ride_service)) -> dict:
+    return await service.get_shared_ride(token)
 
 
 @router.get("/{ride_id}")
@@ -276,5 +285,49 @@ async def rate_ride(
         ride_id,
         payload.rating,
         payload.comment,
+        actor_user_id=current_user.id,
         actor_role=current_user.role,
+    )
+
+
+@router.post("/{ride_id}/location-samples")
+async def add_location_samples(
+    ride_id: UUID,
+    payload: RideLocationSamplesRequest,
+    service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    return await service.add_location_samples(
+        ride_id,
+        [sample.model_dump() for sample in payload.samples],
+        actor_user_id=current_user.id,
+    )
+
+
+@router.post("/{ride_id}/share-link")
+async def create_share_link(
+    ride_id: UUID,
+    service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    return await service.create_share_link(
+        ride_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
+
+
+@router.post("/{ride_id}/emergency")
+async def request_emergency(
+    ride_id: UUID,
+    payload: RideEmergencyRequest,
+    service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    return await service.request_emergency(
+        ride_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        note=payload.note,
     )

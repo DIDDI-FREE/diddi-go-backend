@@ -9,7 +9,7 @@ APP_ENV=production
 JWT_SECRET=<random-32+-characters-secret>
 POSTGRES_PASSWORD=<strong-password>
 IDENTITY_BASE_URL=https://auth.diddifree.com
-DIDDIMAP_BASE_URL=http://abidjanmaps-backend-staging.diddifree.com
+DIDDIMAP_BASE_URL=<production-diddimap-base-url>
 CORS_ORIGINS=https://go.diddifree.com
 PUSH_ENABLED=true
 FCM_PROJECT_ID=<firebase-project-id>
@@ -25,6 +25,10 @@ variable, Compose refuse de charger la stack.
 
 `IDENTITY_JWKS_URL` et `IDENTITY_PROFILE_URL` peuvent rester vides si
 `IDENTITY_BASE_URL` est renseigne.
+
+Note staging : `docker-compose.portainer.yml` fournit deja les valeurs par
+defaut staging pour `APP_ENV`, `IDENTITY_BASE_URL` et `DIDDIMAP_BASE_URL`.
+En production, il faut les surcharger explicitement.
 
 ## Temps reel chauffeur
 

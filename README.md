@@ -47,10 +47,13 @@ Le démarrage Portainer passe par `docker/start.sh`:
 
 Dans Portainer staging/test :
 - utiliser la stack `docker-compose.portainer.yml`
-- renseigner au minimum `APP_ENV`, `JWT_SECRET`, `DIDDIMAP_BASE_URL`,
-  `IDENTITY_BASE_URL` et `POSTGRES_PASSWORD`
+- renseigner au minimum `JWT_SECRET` et `POSTGRES_PASSWORD`
 - `POSTGRES_PASSWORD` est obligatoire des le parsing Compose. Il faut le mettre
   dans `Stack > Environment variables` avant de deployer.
+- `APP_ENV` vaut `production` par defaut dans la stack Portainer.
+- `IDENTITY_BASE_URL` vaut `https://auth-staging.diddifree.com` par defaut.
+- `DIDDIMAP_BASE_URL` vaut
+  `http://abidjanmaps-backend-staging.diddifree.com` par defaut.
 - `DATABASE_URL` et `REDIS_URL` ont des valeurs internes par defaut pour la
   stack Portainer (`db:5432` et `redis:6379`). Ne les renseigner que si la base
   PostgreSQL ou Redis vivent hors de cette stack.
@@ -61,15 +64,14 @@ Dans Portainer staging/test :
   `https://go-staging.diddifree.com,https://qa.diddifree.com`
 - `localhost` et `127.0.0.1` sont autorisÃ©s sur tous les ports par dÃ©faut via
   `CORS_ORIGIN_REGEX`, ce qui couvre les testeurs en local
-- pour consommer DiddiFreeID en staging, renseigner
-  `IDENTITY_BASE_URL=https://auth-staging.diddifree.com`.
+- pour consommer un autre DiddiFreeID que le staging, surcharger
+  `IDENTITY_BASE_URL`.
   `IDENTITY_JWKS_URL` et `IDENTITY_PROFILE_URL` sont dérivées automatiquement,
   mais restent disponibles si on doit les surcharger.
 - conserver `main` pour la production et `stage` pour QA / UI / intégration
 
 Garde-fous production :
-- `docker-compose.portainer.yml` exige `APP_ENV`, `JWT_SECRET`,
-  `DIDDIMAP_BASE_URL`, `IDENTITY_BASE_URL` et `POSTGRES_PASSWORD`.
+- `docker-compose.portainer.yml` exige `JWT_SECRET` et `POSTGRES_PASSWORD`.
 - `DATABASE_URL` et `REDIS_URL` ne sont plus obligatoires quand Portainer
   utilise les services internes `db` et `redis`.
 - `docker/start.sh` refuse de demarrer en `APP_ENV=production` avec le
@@ -94,11 +96,8 @@ Important :
 Variables Portainer staging obligatoires :
 
 ```env
-APP_ENV=production
 JWT_SECRET=<random-32+-characters-secret>
 POSTGRES_PASSWORD=<strong-password>
-IDENTITY_BASE_URL=https://auth-staging.diddifree.com
-DIDDIMAP_BASE_URL=http://abidjanmaps-backend-staging.diddifree.com
 CORS_ORIGINS=https://go-staging.diddifree.com
 ```
 
@@ -106,9 +105,12 @@ Variables Portainer optionnelles/recommandees :
 
 ```env
 APP_NAME=DiddiGo
+APP_ENV=production
 BACKEND_PORT=18000
 POSTGRES_DB=diddi_go
 POSTGRES_USER=postgres
+IDENTITY_BASE_URL=https://auth-staging.diddifree.com
+DIDDIMAP_BASE_URL=http://abidjanmaps-backend-staging.diddifree.com
 PUSH_ENABLED=true
 FCM_PROJECT_ID=<firebase-project-id>
 FCM_SERVICE_ACCOUNT_JSON=<firebase-service-account-json-one-line>
@@ -116,6 +118,16 @@ FCM_SERVICE_ACCOUNT_JSON=<firebase-service-account-json-one-line>
 
 Ne pas renseigner `DATABASE_URL` ni `REDIS_URL` si la stack utilise les services
 internes `db` et `redis`.
+
+Pour verifier localement le fichier Portainer sans que le `.env` de dev ne
+pollue les valeurs, utiliser :
+
+```powershell
+$env:COMPOSE_DISABLE_ENV_FILE='1'
+$env:JWT_SECRET='test-secret-at-least-32-characters-long!!'
+$env:POSTGRES_PASSWORD='postgres'
+docker compose -f docker-compose.portainer.yml config
+```
 
 ---
 

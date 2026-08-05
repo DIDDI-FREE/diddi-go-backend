@@ -44,5 +44,12 @@ async def test_pricing_uses_diddigo_policy_with_diddimap_distance():
         "distance_km": 11.876,
         "duration_seconds": 983,
         "surge_multiplier": 1.0,
+        "surge_cap": 1.6,
+        "base_fare": 250,
+        "distance_fare": 2850,
+        "duration_fare": 0,
+        "commission_rate": 0.08,
+        "platform_commission": 248,
+        "driver_payout_estimate": 2852,
     }
     assert pricing_rules.called is True
