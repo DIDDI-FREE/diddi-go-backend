@@ -27,8 +27,8 @@ services:
       FCM_SERVICE_ACCOUNT_JSON: ${FCM_SERVICE_ACCOUNT_JSON:-}
       FCM_SERVICE_ACCOUNT_FILE: ${FCM_SERVICE_ACCOUNT_FILE:-}
       BACKEND_PORT: ${BACKEND_PORT:-18000}
-      POSTGRES_PORT: ${POSTGRES_PORT:-15432}
-      REDIS_PORT: ${REDIS_PORT:-16379}
+      POSTGRES_PORT: ${POSTGRES_PORT:-15433}
+      REDIS_PORT: ${REDIS_PORT:-16380}
     depends_on:
       db:
         condition: service_healthy
@@ -42,7 +42,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "${POSTGRES_PORT:-15432}:5432"
+      - "${POSTGRES_PORT:-15433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
@@ -56,7 +56,7 @@ services:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "${REDIS_PORT:-16379}:6379"
+      - "${REDIS_PORT:-16380}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

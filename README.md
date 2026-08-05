@@ -29,8 +29,22 @@ Santé : <http://localhost:8000/health>
 
 Repères locaux :
 - Backend exposé sur `18000`
-- PostgreSQL exposé sur `15432`
-- Redis exposé sur `16379`
+- PostgreSQL exposé sur `15433`
+- Redis exposé sur `16380`
+
+Depuis Windows/hote, utiliser :
+
+```env
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:15433/diddi_go
+REDIS_URL=redis://localhost:16380/0
+```
+
+Depuis les conteneurs Docker Compose, utiliser :
+
+```env
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/diddi_go
+REDIS_URL=redis://redis:6379/0
+```
 
 ---
 

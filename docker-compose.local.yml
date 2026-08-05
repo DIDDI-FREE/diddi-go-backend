@@ -3,6 +3,9 @@ services:
     extends:
       file: docker-compose.yml
       service: app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-diddi_go}
+      REDIS_URL: redis://redis:6379/0
     command: alembic upgrade head
     restart: "no"
     depends_on:
@@ -12,6 +15,9 @@ services:
         condition: service_healthy
 
   app:
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-diddi_go}
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "${BACKEND_PORT:-18000}:8000"
     command: uvicorn app_base.main:app --host 0.0.0.0 --port 8000 --reload
@@ -26,8 +32,8 @@ services:
 
   db:
     ports:
-      - "${POSTGRES_PORT:-15432}:5432"
+      - "${POSTGRES_PORT:-15433}:5432"
 
   redis:
     ports:
-      - "${REDIS_PORT:-16379}:6379"
+      - "${REDIS_PORT:-16380}:6379"
