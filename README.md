@@ -47,9 +47,13 @@ Le démarrage Portainer passe par `docker/start.sh`:
 
 Dans Portainer :
 - utiliser la stack `docker-compose.portainer.yml`
-- renseigner `APP_NAME`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`,
-  `DIDDIMAP_BASE_URL`, `POSTGRES_PASSWORD`, `BACKEND_PORT`, `POSTGRES_PORT`,
-  `REDIS_PORT`, `CORS_ORIGINS` et les autres variables si besoin
+- renseigner au minimum `APP_ENV`, `JWT_SECRET`, `DIDDIMAP_BASE_URL`,
+  `IDENTITY_BASE_URL` et `POSTGRES_PASSWORD`
+- `DATABASE_URL` et `REDIS_URL` ont des valeurs internes par defaut pour la
+  stack Portainer (`db:5432` et `redis:6379`). Ne les renseigner que si la base
+  PostgreSQL ou Redis vivent hors de cette stack.
+- `BACKEND_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, `CORS_ORIGINS` et les autres
+  variables restent surchargeables si besoin
 - pour autoriser les frontends de test, renseigner `CORS_ORIGINS` avec une
   liste sÃ©parÃ©e par des virgules, par exemple
   `https://go-staging.diddifree.com,https://qa.diddifree.com`
@@ -62,8 +66,10 @@ Dans Portainer :
 - conserver `main` pour la production et `stage` pour QA / UI / intégration
 
 Garde-fous production :
-- `docker-compose.portainer.yml` exige `DATABASE_URL`, `REDIS_URL`,
-  `JWT_SECRET`, `DIDDIMAP_BASE_URL` et `POSTGRES_PASSWORD`.
+- `docker-compose.portainer.yml` exige `APP_ENV`, `JWT_SECRET`,
+  `DIDDIMAP_BASE_URL`, `IDENTITY_BASE_URL` et `POSTGRES_PASSWORD`.
+- `DATABASE_URL` et `REDIS_URL` ne sont plus obligatoires quand Portainer
+  utilise les services internes `db` et `redis`.
 - `docker/start.sh` refuse de demarrer en `APP_ENV=production` avec le
   `JWT_SECRET` d'exemple.
 - `docker/start.sh` refuse de demarrer en production sans DiddiAuth

@@ -6,8 +6,6 @@ Ce document liste les points obligatoires avant passage en production.
 
 ```env
 APP_ENV=production
-DATABASE_URL=postgresql+asyncpg://postgres:<strong-password>@db:5432/diddi_go
-REDIS_URL=redis://redis:6379/0
 JWT_SECRET=<random-32+-characters-secret>
 POSTGRES_PASSWORD=<strong-password>
 IDENTITY_BASE_URL=https://auth.diddifree.com
@@ -17,6 +15,10 @@ PUSH_ENABLED=true
 FCM_PROJECT_ID=<firebase-project-id>
 FCM_SERVICE_ACCOUNT_JSON=<firebase-service-account-json>
 ```
+
+`DATABASE_URL` et `REDIS_URL` sont optionnels quand Portainer utilise les
+services internes `db` et `redis`. Les renseigner uniquement si PostgreSQL ou
+Redis vivent hors de cette stack.
 
 `IDENTITY_JWKS_URL` et `IDENTITY_PROFILE_URL` peuvent rester vides si
 `IDENTITY_BASE_URL` est renseigne.
