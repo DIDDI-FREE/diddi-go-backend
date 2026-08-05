@@ -283,8 +283,7 @@ Important : DiddiGo n'expose pas `/v1/files/*`. Les fichiers passent par le
 service separe DiddiFiles :
 
 ```text
-Staging DiddiFiles: https://diddifiles-staging.diddifree.com/v1
-Production DiddiFiles: https://diddifiles.diddifree.com/v1
+DiddiFiles: https://diddifiles.diddifree.com/v1
 ```
 
 Routes DiddiFiles utilisees par le frontend :
