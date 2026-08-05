@@ -279,6 +279,22 @@ avant cet appel. DiddiGo stocke uniquement les `*_file_id` retournes par
 DiddiFiles. Les champs `*_document_url` sont conserves temporairement pour
 compatibilite legacy et ne doivent plus etre la source de verite.
 
+Important : DiddiGo n'expose pas `/v1/files/*`. Les fichiers passent par le
+service separe DiddiFiles :
+
+```text
+DiddiFiles: https://diddifiles.diddifree.com/v1
+```
+
+Routes DiddiFiles utilisees par le frontend :
+
+```http
+POST /files/upload-session
+POST /files/{file_id}/confirm
+GET /files/{file_id}
+POST /files/{file_id}/download-url
+```
+
 Le token DiddiFreeID reste normalement `role=user`. Le frontend ne doit pas
 attendre un `role=driver` central pour continuer le parcours chauffeur.
 

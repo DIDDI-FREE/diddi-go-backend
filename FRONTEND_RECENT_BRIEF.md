@@ -78,11 +78,23 @@ Payload :
 recommandes pour le dossier KYC.
 
 Nouveau flux fichiers :
+- utiliser DiddiFiles sur son URL dediee, pas sur `go-staging`
+- URL DiddiFiles : `https://diddifiles.diddifree.com/v1`
 - uploader les documents dans DiddiFiles avec `module_owner=diddigo`
 - utiliser les purposes `diddigo_driver_kyc_license`,
   `diddigo_driver_kyc_national_id`, `diddigo_driver_kyc_selfie`
 - appeler `POST /v1/files/{file_id}/confirm`
 - envoyer ensuite les `*_document_file_id` a DiddiGo
+
+Important : `go-staging.diddifree.com` ne doit pas exposer `/v1/files/*`.
+Les routes fichiers appartiennent au service separe DiddiFiles :
+
+```http
+POST https://diddifiles.diddifree.com/v1/files/upload-session
+POST https://diddifiles.diddifree.com/v1/files/{file_id}/confirm
+GET  https://diddifiles.diddifree.com/v1/files/{file_id}
+POST https://diddifiles.diddifree.com/v1/files/{file_id}/download-url
+```
 
 Les champs `*_document_url` restent acceptes uniquement pour compatibilite
 temporaire. Le frontend ne doit plus construire d'URL permanente comme source
@@ -188,6 +200,9 @@ PUSH_ENABLED=true
 FCM_PROJECT_ID=<firebase-project-id>
 FCM_SERVICE_ACCOUNT_JSON=<firebase-service-account-json-one-line>
 ```
+
+`POSTGRES_PASSWORD` ne bloque plus le parsing Compose si absent, mais il reste
+obligatoire pour que PostgreSQL demarre correctement.
 
 Ne pas envoyer `DATABASE_URL` ni `REDIS_URL` depuis le frontend. Ce sont des
 variables internes backend. Le frontend doit seulement appeler les URLs HTTP et

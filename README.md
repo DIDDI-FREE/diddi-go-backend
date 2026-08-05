@@ -45,10 +45,13 @@ Le démarrage Portainer passe par `docker/start.sh`:
 - `alembic upgrade head`
 - lancement de FastAPI
 
-Dans Portainer :
+Dans Portainer staging/test :
 - utiliser la stack `docker-compose.portainer.yml`
 - renseigner au minimum `APP_ENV`, `JWT_SECRET`, `DIDDIMAP_BASE_URL`,
   `IDENTITY_BASE_URL` et `POSTGRES_PASSWORD`
+- `POSTGRES_PASSWORD` n'est plus bloque au parsing Compose, ce qui permet a
+  Portainer de faire `pull/config`. Il reste obligatoire pour que PostgreSQL
+  demarre correctement.
 - `DATABASE_URL` et `REDIS_URL` ont des valeurs internes par defaut pour la
   stack Portainer (`db:5432` et `redis:6379`). Ne les renseigner que si la base
   PostgreSQL ou Redis vivent hors de cette stack.
@@ -67,7 +70,10 @@ Dans Portainer :
 
 Garde-fous production :
 - `docker-compose.portainer.yml` exige `APP_ENV`, `JWT_SECRET`,
-  `DIDDIMAP_BASE_URL`, `IDENTITY_BASE_URL` et `POSTGRES_PASSWORD`.
+  `DIDDIMAP_BASE_URL` et `IDENTITY_BASE_URL`.
+- Renseigner toujours `POSTGRES_PASSWORD` avec une valeur forte. Sans cette
+  variable, Compose peut etre charge par Portainer, mais PostgreSQL refusera de
+  demarrer.
 - `DATABASE_URL` et `REDIS_URL` ne sont plus obligatoires quand Portainer
   utilise les services internes `db` et `redis`.
 - `docker/start.sh` refuse de demarrer en `APP_ENV=production` avec le
