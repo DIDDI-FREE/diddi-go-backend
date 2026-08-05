@@ -212,7 +212,7 @@ class MatchingService:
                 )
                 continue
 
-            can_take, reason = await self._can_take_ride(user_id)
+            can_take, reason = await self._can_take_ride(user_id, ride)
             if can_take:
                 logger.info("matching_candidate_selected ride_id=%s driver_user_id=%s", ride.id, user_id)
                 return user_id
@@ -227,7 +227,7 @@ class MatchingService:
         logger.info("matching_no_candidate ride_id=%s reason=all_candidates_rejected", ride.id)
         return None
 
-    async def _can_take_ride(self, user_id: UUID) -> tuple[bool, str | None]:
+    async def _can_take_ride(self, user_id: UUID, ride: Ride) -> tuple[bool, str | None]:
         profile = await self.driver_repo.find_by_user_id(user_id)
         if profile is None:
             return False, "driver_profile_not_found"
@@ -236,6 +236,10 @@ class MatchingService:
         vehicle = await self.vehicle_repo.find_active_for_driver(profile.id)
         if vehicle is None:
             return False, "no_active_vehicle"
+        if vehicle.category != ride.vehicle_category:
+            return False, f"vehicle_category_mismatch:{vehicle.category.value}!={ride.vehicle_category.value}"
+        if vehicle.comfort_level != ride.comfort_level:
+            return False, f"comfort_level_mismatch:{vehicle.comfort_level.value}!={ride.comfort_level.value}"
         return True, None
 
     async def _give_up(self, ride: Ride) -> None:

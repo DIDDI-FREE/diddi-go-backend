@@ -2,6 +2,26 @@
 
 Ce brief resume les changements recents a consommer cote mobile/frontend.
 
+## 0. Contrat API v3
+
+Le nouveau contrat de reference est :
+
+```text
+DiddiGo_Contrat_API_v3.md
+```
+
+Le prefixe public reste `/v1`. `v3` est la version fonctionnelle du contrat,
+pas encore une URL `/v3`.
+
+Ajouts majeurs :
+
+- `comfort_level` sur pricing, creation de course et vehicule.
+- pricing detaille avec commission plateforme et payout chauffeur estime.
+- preparation `cash`, `wave`, `diddipay`.
+- traces GPS chauffeur via REST.
+- lien public de partage de course sans login.
+- endpoint urgence course.
+
 ## 1. Auth DiddiFreeID
 
 Le frontend se connecte sur DiddiFreeID, puis appelle DiddiGo avec :
@@ -136,6 +156,180 @@ Regles frontend :
 - Afficher `label`.
 - Utiliser `lat` et `lng` retournes pour pickup/dropoff.
 
+## 4.1 Pricing et comfort level
+
+`POST /v1/rides/pricing/estimate` accepte maintenant :
+
+```json
+{
+  "pickup": {"lat": 5.3599, "lng": -4.0083, "address": "Carrefour Anador"},
+  "dropoff": {"lat": 5.3167, "lng": -4.0333, "address": "Plateau"},
+  "vehicle_category": "standard",
+  "comfort_level": "standard"
+}
+```
+
+Reponse :
+
+```json
+{
+  "estimated_fare": 3100,
+  "currency": "XOF",
+  "distance_km": 11.876,
+  "duration_seconds": 983,
+  "surge_multiplier": 1.0,
+  "surge_cap": 1.6,
+  "base_fare": 250,
+  "distance_fare": 2850,
+  "duration_fare": 0,
+  "commission_rate": 0.08,
+  "platform_commission": 248,
+  "driver_payout_estimate": 2852
+}
+```
+
+Important :
+
+- DiddiMap donne distance/duree.
+- DiddiGo calcule le prix, la commission et le payout.
+- Pas de fallback silencieux si DiddiMap echoue.
+- Le prix final utilisera plus tard la distance/duree reellement parcourues,
+  quand DiddiMap Core exposera le calcul officiel.
+
+## 4.2 Creation de course
+
+`POST /v1/rides` accepte maintenant aussi :
+
+```json
+{
+  "comfort_level": "standard",
+  "payment_method": "cash"
+}
+```
+
+`payment_method` peut etre `cash`, `wave`, ou `diddipay`. Pour le moment,
+seul `cash` est reellement encaissable. `wave` et `diddipay` sont prepares pour
+l'integration provider.
+
+Le matching exige maintenant :
+
+```text
+vehicle.category == ride.vehicle_category
+vehicle.comfort_level == ride.comfort_level
+```
+
+Donc si l'utilisateur choisit `comfort_level=premium`, il faut s'attendre a ce
+que seuls les chauffeurs avec vehicule premium soient eligibles.
+
+La reponse contient maintenant :
+
+```json
+{
+  "payment_method": "cash"
+}
+```
+
+## 4.3 Traces GPS chauffeur
+
+Nouveau endpoint REST :
+
+```http
+POST /v1/rides/{ride_id}/location-samples
+```
+
+Reserve au chauffeur assigne.
+
+Payload :
+
+```json
+{
+  "samples": [
+    {
+      "lat": 5.352,
+      "lng": -3.997,
+      "recorded_at": "2026-08-05T10:20:00Z",
+      "heading": 90,
+      "speed_kmh": 25,
+      "accuracy_m": 8,
+      "source": "driver"
+    }
+  ]
+}
+```
+
+Le frontend peut continuer a utiliser le WebSocket `driver.location_push` pour
+le temps reel. Cette route REST sert de canal controle/documente pour stocker
+les traces et alimenter le partage public.
+
+Pour le moment, DiddiGo ne recalcule pas encore le prix final depuis ces traces.
+Il n'y a pas de fallback silencieux : si le fournisseur DiddiMap Core n'expose
+pas encore le calcul officiel, les champs `actual_distance_km` et
+`actual_duration_seconds` restent `null`.
+
+## 4.4 Partage de course
+
+Creer un lien :
+
+```http
+POST /v1/rides/{ride_id}/share-link
+```
+
+Reponse :
+
+```json
+{
+  "ride_id": "ride-id",
+  "share_token": "opaque-token",
+  "expires_at": "2026-08-06T10:15:00Z",
+  "public_path": "/v1/rides/shared/opaque-token"
+}
+```
+
+Vue publique sans login :
+
+```http
+GET /v1/rides/shared/{token}
+```
+
+Cette vue doit afficher la position du chauffeur, pas celle du passager.
+
+## 4.5 Urgence
+
+Nouveau endpoint :
+
+```http
+POST /v1/rides/{ride_id}/emergency
+```
+
+Payload :
+
+```json
+{
+  "note": "Besoin assistance"
+}
+```
+
+Reponse :
+
+```json
+{
+  "ride_id": "ride-id",
+  "status": "open",
+  "requested_at": "2026-08-05T10:25:00Z"
+}
+```
+
+Le detail course expose aussi :
+
+```json
+{
+  "emergency": {
+    "status": "open",
+    "requested_at": "2026-08-05T10:25:00Z"
+  }
+}
+```
+
 ## 5. Push notifications
 
 Le backend DiddiGo utilise FCM uniquement, Android et iOS.
@@ -147,6 +341,42 @@ POST /v1/devices/unregister
 
 Sur iOS, l'application doit envoyer un token FCM Firebase Messaging, pas un
 token APNs brut. Firebase relaie ensuite vers APNs en interne.
+
+## 5.1 Paiement prepare
+
+Nouveau endpoint :
+
+```http
+POST /v1/payments/{ride_id}/prepare
+```
+
+Payload :
+
+```json
+{
+  "method": "wave"
+}
+```
+
+Reponse tant que le provider n'est pas branche :
+
+```json
+{
+  "ride_id": "ride-id",
+  "status": "pending",
+  "method": "wave",
+  "amount": 3100,
+  "currency": "XOF",
+  "provider": "wave",
+  "provider_status": "not_connected"
+}
+```
+
+Pour la production initiale, l'encaissement actif reste :
+
+```http
+POST /v1/payments/{ride_id}/confirm-cash
+```
 
 ## 6. WebSocket chauffeur
 
@@ -184,11 +414,8 @@ stack utilise les services internes `db` et `redis`.
 Variables minimales a fournir dans la stack :
 
 ```env
-APP_ENV=production
 JWT_SECRET=<random-32+-characters-secret>
 POSTGRES_PASSWORD=<strong-password>
-IDENTITY_BASE_URL=https://auth-staging.diddifree.com
-DIDDIMAP_BASE_URL=http://abidjanmaps-backend-staging.diddifree.com
 CORS_ORIGINS=https://go-staging.diddifree.com
 ```
 
@@ -196,6 +423,9 @@ Variables optionnelles selon environnement :
 
 ```env
 BACKEND_PORT=18000
+APP_ENV=production
+IDENTITY_BASE_URL=https://auth-staging.diddifree.com
+DIDDIMAP_BASE_URL=http://abidjanmaps-backend-staging.diddifree.com
 PUSH_ENABLED=true
 FCM_PROJECT_ID=<firebase-project-id>
 FCM_SERVICE_ACCOUNT_JSON=<firebase-service-account-json-one-line>
@@ -203,6 +433,10 @@ FCM_SERVICE_ACCOUNT_JSON=<firebase-service-account-json-one-line>
 
 `POSTGRES_PASSWORD` est obligatoire dans Portainer. Sans cette variable,
 Compose refuse de charger la stack.
+
+En staging, `IDENTITY_BASE_URL` et `DIDDIMAP_BASE_URL` ont deja des valeurs par
+defaut dans `docker-compose.portainer.yml`. Les surcharger seulement si on vise
+un autre environnement.
 
 Ne pas envoyer `DATABASE_URL` ni `REDIS_URL` depuis le frontend. Ce sont des
 variables internes backend. Le frontend doit seulement appeler les URLs HTTP et

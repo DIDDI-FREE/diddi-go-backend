@@ -55,12 +55,27 @@ async def test_pricing_estimate_matches_contract_shape(client, passenger) -> Non
     assert r.status_code == 200
     body = r.json()
     assert set(body) == {
-        "estimated_fare", "currency", "distance_km", "duration_seconds", "surge_multiplier",
+        "estimated_fare",
+        "currency",
+        "distance_km",
+        "duration_seconds",
+        "surge_multiplier",
+        "surge_cap",
+        "base_fare",
+        "distance_fare",
+        "duration_fare",
+        "commission_rate",
+        "platform_commission",
+        "driver_payout_estimate",
     }
     assert body["currency"] == "XOF"
     assert isinstance(body["estimated_fare"], int) and body["estimated_fare"] > 0
     assert body["distance_km"] > 0
     assert body["surge_multiplier"] == 1.0
+    assert body["surge_cap"] == 1.6
+    assert body["commission_rate"] == 0.08
+    assert body["platform_commission"] > 0
+    assert body["driver_payout_estimate"] > 0
 
 
 async def test_pricing_rejects_unknown_vehicle_category(client, passenger) -> None:
@@ -82,6 +97,7 @@ async def test_create_ride_returns_requested(client, passenger) -> None:
     assert body["status"] == "requested"
     assert body["currency"] == "XOF"
     assert body["estimated_fare"] > 0
+    assert body["payment_method"] == "cash"
     assert body["requested_at"].endswith("Z")
 
 
@@ -266,6 +282,57 @@ async def test_rating_out_of_range_is_rejected(client, passenger, driver) -> Non
     assert r.json()["error"]["code"] == "RATING_OUT_OF_RANGE"
 
 
+# --- safety + tracking -----------------------------------------------------
+
+async def test_driver_location_samples_power_public_share_link(client, passenger, driver) -> None:
+    ride_id = await matched_ride(client, passenger, driver)
+
+    r = await client.post(
+        f"/v1/rides/{ride_id}/location-samples",
+        json={
+            "samples": [
+                {
+                    "lat": 5.352,
+                    "lng": -3.997,
+                    "heading": 90,
+                    "speed_kmh": 25,
+                    "accuracy_m": 8,
+                    "source": "driver",
+                }
+            ]
+        },
+        headers=driver,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["accepted_samples"] == 1
+
+    r = await client.post(f"/v1/rides/{ride_id}/share-link", headers=passenger)
+    assert r.status_code == 200, r.text
+    token = r.json()["share_token"]
+
+    public = await client.get(f"/v1/rides/shared/{token}")
+    assert public.status_code == 200, public.text
+    body = public.json()
+    assert body["ride_id"] == ride_id
+    assert body["driver_location"] == {"lat": 5.352, "lng": -3.997}
+    assert body["last_location_at"].endswith("Z")
+
+
+async def test_passenger_can_trigger_ride_emergency(client, passenger, driver) -> None:
+    ride_id = await matched_ride(client, passenger, driver)
+
+    r = await client.post(
+        f"/v1/rides/{ride_id}/emergency",
+        json={"note": "Besoin assistance"},
+        headers=passenger,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "open"
+
+    detail = (await client.get(f"/v1/rides/{ride_id}", headers=passenger)).json()
+    assert detail["emergency"]["status"] == "open"
+
+
 # --- payment ---------------------------------------------------------------
 
 async def test_payment_starts_pending(client, passenger, driver) -> None:
@@ -274,6 +341,19 @@ async def test_payment_starts_pending(client, passenger, driver) -> None:
     assert r.status_code == 200
     assert r.json()["status"] == "pending"
     assert r.json()["method"] == "cash"
+
+
+async def test_wave_payment_can_be_prepared_for_future_provider(client, passenger, driver) -> None:
+    ride_id, fare = await complete_ride(client, passenger, driver)
+
+    r = await client.post(f"/v1/payments/{ride_id}/prepare", json={"method": "wave"}, headers=passenger)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "pending"
+    assert body["method"] == "wave"
+    assert body["amount"] == fare
+    assert body["provider"] == "wave"
+    assert body["provider_status"] == "not_connected"
 
 
 async def test_driver_confirms_cash_collection(client, passenger, driver) -> None:

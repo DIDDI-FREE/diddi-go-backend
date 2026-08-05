@@ -104,11 +104,47 @@ class PaymentService:
     async def get_payment(self, ride_id: UUID) -> dict:
         payment = await self.payment_repo.find_by_ride_id(ride_id)
         if payment is None:
-            return {"ride_id": str(ride_id), "status": "pending", "method": "cash", "amount": None, "currency": "XOF"}
+            ride = await self.ride_repo.find_by_id(ride_id)
+            method = ride.payment_method.value if ride is not None else "cash"
+            return {"ride_id": str(ride_id), "status": "pending", "method": method, "amount": None, "currency": "XOF"}
         return {
             "ride_id": str(payment.ride_id),
             "status": payment.status.value,
             "method": payment.method.value,
             "amount": int(payment.amount),
             "currency": payment.currency,
+        }
+
+    async def prepare_payment(self, ride_id: UUID, method: str) -> dict:
+        ride = await self.ride_repo.find_by_id(ride_id)
+        if ride is None:
+            raise ApiError(404, "RIDE_NOT_FOUND", "Aucune course trouvee avec cet identifiant.")
+        try:
+            payment_method = PaymentMethod(method)
+        except ValueError as exc:
+            raise ApiError(422, "INVALID_PAYMENT_METHOD", "Methode de paiement invalide.") from exc
+        payment = await self.payment_repo.find_by_ride_id(ride_id)
+        if payment is None:
+            payment = Transaction(
+                id=Transaction.new_id(),
+                ride_id=ride_id,
+                amount=ride.final_fare or ride.estimated_fare or Decimal("0"),
+                currency=ride.currency,
+                method=payment_method,
+                status=PaymentStatus.PENDING,
+                created_at=datetime.utcnow(),
+            )
+            await self.payment_repo.save(payment)
+        return {
+            "ride_id": str(payment.ride_id),
+            "status": payment.status.value,
+            "method": payment.method.value,
+            "amount": int(payment.amount),
+            "currency": payment.currency,
+            "provider": payment.method.value,
+            "provider_status": (
+                "not_connected"
+                if payment.method in {PaymentMethod.WAVE, PaymentMethod.DIDDIPAY}
+                else "local"
+            ),
         }

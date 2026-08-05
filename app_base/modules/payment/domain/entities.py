@@ -17,8 +17,8 @@ class PaymentStatus(str, Enum):
 
 class PaymentMethod(str, Enum):
     CASH = "cash"
-    # MOBILE_MONEY = "mobile_money"  # DiddiPay era
-    # WALLET = "wallet"              # DiddiPay era
+    WAVE = "wave"
+    DIDDIPAY = "diddipay"
 
 
 @dataclass

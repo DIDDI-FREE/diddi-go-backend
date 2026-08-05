@@ -106,6 +106,7 @@ class VehicleModel(Base):
     color: Mapped[str | None] = mapped_column(String(30), nullable=True)
     registration_document_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     category: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")  # standard | comfort | van
+    comfort_level: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()"),
@@ -141,6 +142,7 @@ class RideModel(Base):
     # every value in the enum with headroom for the future `payment_pending`
     # status the API contract reserves.
     status: Mapped[str] = mapped_column(String(30), nullable=False, index=True, default="requested")
+    comfort_level: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")
     # -- Spatial columns: WGS84 geography (degrees); distances computed in meters on the sphere.
     pickup_location = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=False)
     pickup_address: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -162,8 +164,24 @@ class RideModel(Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="XOF")
     distance_km: Mapped[Decimal | None] = mapped_column(Numeric(6, 2), nullable=True)  # from DiddiMap
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)  # from DiddiMap
+    base_fare: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    distance_fare: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    duration_fare: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    surge_multiplier: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False, default=Decimal("1.00"))
+    surge_cap: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False, default=Decimal("1.60"))
+    commission_rate: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False, default=Decimal("0.08"))
+    driver_payout_estimate: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    platform_commission: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    actual_distance_km: Mapped[Decimal | None] = mapped_column(Numeric(8, 3), nullable=True)
+    actual_duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    payment_method: Mapped[str] = mapped_column(String(20), nullable=False, default="cash")
     # -- Cross-module reference (resolved via payment_module, never via direct SQL)
     payment_transaction_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    share_token: Mapped[str | None] = mapped_column(String(80), nullable=True, unique=True)
+    share_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    emergency_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    emergency_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    emergency_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()"),
     )
@@ -217,6 +235,11 @@ class RideRoutePointModel(Base):
     )
     location = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    heading: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    speed_kmh: Mapped[Decimal | None] = mapped_column(Numeric(7, 2), nullable=True)
+    accuracy_m: Mapped[Decimal | None] = mapped_column(Numeric(7, 2), nullable=True)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="driver")
+    extra: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
 
 
 class PricingRuleModel(Base):

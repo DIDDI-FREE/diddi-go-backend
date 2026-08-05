@@ -64,6 +64,18 @@ class VehicleCategory(str, Enum):
     VAN = "van"
 
 
+class ComfortLevel(str, Enum):
+    STANDARD = "standard"
+    COMFORT = "comfort"
+    PREMIUM = "premium"
+
+
+class PaymentMethod(str, Enum):
+    CASH = "cash"
+    WAVE = "wave"
+    DIDDIPAY = "diddipay"
+
+
 class DriverStatus(str, Enum):
     """Lifecycle of a driver's account (architecture doc §3.2).
 
@@ -102,6 +114,7 @@ class Ride:
     passenger_user_id: UUID
     status: RideStatus = RideStatus.REQUESTED
     vehicle_category: VehicleCategory = VehicleCategory.STANDARD
+    comfort_level: ComfortLevel = ComfortLevel.STANDARD
 
     pickup_location: GeoPoint | None = None
     pickup_address: str | None = None
@@ -122,11 +135,27 @@ class Ride:
     currency: str = "XOF"
     distance_km: Decimal | None = None
     duration_seconds: int | None = None
+    base_fare: Decimal | None = None
+    distance_fare: Decimal | None = None
+    duration_fare: Decimal | None = None
+    surge_multiplier: Decimal = Decimal("1.00")
+    surge_cap: Decimal = Decimal("1.60")
+    commission_rate: Decimal = Decimal("0.08")
+    driver_payout_estimate: Decimal | None = None
+    platform_commission: Decimal | None = None
+    actual_distance_km: Decimal | None = None
+    actual_duration_seconds: int | None = None
+    payment_method: PaymentMethod = PaymentMethod.CASH
 
     # Cross-module refs (logical — resolved via module APIs, never via SQL)
     driver_id: UUID | None = None
     vehicle_id: UUID | None = None
     payment_transaction_id: UUID | None = None
+    share_token: str | None = None
+    share_expires_at: datetime | None = None
+    emergency_requested_at: datetime | None = None
+    emergency_status: str | None = None
+    emergency_note: str | None = None
 
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -237,6 +266,7 @@ class Vehicle:
     driver_id: UUID
     plate_number: str
     category: VehicleCategory = VehicleCategory.STANDARD
+    comfort_level: ComfortLevel = ComfortLevel.STANDARD
     make: str | None = None
     model: str | None = None
     color: str | None = None
@@ -271,6 +301,18 @@ class RideRating:
     rating: int
     comment: str | None = None
     created_at: datetime | None = None
+
+
+@dataclass
+class RideRoutePoint:
+    ride_id: UUID
+    location: GeoPoint
+    recorded_at: datetime
+    heading: int | None = None
+    speed_kmh: Decimal | None = None
+    accuracy_m: Decimal | None = None
+    source: str = "driver"
+    extra: dict | None = None
 
 
 @dataclass

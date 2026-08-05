@@ -16,10 +16,20 @@ from app_base.core.deps import payment_service
 from app_base.core.errors import ApiError
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.payment.application.services import PaymentService
-from app_base.modules.payment.presentation.schemas import CashConfirmationRequest
+from app_base.modules.payment.presentation.schemas import CashConfirmationRequest, PaymentPreparationRequest
 from app_base.modules.ride.domain.entities import DriverProfile
 
 router = APIRouter(prefix="/payments", tags=["payment"])
+
+
+@router.post("/{ride_id}/prepare")
+async def prepare_payment(
+    ride_id: UUID,
+    payload: PaymentPreparationRequest,
+    service: PaymentService = Depends(payment_service),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    return await service.prepare_payment(ride_id, payload.method)
 
 
 @router.post("/{ride_id}/confirm-cash")

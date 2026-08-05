@@ -10,3 +10,7 @@ from pydantic import BaseModel, Field
 
 class CashConfirmationRequest(BaseModel):
     amount_collected: int = Field(ge=0)
+
+
+class PaymentPreparationRequest(BaseModel):
+    method: str = Field(default="cash")

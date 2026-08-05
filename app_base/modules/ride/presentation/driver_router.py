@@ -65,6 +65,7 @@ async def register_vehicle(
         model=payload.model,
         color=payload.color,
         category=payload.category,
+        comfort_level=payload.comfort_level,
         registration_document_file_id=payload.registration_document_file_id,
     )
 

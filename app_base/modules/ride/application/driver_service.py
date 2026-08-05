@@ -19,6 +19,7 @@ from uuid import UUID
 
 from app_base.core.errors import ApiError
 from app_base.modules.ride.domain.entities import (
+    ComfortLevel,
     DriverProfile,
     DriverStatus,
     Vehicle,
@@ -99,12 +100,18 @@ class DriverService:
         model: str | None,
         color: str | None,
         category: str,
+        comfort_level: str = "standard",
         registration_document_file_id: UUID | None = None,
     ) -> dict:
         if category not in {c.value for c in VehicleCategory}:
             raise ApiError(
                 422, "INVALID_VEHICLE_CATEGORY", "Catégorie de véhicule invalide.",
                 {"field": "category"},
+            )
+        if comfort_level not in {c.value for c in ComfortLevel}:
+            raise ApiError(
+                422, "INVALID_COMFORT_LEVEL", "Niveau de confort invalide.",
+                {"field": "comfort_level"},
             )
         profile = await self._require_profile(user_id)
 
@@ -117,6 +124,7 @@ class DriverService:
             color=color,
             registration_document_file_id=registration_document_file_id,
             category=VehicleCategory(category),
+            comfort_level=ComfortLevel(comfort_level),
             active=True,
             created_at=datetime.now(UTC),
         )
@@ -204,6 +212,7 @@ def _vehicle_payload(vehicle: Vehicle) -> dict:
         "model": vehicle.model,
         "color": vehicle.color,
         "category": vehicle.category.value,
+        "comfort_level": vehicle.comfort_level.value,
         "registration_document_file_id": str(vehicle.registration_document_file_id)
         if vehicle.registration_document_file_id
         else None,
