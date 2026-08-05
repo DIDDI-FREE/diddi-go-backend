@@ -78,11 +78,23 @@ Payload :
 recommandes pour le dossier KYC.
 
 Nouveau flux fichiers :
+- utiliser DiddiFiles sur son URL dediee, pas sur `go-staging`
+- URL staging attendue : `https://diddifiles-staging.diddifree.com/v1`
 - uploader les documents dans DiddiFiles avec `module_owner=diddigo`
 - utiliser les purposes `diddigo_driver_kyc_license`,
   `diddigo_driver_kyc_national_id`, `diddigo_driver_kyc_selfie`
 - appeler `POST /v1/files/{file_id}/confirm`
 - envoyer ensuite les `*_document_file_id` a DiddiGo
+
+Important : `go-staging.diddifree.com` ne doit pas exposer `/v1/files/*`.
+Les routes fichiers appartiennent au service separe DiddiFiles :
+
+```http
+POST https://diddifiles-staging.diddifree.com/v1/files/upload-session
+POST https://diddifiles-staging.diddifree.com/v1/files/{file_id}/confirm
+GET  https://diddifiles-staging.diddifree.com/v1/files/{file_id}
+POST https://diddifiles-staging.diddifree.com/v1/files/{file_id}/download-url
+```
 
 Les champs `*_document_url` restent acceptes uniquement pour compatibilite
 temporaire. Le frontend ne doit plus construire d'URL permanente comme source
