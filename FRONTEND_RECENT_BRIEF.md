@@ -266,6 +266,20 @@ Il n'y a pas de fallback silencieux : si le fournisseur DiddiMap Core n'expose
 pas encore le calcul officiel, les champs `actual_distance_km` et
 `actual_duration_seconds` restent `null`.
 
+Pipeline cible avec DiddiMap Core :
+
+```text
+DiddiGo collecte les traces chauffeur
+DiddiGo enverra la trace complete a DiddiMap a la fin du ride
+DiddiMap produira des insights
+un admin validera/rejettera ces insights
+les routes/scoring s'amelioreront ensuite
+```
+
+Impact frontend actuel : envoyer les positions. Ne pas encore afficher
+d'insights DiddiMap dans l'UI DiddiGo tant que le contrat DiddiMap correspondant
+n'existe pas.
+
 ## 4.4 Partage de course
 
 Creer un lien :

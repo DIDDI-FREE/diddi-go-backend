@@ -280,6 +280,32 @@ le prix final base sur l'estimation initiale. Aucun fallback cache n'est fait.
 Le backend logge `ride_actual_pricing_pending` a la completion si des samples
 existent mais que le recalcul fournisseur n'est pas encore disponible.
 
+### Pipeline DiddiMap Core cible
+
+Decision produit/architecture :
+
+```text
+1. DiddiGo recoit les positions temps reel chauffeur
+2. DiddiGo stocke ou bufferise les positions liees au ride
+3. A la fin du ride, DiddiGo envoie la trace complete a DiddiMap Core
+4. DiddiMap Core analyse la trace
+5. DiddiMap Core produit des insights route/distance/qualite/scoring
+6. Un admin valide ou rejette ces insights
+7. Les routes, le scoring et les futures optimisations s'ameliorent
+```
+
+Responsabilites :
+
+```text
+DiddiGo = collecte, stockage ride_id, statut metier, lien avec course/paiement
+DiddiMap = map-matching, analyse geographique, insights, amelioration reseau
+Admin = validation/rejet des insights avant impact durable
+```
+
+Tant que DiddiMap Core ne publie pas son contrat REST d'analyse de trace,
+DiddiGo ne doit pas recalculer silencieusement la distance reelle ni le prix
+final. Les traces restent stockees cote DiddiGo et pretes a etre envoyees.
+
 ---
 
 ## 7. Share Ride
