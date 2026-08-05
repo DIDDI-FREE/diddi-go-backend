@@ -83,10 +83,14 @@ class DiddiMapRoutingClient:
         self,
         query: str,
         bias: GeoPoint | None = None,
+        limit: int | None = None,
     ) -> list[GeocodeResultItem]:
-        # `bias` is accepted at the DiddiGo boundary for future ranking, but
-        # AbidjanMaps staging does not expose it in OpenAPI yet.
         params: dict[str, str] = {"q": query}
+        if bias is not None:
+            params["bias_lat"] = str(bias.lat)
+            params["bias_lng"] = str(bias.lng)
+        if limit is not None:
+            params["limit"] = str(limit)
         try:
             response = await self._http().get("/api/v1/geocoding/search", params=params)
             response.raise_for_status()

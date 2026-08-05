@@ -14,7 +14,7 @@ there is no back-office, and must be flipped off once one exists.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from app_base.core.errors import ApiError
@@ -45,6 +45,15 @@ class DriverService:
         *,
         user_id: UUID,
         license_number: str,
+        legal_name: str | None = None,
+        birth_date: date | None = None,
+        residence_address: str | None = None,
+        license_document_file_id: UUID | None = None,
+        national_id_document_file_id: UUID | None = None,
+        selfie_document_file_id: UUID | None = None,
+        license_document_url: str | None = None,
+        national_id_document_url: str | None = None,
+        selfie_document_url: str | None = None,
     ) -> dict:
         if not license_number or not license_number.strip():
             raise ApiError(
@@ -65,6 +74,16 @@ class DriverService:
             license_number=license_number.strip(),
             status=DriverStatus.ACTIVE if APPROVE_DRIVERS_ON_CREATE else DriverStatus.PENDING_VERIFICATION,
             license_verified_at=now if APPROVE_DRIVERS_ON_CREATE else None,
+            legal_name=_blank_to_none(legal_name),
+            birth_date=birth_date,
+            residence_address=_blank_to_none(residence_address),
+            license_document_file_id=license_document_file_id,
+            national_id_document_file_id=national_id_document_file_id,
+            selfie_document_file_id=selfie_document_file_id,
+            license_document_url=_blank_to_none(license_document_url),
+            national_id_document_url=_blank_to_none(national_id_document_url),
+            selfie_document_url=_blank_to_none(selfie_document_url),
+            kyc_submitted_at=now,
             created_at=now,
             updated_at=now,
         )
@@ -80,6 +99,7 @@ class DriverService:
         model: str | None,
         color: str | None,
         category: str,
+        registration_document_file_id: UUID | None = None,
     ) -> dict:
         if category not in {c.value for c in VehicleCategory}:
             raise ApiError(
@@ -95,6 +115,7 @@ class DriverService:
             make=make,
             model=model,
             color=color,
+            registration_document_file_id=registration_document_file_id,
             category=VehicleCategory(category),
             active=True,
             created_at=datetime.now(UTC),
@@ -152,6 +173,26 @@ def _profile_payload(profile: DriverProfile) -> dict:
         "status": profile.status.value,
         "rating_avg": float(profile.rating_avg) if profile.rating_avg is not None else None,
         "rating_count": profile.rating_count,
+        "kyc": {
+            "legal_name": profile.legal_name,
+            "birth_date": profile.birth_date.isoformat() if profile.birth_date else None,
+            "residence_address": profile.residence_address,
+            "license_document_file_id": str(profile.license_document_file_id)
+            if profile.license_document_file_id
+            else None,
+            "national_id_document_file_id": str(profile.national_id_document_file_id)
+            if profile.national_id_document_file_id
+            else None,
+            "selfie_document_file_id": str(profile.selfie_document_file_id)
+            if profile.selfie_document_file_id
+            else None,
+            "license_document_url": profile.license_document_url,
+            "national_id_document_url": profile.national_id_document_url,
+            "selfie_document_url": profile.selfie_document_url,
+            "submitted_at": profile.kyc_submitted_at.isoformat() if profile.kyc_submitted_at else None,
+            "reviewed_at": profile.kyc_reviewed_at.isoformat() if profile.kyc_reviewed_at else None,
+            "review_notes": profile.kyc_review_notes,
+        },
     }
 
 
@@ -163,5 +204,15 @@ def _vehicle_payload(vehicle: Vehicle) -> dict:
         "model": vehicle.model,
         "color": vehicle.color,
         "category": vehicle.category.value,
+        "registration_document_file_id": str(vehicle.registration_document_file_id)
+        if vehicle.registration_document_file_id
+        else None,
         "active": vehicle.active,
     }
+
+
+def _blank_to_none(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None

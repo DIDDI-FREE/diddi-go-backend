@@ -71,6 +71,32 @@ Apres verification OTP, DiddiAuth retourne :
 }
 ```
 
+Depuis DiddiFreeID v2.0, l'inscription peut aussi contenir `email`, et la
+demande OTP peut choisir explicitement un canal :
+
+```json
+{ "phone": "+237699000000", "channel": "email" }
+```
+
+ou :
+
+```json
+{ "phone": "+237699000000", "channel": "telegram" }
+```
+
+La reponse DiddiFreeID indique le canal effectif :
+
+```json
+{
+  "expires_in_seconds": 300,
+  "retry_after_seconds": 60,
+  "channel": "email"
+}
+```
+
+Ce choix de canal ne change rien pour DiddiGo : apres verification OTP, le
+frontend continue d'envoyer a DiddiGo le `access_token` DiddiFreeID.
+
 Le frontend utilise ensuite le `access_token` DiddiAuth pour appeler DiddiGo :
 
 ```http
@@ -131,6 +157,36 @@ ride.driver_profiles.user_id pointe encore vers auth.users.id
 
 Il n'y a plus besoin que DiddiAuth emette `role=driver` pour qu'un utilisateur
 devienne chauffeur dans DiddiGo.
+
+---
+
+## 2.1 Profils Utilisateur
+
+DiddiFreeID garde l'identite et le profil global :
+
+```text
+telephone
+nom legal / nom global
+nom affiche global
+avatar
+langue preferee
+contact d'urgence general
+role global user/admin
+statut global du compte
+```
+
+DiddiGo ne duplique pas ces champs. DiddiGo garde seulement les extensions
+metier propres au transport :
+
+```text
+ride.driver_profiles = profil chauffeur et KYC transport
+ride.vehicles = vehicules chauffeur
+notification.user_devices = tokens push pour alerte course
+```
+
+DiddiGo ne demande plus le role `driver` a DiddiFreeID. DiddiFreeID garde
+seulement les roles globaux `user` et `admin`. Le droit chauffeur est un role
+metier DiddiGo, base sur `ride.driver_profiles` et `ride.vehicles`.
 
 ---
 
@@ -202,9 +258,29 @@ authentifie.
 
 ```json
 {
-  "license_number": "CI-123456"
+  "license_number": "CI-123456",
+  "legal_name": "Awa Kone",
+  "birth_date": "1992-04-20",
+  "residence_address": "Cocody, Abidjan",
+  "license_document_file_id": "8a1a0f2e-30e7-4436-a8ea-c12a1f76f3c1",
+  "national_id_document_file_id": "45a14448-7bc7-4a21-972b-ff61585a571f",
+  "selfie_document_file_id": "f9ac4c34-9c51-4772-a2d0-38bfb55bf3d9",
+  "license_document_url": "https://cdn.example/license.jpg",
+  "national_id_document_url": "https://cdn.example/id.jpg",
+  "selfie_document_url": "https://cdn.example/selfie.jpg"
 }
 ```
+
+Seul `license_number` est obligatoire pour compatibilite. Les autres champs
+constituent le dossier KYC chauffeur DiddiGo.
+
+Pour les nouveaux clients, les documents doivent etre uploades via DiddiFiles
+avant cet appel. DiddiGo stocke uniquement les `*_file_id` retournes par
+DiddiFiles. Les champs `*_document_url` sont conserves temporairement pour
+compatibilite legacy et ne doivent plus etre la source de verite.
+
+Le token DiddiFreeID reste normalement `role=user`. Le frontend ne doit pas
+attendre un `role=driver` central pour continuer le parcours chauffeur.
 
 **Reponse `201`**
 
@@ -215,7 +291,21 @@ authentifie.
   "license_number": "CI-123456",
   "status": "active",
   "rating_avg": 5.0,
-  "rating_count": 0
+  "rating_count": 0,
+  "kyc": {
+    "legal_name": "Awa Kone",
+    "birth_date": "1992-04-20",
+    "residence_address": "Cocody, Abidjan",
+    "license_document_file_id": "8a1a0f2e-30e7-4436-a8ea-c12a1f76f3c1",
+    "national_id_document_file_id": "45a14448-7bc7-4a21-972b-ff61585a571f",
+    "selfie_document_file_id": "f9ac4c34-9c51-4772-a2d0-38bfb55bf3d9",
+    "license_document_url": "https://cdn.example/license.jpg",
+    "national_id_document_url": "https://cdn.example/id.jpg",
+    "selfie_document_url": "https://cdn.example/selfie.jpg",
+    "submitted_at": "2026-08-04T10:00:00+00:00",
+    "reviewed_at": null,
+    "review_notes": null
+  }
 }
 ```
 
@@ -231,9 +321,13 @@ Ajouter un vehicule actif au profil chauffeur.
   "make": "Toyota",
   "model": "Yaris",
   "color": "gris",
-  "category": "standard"
+  "category": "standard",
+  "registration_document_file_id": "681effc5-4176-43d0-b42f-d0855fb2a7d8"
 }
 ```
+
+`registration_document_file_id` vient de DiddiFiles avec le purpose
+`diddigo_vehicle_registration`.
 
 ### `POST /drivers/online`
 
@@ -665,6 +759,128 @@ Si le WebSocket ferme avec `4401`, le frontend doit refresh le token via
 DiddiAuth, ouvrir un nouveau WebSocket, puis rappeler `GET /rides/{ride_id}`.
 
 Le WebSocket ne rejoue pas les evenements manques.
+
+### Limite mobile et notifications push v2.0
+
+Le WebSocket est un canal temps reel, mais il ne garantit pas la reception des
+demandes de course quand l'application chauffeur est suspendue, fermee, ou tuee
+par le systeme.
+
+Phase test :
+
+```text
+Android foreground service + WebSocket + driver.location_push regulier
+```
+
+Le front Android doit afficher une notification persistante pendant que le
+chauffeur est en ligne, puis envoyer `driver.location_push` toutes les 3 a 5
+secondes.
+
+iOS et les apps tuees/force-stopped ne peuvent pas garder un WebSocket fiable.
+
+Version 2.0 backend prevue :
+
+```text
+WebSocket = canal rapide quand l'app est active
+FCM = canal push pour alerter/reveiller l'app quand le WebSocket n'est pas fiable
+```
+
+Chantiers backend v2.0 :
+
+```text
+driver_devices
+device push_token
+platform android/ios
+push_provider fcm
+ride offer push + websocket
+offer timeout / accepted / declined / expired
+```
+
+Le matching ne devra pas dependre uniquement d'un WebSocket connecte pour
+alerter un chauffeur.
+
+### Devices et push tokens
+
+Le frontend doit enregistrer le token FCM apres login, puis a chaque rotation
+du token FCM. Sur iOS, il faut envoyer le token FCM emis par Firebase
+Messaging, pas le token APNs brut.
+
+#### `POST /devices/register`
+
+**Requete**
+
+```json
+{
+  "platform": "android",
+  "push_provider": "fcm",
+  "push_token": "fcm-device-token",
+  "device_id": "optional-stable-device-id"
+}
+```
+
+`push_provider` est optionnel :
+
+```text
+android -> fcm
+ios     -> fcm
+```
+
+`fcm` est le seul provider supporte par DiddiGo. Pour iOS, Firebase utilise
+APNs en interne si le projet Firebase et l'app iOS sont bien configures cote
+Apple/Firebase.
+
+**Reponse `200`**
+
+```json
+{
+  "status": "registered",
+  "id": "device-row-id",
+  "platform": "android",
+  "push_provider": "fcm"
+}
+```
+
+#### `POST /devices/unregister`
+
+Appeler au logout ou quand un token devient invalide.
+
+```json
+{
+  "push_token": "fcm-device-token"
+}
+```
+
+**Reponse `200`**
+
+```json
+{
+  "status": "unregistered"
+}
+```
+
+### Envoi ride.new_request
+
+Quand le matching trouve un chauffeur, DiddiGo tente :
+
+```text
+1. WebSocket ride.new_request si le socket chauffeur est connecte
+2. Push notification FCM pour les devices fcm enregistres
+```
+
+Payload push data :
+
+```json
+{
+  "event": "ride.new_request",
+  "ride_id": "ride-id",
+  "expires_in_seconds": "15"
+}
+```
+
+Note iOS : l'envoi iOS passe aussi par FCM. Firebase relaie ensuite vers APNs
+en interne si l'app iOS et le projet Firebase sont configures correctement.
+DiddiGo ne stocke pas de token APNs brut et ne configure pas de credentials
+Apple APNs.
 
 ---
 

@@ -30,6 +30,7 @@ from app_base.core.settings import settings
 # Force model registration — each import registers its SQLAlchemy models
 # onto Base.metadata so Alembic can see them for autogenerate.
 from app_base.modules.auth.infra import models as _auth_models  # noqa: F401
+from app_base.modules.notification.infra import models as _notification_models  # noqa: F401
 from app_base.modules.payment.infra import models as _payment_models  # noqa: F401
 from app_base.modules.ride.infra import models as _ride_models  # noqa: F401
 
@@ -47,7 +48,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 # Schemas managed by this project. Alembic will ignore anything outside.
-INCLUDE_SCHEMAS = {"auth", "ride", "payment"}
+INCLUDE_SCHEMAS = {"auth", "ride", "payment", "notification"}
 
 
 def include_object(obj, name, type_, reflected, compare_to):

@@ -49,7 +49,18 @@ def test_identity_payload_maps_diddifree_user_role_to_passenger():
     assert user.full_name == "Diddi Passenger"
 
 
-def test_identity_payload_keeps_diddigo_service_roles():
+def test_identity_payload_keeps_requested_role_if_identity_still_sends_it():
+    user_id = uuid4()
+
+    user = identity_payload_to_user_model(
+        {"sub": str(user_id), "role": "user", "status": "active"},
+        {"phone": "+237699000000", "requested_role": "driver"},
+    )
+
+    assert user.requested_role == "driver"
+
+
+def test_identity_payload_keeps_legacy_diddigo_service_roles_during_migration():
     driver_id = uuid4()
 
     user = identity_payload_to_user_model(

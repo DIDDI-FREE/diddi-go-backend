@@ -35,6 +35,9 @@ from app_base.modules.auth.infra.repositories import (
     SqlAlchemyOTPRepository,
     SqlAlchemyUserRepository,
 )
+from app_base.modules.notification.application import DeviceService, PushNotificationService
+from app_base.modules.notification.infra.fcm import build_push_gateway
+from app_base.modules.notification.infra.repositories import SqlAlchemyUserDeviceRepository
 from app_base.modules.payment.application.services import PaymentService
 from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentRepository
 from app_base.modules.ride.application.driver_service import DriverService
@@ -113,6 +116,10 @@ async def payment_repo(session: AsyncSession = Depends(session_dep)) -> SqlAlche
     return SqlAlchemyPaymentRepository(session)
 
 
+async def user_device_repo(session: AsyncSession = Depends(session_dep)) -> SqlAlchemyUserDeviceRepository:
+    return SqlAlchemyUserDeviceRepository(session)
+
+
 # --- services --------------------------------------------------------------
 
 async def auth_service(
@@ -154,6 +161,18 @@ async def driver_service(
     return DriverService(driver_repo=driver_repo_dep, vehicle_repo=vehicle_repo_dep)
 
 
+async def device_service(
+    user_device_repo_dep: SqlAlchemyUserDeviceRepository = Depends(user_device_repo),
+) -> DeviceService:
+    return DeviceService(devices=user_device_repo_dep)
+
+
+async def push_notification_service(
+    user_device_repo_dep: SqlAlchemyUserDeviceRepository = Depends(user_device_repo),
+) -> PushNotificationService:
+    return PushNotificationService(devices=user_device_repo_dep, gateway=build_push_gateway())
+
+
 def get_offer_store(redis: Redis = Depends(get_redis)) -> RedisOfferStore:
     return RedisOfferStore(redis=redis)
 
@@ -186,6 +205,8 @@ __all__ = [
     "ride_service",
     "payment_service",
     "driver_service",
+    "device_service",
+    "push_notification_service",
     "matching_service",
     "user_repo",
     "otp_repo",
@@ -194,4 +215,5 @@ __all__ = [
     "vehicle_repo",
     "pricing_rule_repo",
     "payment_repo",
+    "user_device_repo",
 ]

@@ -8,7 +8,7 @@ by calling the entity, not by re-implementing the validation inline.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 from uuid import UUID, uuid4
@@ -211,6 +211,18 @@ class DriverProfile:
     rating_avg: Decimal | None = Decimal("5.00")
     rating_count: int = 0
     license_verified_at: datetime | None = None
+    legal_name: str | None = None
+    birth_date: date | None = None
+    residence_address: str | None = None
+    license_document_file_id: UUID | None = None
+    national_id_document_file_id: UUID | None = None
+    selfie_document_file_id: UUID | None = None
+    license_document_url: str | None = None
+    national_id_document_url: str | None = None
+    selfie_document_url: str | None = None
+    kyc_submitted_at: datetime | None = None
+    kyc_reviewed_at: datetime | None = None
+    kyc_review_notes: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -228,6 +240,7 @@ class Vehicle:
     make: str | None = None
     model: str | None = None
     color: str | None = None
+    registration_document_file_id: UUID | None = None
     active: bool = True
     created_at: datetime | None = None
 

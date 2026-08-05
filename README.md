@@ -61,6 +61,16 @@ Dans Portainer :
   mais restent disponibles si on doit les surcharger.
 - conserver `main` pour la production et `stage` pour QA / UI / intégration
 
+Garde-fous production :
+- `docker-compose.portainer.yml` exige `DATABASE_URL`, `REDIS_URL`,
+  `JWT_SECRET`, `DIDDIMAP_BASE_URL` et `POSTGRES_PASSWORD`.
+- `docker/start.sh` refuse de demarrer en `APP_ENV=production` avec le
+  `JWT_SECRET` d'exemple.
+- `docker/start.sh` refuse de demarrer en production sans DiddiAuth
+  (`IDENTITY_BASE_URL` ou `IDENTITY_JWKS_URL`) et sans DiddiMap
+  (`DIDDIMAP_BASE_URL`).
+- `APP_ENV=production` est lu par le backend comme environnement runtime.
+
 Important :
 - la stack Portainer ne repose pas sur `--reload`
 - elle ne dépend pas du montage local du code
@@ -134,6 +144,43 @@ Si les logs affichent `GET /v1/ws ... 404` ou `426`, le client/proxy n'a pas
 envoyÃ© un vrai handshake WebSocket. Avec Nginx Proxy Manager, activer
 `Websockets Support` sur le proxy host DiddiGo.
 
+Phase test chauffeur :
+- Android doit utiliser un foreground service pendant que le chauffeur est en
+  ligne, avec une notification persistante du type "DiddiGo chauffeur actif".
+- Le WebSocket doit rester ouvert quand l'app est vivante.
+- Le front chauffeur doit envoyer `driver.location_push` toutes les 3 a 5
+  secondes tant que le chauffeur est online.
+- Le backend considere un chauffeur absent si sa presence Redis expire, meme
+  si le dernier `POST /drivers/online` avait repondu `200`.
+
+Version 2.0 prevue :
+- ajouter l'enregistrement des devices chauffeur (`driver_devices`)
+- stocker les push tokens FCM par utilisateur et plateforme
+- envoyer une notification push en plus du WebSocket quand une course est
+  proposee
+- conserver le WebSocket comme canal temps reel rapide quand l'app est active
+- utiliser la push notification comme canal de reveil/alerte quand l'app n'est
+  pas fiable en arriere-plan
+
+Routes push disponibles :
+- `POST /v1/devices/register` enregistre le token FCM du device connecte.
+- `POST /v1/devices/unregister` desactive le token au logout.
+- Android et iOS passent par FCM cote backend. Sur iOS, Firebase relaie vers
+  APNs en interne; DiddiGo ne stocke pas de token APNs brut.
+
+Profils :
+- DiddiFreeID garde le profil global (`display_name`, `avatar_url`, langue,
+  contact d'urgence general).
+- DiddiGo garde uniquement les extensions metier transport.
+- `POST /v1/drivers/profile` cree le profil chauffeur et stocke le dossier KYC
+  DiddiGo (`legal_name`, `birth_date`, adresse, `file_id` documents
+  permis/CNI/selfie issus de DiddiFiles).
+- Les champs URL KYC restent acceptes pour compatibilite legacy, mais les
+  nouveaux clients doivent uploader les documents via DiddiFiles et envoyer les
+  `*_document_file_id`.
+- `GET /v1/drivers/me` retourne le profil chauffeur, le statut KYC et le
+  vehicule actif si present.
+
 ---
 
 ## Logs et diagnostic
@@ -156,6 +203,20 @@ Les WebSockets loggent aussi :
 - `ws_ride_subscribe`
 - `ws_driver_location_push`
 - `ws_disconnected`
+
+Logs matching utiles :
+- `driver_online`
+- `driver_position_updated`
+- `driver_available_set`
+- `driver_geo_search_raw`
+- `driver_geo_candidate_rejected`
+- `driver_geo_search_result`
+- `matching_start`
+- `matching_candidate_selected`
+- `matching_candidate_rejected`
+- `matching_offer_opened`
+- `ws_send_new_request`
+- `matching_no_driver_found`
 
 ---
 

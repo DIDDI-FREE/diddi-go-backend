@@ -5,23 +5,27 @@ services:
       dockerfile: Dockerfile
     environment:
       APP_NAME: ${APP_NAME:-DiddiGo}
-      APP_ENV: ${APP_ENV:-production}
+      APP_ENV: ${APP_ENV:?APP_ENV is required}
       API_PREFIX: ${API_PREFIX:-/v1}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       CORS_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:-^https?://(localhost|127\.0\.0\.1)(:\d+)?$}
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/diddi_go}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-prod-at-least-32-characters-long}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_ACCESS_LIFETIME_MINUTES: ${JWT_ACCESS_LIFETIME_MINUTES:-15}
       JWT_REFRESH_LIFETIME_DAYS: ${JWT_REFRESH_LIFETIME_DAYS:-30}
       OTP_RATE_LIMIT_SECONDS: ${OTP_RATE_LIMIT_SECONDS:-60}
       OTP_CODE_LIFETIME_SECONDS: ${OTP_CODE_LIFETIME_SECONDS:-300}
-      DIDDIMAP_BASE_URL: ${DIDDIMAP_BASE_URL:-http://abidjanmaps-backend-staging.diddifree.com}
-      IDENTITY_BASE_URL: ${IDENTITY_BASE_URL:-}
+      DIDDIMAP_BASE_URL: ${DIDDIMAP_BASE_URL:?DIDDIMAP_BASE_URL is required}
+      IDENTITY_BASE_URL: ${IDENTITY_BASE_URL:?IDENTITY_BASE_URL is required}
       IDENTITY_JWKS_URL: ${IDENTITY_JWKS_URL:-}
       IDENTITY_ISSUER: ${IDENTITY_ISSUER:-diddifree-id}
       IDENTITY_PROFILE_URL: ${IDENTITY_PROFILE_URL:-}
       IDENTITY_SERVICE_KEY: ${IDENTITY_SERVICE_KEY:-}
+      PUSH_ENABLED: ${PUSH_ENABLED:-false}
+      FCM_PROJECT_ID: ${FCM_PROJECT_ID:-}
+      FCM_SERVICE_ACCOUNT_JSON: ${FCM_SERVICE_ACCOUNT_JSON:-}
+      FCM_SERVICE_ACCOUNT_FILE: ${FCM_SERVICE_ACCOUNT_FILE:-}
       BACKEND_PORT: ${BACKEND_PORT:-18000}
       POSTGRES_PORT: ${POSTGRES_PORT:-15432}
       REDIS_PORT: ${REDIS_PORT:-16379}
@@ -36,7 +40,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-diddi_go}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

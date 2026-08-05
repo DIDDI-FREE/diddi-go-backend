@@ -231,6 +231,18 @@ class SqlAlchemyDriverProfileRepository:
         row.rating_avg = profile.rating_avg
         row.rating_count = profile.rating_count
         row.license_verified_at = profile.license_verified_at
+        row.legal_name = profile.legal_name
+        row.birth_date = profile.birth_date
+        row.residence_address = profile.residence_address
+        row.license_document_file_id = profile.license_document_file_id
+        row.national_id_document_file_id = profile.national_id_document_file_id
+        row.selfie_document_file_id = profile.selfie_document_file_id
+        row.license_document_url = profile.license_document_url
+        row.national_id_document_url = profile.national_id_document_url
+        row.selfie_document_url = profile.selfie_document_url
+        row.kyc_submitted_at = profile.kyc_submitted_at
+        row.kyc_reviewed_at = profile.kyc_reviewed_at
+        row.kyc_review_notes = profile.kyc_review_notes
         row.updated_at = datetime.now(UTC)
         await self._session.flush()
         return profile
@@ -260,6 +272,18 @@ class SqlAlchemyDriverProfileRepository:
             rating_avg=row.rating_avg,
             rating_count=row.rating_count,
             license_verified_at=row.license_verified_at,
+            legal_name=row.legal_name,
+            birth_date=row.birth_date,
+            residence_address=row.residence_address,
+            license_document_file_id=row.license_document_file_id,
+            national_id_document_file_id=row.national_id_document_file_id,
+            selfie_document_file_id=row.selfie_document_file_id,
+            license_document_url=row.license_document_url,
+            national_id_document_url=row.national_id_document_url,
+            selfie_document_url=row.selfie_document_url,
+            kyc_submitted_at=row.kyc_submitted_at,
+            kyc_reviewed_at=row.kyc_reviewed_at,
+            kyc_review_notes=row.kyc_review_notes,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
@@ -277,6 +301,7 @@ class SqlAlchemyVehicleRepository:
             make=vehicle.make,
             model=vehicle.model,
             color=vehicle.color,
+            registration_document_file_id=vehicle.registration_document_file_id,
             category=vehicle.category.value,
             active=vehicle.active,
         )
@@ -302,6 +327,7 @@ class SqlAlchemyVehicleRepository:
             make=row.make,
             model=row.model,
             color=row.color,
+            registration_document_file_id=row.registration_document_file_id,
             active=row.active,
             created_at=row.created_at,
         )
