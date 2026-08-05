@@ -11,6 +11,7 @@ Instantiated at module import time as `settings` — importers do
 
 from __future__ import annotations
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,7 +24,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "DiddiGo"
-    environment: str = "development"
+    environment: str = Field(default="development", validation_alias=AliasChoices("ENVIRONMENT", "APP_ENV"))
     api_prefix: str = "/v1"
     cors_origins: str = ""
     cors_origin_regex: str | None = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
@@ -47,6 +48,11 @@ class Settings(BaseSettings):
     identity_issuer: str = "diddifree-id"
     identity_profile_url: str | None = None
     identity_service_key: str | None = None
+
+    push_enabled: bool = False
+    fcm_project_id: str | None = None
+    fcm_service_account_json: str | None = None
+    fcm_service_account_file: str | None = None
 
     @property
     def cors_origin_list(self) -> list[str]:

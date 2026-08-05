@@ -40,6 +40,15 @@ async def create_profile(
     return await service.create_profile(
         user_id=current_user.id,
         license_number=payload.license_number,
+        legal_name=payload.legal_name,
+        birth_date=payload.birth_date,
+        residence_address=payload.residence_address,
+        license_document_file_id=payload.license_document_file_id,
+        national_id_document_file_id=payload.national_id_document_file_id,
+        selfie_document_file_id=payload.selfie_document_file_id,
+        license_document_url=payload.license_document_url,
+        national_id_document_url=payload.national_id_document_url,
+        selfie_document_url=payload.selfie_document_url,
     )
 
 
@@ -56,6 +65,7 @@ async def register_vehicle(
         model=payload.model,
         color=payload.color,
         category=payload.category,
+        registration_document_file_id=payload.registration_document_file_id,
     )
 
 

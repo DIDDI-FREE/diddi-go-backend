@@ -292,8 +292,12 @@ Format uniforme sur **toutes** les routes :
    quand même l'affichage : le produit exige qu'un surge soit montré
    explicitement avant réservation.
 5. **Photos / avatars.** Aucun upload de fichier nulle part.
-6. **Notifications push.** Uniquement le WebSocket : une app chauffeur en
-   arrière-plan ne recevra pas les offres.
+6. **Notifications push.** Le front doit appeler `POST /v1/devices/register`
+   apres login avec son token FCM, puis `POST /v1/devices/unregister` au
+   logout. Le backend DiddiGo utilise FCM uniquement pour Android et iOS. Sur
+   iOS, Firebase relaie ensuite vers APNs si le projet Firebase/iOS est bien
+   configure. En phase test, garder aussi le foreground service Android +
+   `driver.location_push` toutes les 3 a 5 secondes.
 7. **Adresses depuis DiddiMap.** Le géocodage existe côté backend mais aucune
    route ne l'expose. L'autocomplétion d'adresse est à votre charge, ou à
    demander.

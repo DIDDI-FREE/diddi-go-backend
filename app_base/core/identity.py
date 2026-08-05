@@ -34,7 +34,7 @@ class IdentityTokenVerifier:
                 options={"require": ["exp", "sub", "iss"]},
             )
         except jwt.ExpiredSignatureError as exc:
-            raise ApiError(401, "TOKEN_EXPIRED", "Le token a expiré.") from exc
+            raise ApiError(401, "TOKEN_EXPIRED", "Le token a expire.") from exc
         except jwt.InvalidTokenError as exc:
             raise ApiError(401, "TOKEN_INVALID", f"Token invalide: {exc}") from exc
 
@@ -50,14 +50,14 @@ def identity_mode_enabled() -> bool:
 def decode_identity_access_token(token: str) -> dict:
     jwks_url = settings.effective_identity_jwks_url
     if not jwks_url:
-        raise ApiError(500, "IDENTITY_NOT_CONFIGURED", "DiddiFreeID n'est pas configuré.")
+        raise ApiError(500, "IDENTITY_NOT_CONFIGURED", "DiddiFreeID n'est pas configure.")
     return IdentityTokenVerifier(jwks_url, settings.identity_issuer).decode_access_token(token)
 
 
 def user_id_from_identity_payload(payload: dict) -> UUID:
     sub = payload.get("sub")
     if not isinstance(sub, str):
-        raise ApiError(401, "TOKEN_INVALID", "Claim `sub` manquant ou malformé.")
+        raise ApiError(401, "TOKEN_INVALID", "Claim `sub` manquant ou malforme.")
     try:
         return UUID(sub)
     except ValueError as exc:
@@ -91,6 +91,7 @@ def identity_payload_to_user_model(payload: dict, profile: dict | None = None):
     role = payload.get("role") or data.get("role") or "user"
     user.role = "passenger" if role == "user" else role
     user.status = payload.get("status") or data.get("status") or "active"
+    user.requested_role = data.get("requested_role")
     now = datetime.now(UTC)
     user.created_at = data.get("created_at") or now
     user.updated_at = data.get("updated_at") or now

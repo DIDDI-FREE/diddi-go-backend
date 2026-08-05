@@ -12,10 +12,12 @@ class FakeDiddiMap:
     def __init__(self) -> None:
         self.query = None
         self.bias = None
+        self.limit = None
 
-    async def geocode(self, query, bias=None):
+    async def geocode(self, query, bias=None, limit=None):
         self.query = query
         self.bias = bias
+        self.limit = limit
         return [
             SimpleNamespace(label="Plateau, Abidjan", point=GeoPoint(lat=5.3204, lng=-4.0161)),
             SimpleNamespace(label="Plateau Dokui", point=GeoPoint(lat=5.391, lng=-4.009)),
@@ -36,6 +38,7 @@ async def test_search_places_returns_diddimap_results_with_bias_and_limit():
 
     assert diddimap.query == "Plateau"
     assert diddimap.bias == GeoPoint(lat=5.3599, lng=-4.0083)
+    assert diddimap.limit == 1
     assert len(results) == 1
     assert results[0].model_dump() == {"label": "Plateau, Abidjan", "lat": 5.3204, "lng": -4.0161}
 

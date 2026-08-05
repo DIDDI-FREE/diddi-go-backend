@@ -145,15 +145,17 @@ async def test_geocode_accepts_a_bare_list() -> None:
 
 
 @pytest.mark.unit
-async def test_geocode_does_not_send_unsupported_bias_param() -> None:
+async def test_geocode_sends_bias_coordinates_and_limit() -> None:
     seen: dict[str, str] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.update(request.url.params)
         return httpx.Response(200, json={"results": []})
 
-    await client_with(handler).geocode("Rue du Commerce", bias=ORIGIN)
-    assert "bias" not in seen
+    await client_with(handler).geocode("Rue du Commerce", bias=ORIGIN, limit=7)
+    assert seen["bias_lat"] == str(ORIGIN.lat)
+    assert seen["bias_lng"] == str(ORIGIN.lng)
+    assert seen["limit"] == "7"
 
 
 @pytest.mark.unit

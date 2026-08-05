@@ -21,4 +21,9 @@ class RoutingProvider(Protocol):
 
     async def estimate(self, origin: GeoPoint, destination: GeoPoint, profile: str) -> RouteEstimate: ...
 
-    async def geocode(self, query: str, bias: GeoPoint | None = None) -> list[GeocodeResult]: ...
+    async def geocode(
+        self,
+        query: str,
+        bias: GeoPoint | None = None,
+        limit: int | None = None,
+    ) -> list[GeocodeResult]: ...

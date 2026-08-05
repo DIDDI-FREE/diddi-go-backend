@@ -17,7 +17,7 @@ doc SQL which specifies `GEOGRAPHY(POINT, 4326)`.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -26,6 +26,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -60,6 +61,18 @@ class DriverProfileModel(Base):
     )
     license_number: Mapped[str] = mapped_column(String(50), nullable=False)
     license_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    legal_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    residence_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    license_document_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    national_id_document_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    selfie_document_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    license_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    national_id_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    selfie_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    kyc_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    kyc_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    kyc_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending_verification",
     )  # pending_verification | active | suspended | offline
@@ -91,6 +104,7 @@ class VehicleModel(Base):
     make: Mapped[str | None] = mapped_column(String(50), nullable=True)
     model: Mapped[str | None] = mapped_column(String(50), nullable=True)
     color: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    registration_document_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     category: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")  # standard | comfort | van
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(

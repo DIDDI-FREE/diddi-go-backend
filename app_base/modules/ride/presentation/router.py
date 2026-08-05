@@ -19,9 +19,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from app_base.core.auth_deps import get_current_user, require_business_driver
-from app_base.core.deps import get_diddimap, matching_service, ride_service
+from app_base.core.deps import get_diddimap, matching_service, push_notification_service, ride_service
 from app_base.core.errors import ApiError
 from app_base.modules.auth.infra.models import UserModel
+from app_base.modules.notification.application import PushNotificationService
 from app_base.modules.ride.application.matching_service import MatchingService
 from app_base.modules.ride.application.services import RideService, iso_utc, ride_creation_payload
 from app_base.modules.ride.domain.entities import DriverProfile, RideStatus
@@ -56,7 +57,7 @@ async def search_places(
     user's current position. If only one is sent, the bias is ignored.
     """
     bias = GeoPoint(lat=bias_lat, lng=bias_lng) if bias_lat is not None and bias_lng is not None else None
-    results = await diddimap.geocode(q, bias=bias)
+    results = await diddimap.geocode(q, bias=bias, limit=limit)
     return [
         PlaceSearchResponseItem(label=item.label, lat=item.point.lat, lng=item.point.lng)
         for item in results[:limit]
@@ -78,6 +79,7 @@ async def create_ride(
     payload: RideCreateRequest,
     service: RideService = Depends(ride_service),
     matching: MatchingService = Depends(matching_service),
+    push_notifications: PushNotificationService = Depends(push_notification_service),
     current_user: UserModel = Depends(get_current_user),
 ) -> dict:
     """Create a ride and immediately offer it to the nearest driver.
@@ -104,20 +106,22 @@ async def create_ride(
 
     offered_to = await matching.try_match(ride)
     if offered_to is not None:
+        offer_payload = {
+            "ride_id": str(ride.id),
+            "pickup": {
+                "lat": pickup.lat,
+                "lng": pickup.lng,
+                "address": payload.pickup.address,
+            },
+            "dropoff_address": payload.dropoff.address,
+            "estimated_fare": int(ride.estimated_fare) if ride.estimated_fare else None,
+            "expires_in_seconds": OFFER_TTL_SECONDS,
+        }
         await manager.send_new_request(
             offered_to,
-            {
-                "ride_id": str(ride.id),
-                "pickup": {
-                    "lat": pickup.lat,
-                    "lng": pickup.lng,
-                    "address": payload.pickup.address,
-                },
-                "dropoff_address": payload.dropoff.address,
-                "estimated_fare": int(ride.estimated_fare) if ride.estimated_fare else None,
-                "expires_in_seconds": OFFER_TTL_SECONDS,
-            },
+            offer_payload,
         )
+        await push_notifications.send_ride_offer(driver_user_id=offered_to, payload=offer_payload)
     elif ride.status is RideStatus.NO_DRIVER_FOUND:
         await manager.broadcast_no_driver_found(ride.id)
 

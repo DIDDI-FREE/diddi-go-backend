@@ -2,11 +2,23 @@
 
 from __future__ import annotations
 
+from datetime import date
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
 class DriverProfileCreateRequest(BaseModel):
     license_number: str = Field(min_length=1, max_length=50)
+    legal_name: str | None = Field(default=None, min_length=1, max_length=160)
+    birth_date: date | None = None
+    residence_address: str | None = Field(default=None, min_length=1, max_length=500)
+    license_document_file_id: UUID | None = None
+    national_id_document_file_id: UUID | None = None
+    selfie_document_file_id: UUID | None = None
+    license_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    national_id_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    selfie_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
 
 
 class VehicleCreateRequest(BaseModel):
@@ -15,6 +27,7 @@ class VehicleCreateRequest(BaseModel):
     model: str | None = Field(default=None, max_length=50)
     color: str | None = Field(default=None, max_length=30)
     category: str = Field(default="standard")
+    registration_document_file_id: UUID | None = None
 
 
 class GoOnlineRequest(BaseModel):
