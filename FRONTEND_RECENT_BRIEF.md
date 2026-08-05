@@ -154,3 +154,51 @@ driver.location_push toutes les 3 a 5 secondes
 
 Pas encore implemente dans DiddiGo. A traiter comme un futur module separe,
 probablement `communication`, avec acces limite aux rides concernees.
+
+## 8. Staging / Portainer
+
+Le correctif recent concerne le deploiement backend, pas les endpoints
+frontend. Les URLs API ne changent pas :
+
+```text
+API DiddiGo staging: https://go-staging.diddifree.com/v1
+Auth staging: https://auth-staging.diddifree.com
+WebSocket staging: wss://go-staging.diddifree.com/v1/ws?token=<access_token>
+```
+
+Cote Portainer, `DATABASE_URL` et `REDIS_URL` ne sont plus obligatoires si la
+stack utilise les services internes `db` et `redis`.
+
+Variables minimales a fournir dans la stack :
+
+```env
+APP_ENV=production
+JWT_SECRET=<random-32+-characters-secret>
+POSTGRES_PASSWORD=<strong-password>
+IDENTITY_BASE_URL=https://auth-staging.diddifree.com
+DIDDIMAP_BASE_URL=http://abidjanmaps-backend-staging.diddifree.com
+CORS_ORIGINS=https://go-staging.diddifree.com
+```
+
+Variables optionnelles selon environnement :
+
+```env
+BACKEND_PORT=18000
+PUSH_ENABLED=true
+FCM_PROJECT_ID=<firebase-project-id>
+FCM_SERVICE_ACCOUNT_JSON=<firebase-service-account-json-one-line>
+```
+
+Ne pas envoyer `DATABASE_URL` ni `REDIS_URL` depuis le frontend. Ce sont des
+variables internes backend. Le frontend doit seulement appeler les URLs HTTP et
+WebSocket publiques.
+
+Impact frontend :
+
+- Aucun changement de payload pour les courses, places, drivers, devices ou
+  WebSocket.
+- Si le backend etait bloque au deploiement par `REDIS_URL is required`, il
+  doit redeployer avec le dernier commit.
+- Pour les tests CORS localhost, le backend accepte deja `localhost` et
+  `127.0.0.1` via `CORS_ORIGIN_REGEX`; ajouter les vrais domaines QA dans
+  `CORS_ORIGINS`.
