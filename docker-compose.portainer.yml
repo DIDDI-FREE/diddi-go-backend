@@ -9,8 +9,8 @@ services:
       API_PREFIX: ${API_PREFIX:-/v1}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       CORS_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:-^https?://(localhost|127\.0\.0\.1)(:\d+)?$}
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
-      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-diddi_go}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_ACCESS_LIFETIME_MINUTES: ${JWT_ACCESS_LIFETIME_MINUTES:-15}
       JWT_REFRESH_LIFETIME_DAYS: ${JWT_REFRESH_LIFETIME_DAYS:-30}
@@ -44,7 +44,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d diddi_go"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       retries: 10
