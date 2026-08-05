@@ -20,6 +20,10 @@ FCM_SERVICE_ACCOUNT_JSON=<firebase-service-account-json>
 services internes `db` et `redis`. Les renseigner uniquement si PostgreSQL ou
 Redis vivent hors de cette stack.
 
+`POSTGRES_PASSWORD` ne bloque pas le parsing Compose afin que Portainer puisse
+charger la stack, mais il reste obligatoire au runtime. Sans valeur forte,
+PostgreSQL refusera de demarrer.
+
 `IDENTITY_JWKS_URL` et `IDENTITY_PROFILE_URL` peuvent rester vides si
 `IDENTITY_BASE_URL` est renseigne.
 
