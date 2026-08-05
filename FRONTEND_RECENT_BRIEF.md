@@ -201,8 +201,8 @@ FCM_PROJECT_ID=<firebase-project-id>
 FCM_SERVICE_ACCOUNT_JSON=<firebase-service-account-json-one-line>
 ```
 
-`POSTGRES_PASSWORD` ne bloque plus le parsing Compose si absent, mais il reste
-obligatoire pour que PostgreSQL demarre correctement.
+`POSTGRES_PASSWORD` est obligatoire dans Portainer. Sans cette variable,
+Compose refuse de charger la stack.
 
 Ne pas envoyer `DATABASE_URL` ni `REDIS_URL` depuis le frontend. Ce sont des
 variables internes backend. Le frontend doit seulement appeler les URLs HTTP et

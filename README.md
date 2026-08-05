@@ -49,9 +49,8 @@ Dans Portainer staging/test :
 - utiliser la stack `docker-compose.portainer.yml`
 - renseigner au minimum `APP_ENV`, `JWT_SECRET`, `DIDDIMAP_BASE_URL`,
   `IDENTITY_BASE_URL` et `POSTGRES_PASSWORD`
-- `POSTGRES_PASSWORD` n'est plus bloque au parsing Compose, ce qui permet a
-  Portainer de faire `pull/config`. Il reste obligatoire pour que PostgreSQL
-  demarre correctement.
+- `POSTGRES_PASSWORD` est obligatoire des le parsing Compose. Il faut le mettre
+  dans `Stack > Environment variables` avant de deployer.
 - `DATABASE_URL` et `REDIS_URL` ont des valeurs internes par defaut pour la
   stack Portainer (`db:5432` et `redis:6379`). Ne les renseigner que si la base
   PostgreSQL ou Redis vivent hors de cette stack.
@@ -70,10 +69,7 @@ Dans Portainer staging/test :
 
 Garde-fous production :
 - `docker-compose.portainer.yml` exige `APP_ENV`, `JWT_SECRET`,
-  `DIDDIMAP_BASE_URL` et `IDENTITY_BASE_URL`.
-- Renseigner toujours `POSTGRES_PASSWORD` avec une valeur forte. Sans cette
-  variable, Compose peut etre charge par Portainer, mais PostgreSQL refusera de
-  demarrer.
+  `DIDDIMAP_BASE_URL`, `IDENTITY_BASE_URL` et `POSTGRES_PASSWORD`.
 - `DATABASE_URL` et `REDIS_URL` ne sont plus obligatoires quand Portainer
   utilise les services internes `db` et `redis`.
 - `docker/start.sh` refuse de demarrer en `APP_ENV=production` avec le
@@ -92,6 +88,34 @@ Important :
   connectivité au démarrage via le lifespan.
 - Redis ne publie pas de port hôte dans Portainer, pour limiter les collisions
   sur un VPS déjà chargé.
+
+---
+
+Variables Portainer staging obligatoires :
+
+```env
+APP_ENV=production
+JWT_SECRET=<random-32+-characters-secret>
+POSTGRES_PASSWORD=<strong-password>
+IDENTITY_BASE_URL=https://auth-staging.diddifree.com
+DIDDIMAP_BASE_URL=http://abidjanmaps-backend-staging.diddifree.com
+CORS_ORIGINS=https://go-staging.diddifree.com
+```
+
+Variables Portainer optionnelles/recommandees :
+
+```env
+APP_NAME=DiddiGo
+BACKEND_PORT=18000
+POSTGRES_DB=diddi_go
+POSTGRES_USER=postgres
+PUSH_ENABLED=true
+FCM_PROJECT_ID=<firebase-project-id>
+FCM_SERVICE_ACCOUNT_JSON=<firebase-service-account-json-one-line>
+```
+
+Ne pas renseigner `DATABASE_URL` ni `REDIS_URL` si la stack utilise les services
+internes `db` et `redis`.
 
 ---
 
