@@ -249,13 +249,22 @@ async def driver_headers(client, otp_code, phone_factory) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+@pytest.fixture
+async def admin_headers(client, otp_code, phone_factory) -> dict[str, str]:
+    """Authorization header for an admin who can review driver KYC."""
+    from tests.test_auth_flow import register_and_login
+
+    token = await register_and_login(client, otp_code, phone_factory("+22506"), role="admin")
+    return {"Authorization": f"Bearer {token}"}
+
+
 # Default pickup used across ride tests; drivers go online here so they fall
 # inside the matching radius.
 ABIDJAN_PICKUP = {"lat": 5.3599, "lng": -4.0083}
 
 
 @pytest.fixture
-async def driver_factory(client, otp_code, phone_factory):
+async def driver_factory(client, otp_code, phone_factory, admin_headers):
     """Build fully onboarded drivers sitting in the matching pool.
 
     Each call registers a driver, creates their profile and vehicle, and puts
@@ -274,6 +283,14 @@ async def driver_factory(client, otp_code, phone_factory):
             headers=headers,
         )
         assert r.status_code == 201, r.text
+        driver_id = r.json()["id"]
+
+        r = await client.post(
+            f"/v1/drivers/{driver_id}/kyc/approve",
+            json={"notes": "test fixture approval"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
 
         r = await client.post(
             "/v1/drivers/vehicle",

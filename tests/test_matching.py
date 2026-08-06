@@ -43,6 +43,7 @@ async def test_driver_can_create_a_profile(client, driver_headers) -> None:
     )
     assert r.status_code == 201
     assert r.json()["license_number"] == "CI-12345"
+    assert r.json()["status"] == "pending_verification"
 
 
 async def test_driver_profile_is_unique_per_account(client, driver_headers) -> None:
@@ -72,10 +73,25 @@ async def test_vehicle_requires_a_profile_first(client, driver_headers) -> None:
     assert r.json()["error"]["code"] == "DRIVER_PROFILE_NOT_FOUND"
 
 
-async def test_going_online_requires_a_vehicle(client, driver_headers) -> None:
-    """A driver with no vehicle must never enter the matching pool."""
+async def test_going_online_requires_validated_kyc(client, driver_headers) -> None:
+    """A submitted-but-unreviewed driver must never enter the matching pool."""
     await client.post(
         "/v1/drivers/profile", json={"license_number": "CI-999"}, headers=driver_headers,
+    )
+    r = await client.post("/v1/drivers/online", json=NEAR, headers=driver_headers)
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "DRIVER_NOT_VERIFIED"
+
+
+async def test_going_online_requires_a_vehicle_after_kyc_approval(client, driver_headers, admin_headers) -> None:
+    """A validated driver with no vehicle must still never enter the pool."""
+    profile = await client.post(
+        "/v1/drivers/profile", json={"license_number": "CI-999"}, headers=driver_headers,
+    )
+    await client.post(
+        f"/v1/drivers/{profile.json()['id']}/kyc/approve",
+        json={"notes": "test approval"},
+        headers=admin_headers,
     )
     r = await client.post("/v1/drivers/online", json=NEAR, headers=driver_headers)
     assert r.status_code == 409
@@ -128,7 +144,7 @@ async def test_accepting_assigns_driver_and_vehicle_to_the_ride(
 
 
 async def test_business_driver_with_user_role_can_find_assigned_rides(
-    client, passenger, passenger_factory,
+    client, passenger, passenger_factory, admin_headers,
 ) -> None:
     """DiddiAuth emits role=user; DiddiGo must use driver_profiles for driver
     ride history and detail access."""
@@ -139,6 +155,14 @@ async def test_business_driver_with_user_role_can_find_assigned_rides(
         headers=business_driver,
     )
     assert r.status_code == 201, r.text
+    driver_id = r.json()["id"]
+
+    r = await client.post(
+        f"/v1/drivers/{driver_id}/kyc/approve",
+        json={"notes": "business driver test approval"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 200, r.text
 
     r = await client.post(
         "/v1/drivers/vehicle",

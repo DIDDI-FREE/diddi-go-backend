@@ -44,7 +44,103 @@ devient le niveau commercial de confort.
 
 ---
 
-## 3. Places
+## 3. Driver KYC
+
+### `POST /drivers/profile`
+
+Creer le dossier chauffeur DiddiGo. La creation ne valide plus le chauffeur.
+
+Reponse :
+
+```json
+{
+  "id": "driver-profile-id",
+  "user_id": "identity-user-id",
+  "license_number": "CI-123456",
+  "status": "pending_verification",
+  "kyc": {
+    "submitted_at": "2026-08-06T10:00:00Z",
+    "reviewed_at": null,
+    "review_notes": null
+  }
+}
+```
+
+Tant que le statut reste `pending_verification`, le chauffeur peut completer son
+dossier et son vehicule, mais il ne peut pas passer en ligne.
+
+### `POST /drivers/{driver_id}/kyc/approve`
+
+Route admin. Exige un token DiddiFreeID avec `role=admin`.
+
+Requete :
+
+```json
+{
+  "notes": "Documents OK"
+}
+```
+
+Reponse :
+
+```json
+{
+  "id": "driver-profile-id",
+  "status": "active",
+  "kyc": {
+    "reviewed_at": "2026-08-06T10:15:00Z",
+    "review_notes": "Documents OK (reviewed_by=admin-user-id)"
+  }
+}
+```
+
+### `POST /drivers/{driver_id}/kyc/reject`
+
+Route admin. Exige un token DiddiFreeID avec `role=admin`.
+
+Requete :
+
+```json
+{
+  "notes": "Permis illisible"
+}
+```
+
+Reponse :
+
+```json
+{
+  "id": "driver-profile-id",
+  "status": "suspended",
+  "kyc": {
+    "reviewed_at": "2026-08-06T10:15:00Z",
+    "review_notes": "Permis illisible (reviewed_by=admin-user-id)"
+  }
+}
+```
+
+### `POST /drivers/online`
+
+Avant validation admin, retourne :
+
+```json
+{
+  "error": {
+    "code": "DRIVER_NOT_VERIFIED",
+    "message": "Votre profil chauffeur n'est pas encore valide.",
+    "details": {
+      "status": "pending_verification"
+    }
+  }
+}
+```
+
+Apres validation admin, le chauffeur peut passer online s'il a aussi un vehicule
+actif.
+
+---
+
+## 4. Places
 
 ### `GET /places/search`
 
@@ -86,7 +182,7 @@ Erreurs :
 
 ---
 
-## 4. Pricing
+## 5. Pricing
 
 ### `POST /rides/pricing/estimate`
 
@@ -148,7 +244,7 @@ DiddiMap Core ne fournit pas le calcul officiel.
 
 ---
 
-## 5. Rides
+## 6. Rides
 
 ### `POST /rides`
 
@@ -240,7 +336,7 @@ Reponse partielle :
 
 ---
 
-## 6. Traces GPS REST
+## 7. Traces GPS REST
 
 ### `POST /rides/{ride_id}/location-samples`
 
@@ -308,7 +404,7 @@ final. Les traces restent stockees cote DiddiGo et pretes a etre envoyees.
 
 ---
 
-## 7. Share Ride
+## 8. Share Ride
 
 ### `POST /rides/{ride_id}/share-link`
 
@@ -357,7 +453,7 @@ Reponse :
 
 ---
 
-## 8. Urgence
+## 9. Urgence
 
 ### `POST /rides/{ride_id}/emergency`
 
@@ -386,7 +482,7 @@ DiddiGo ecrit aussi un log serveur `ride_emergency` avec `ride_id` et
 
 ---
 
-## 9. Paiements
+## 10. Paiements
 
 ### `GET /payments/{ride_id}`
 
@@ -427,7 +523,7 @@ Confirme l'encaissement cash par le chauffeur.
 
 ---
 
-## 10. WebSocket et push
+## 11. WebSocket et push
 
 Le WebSocket reste le canal temps reel quand l'app est active :
 
@@ -448,7 +544,7 @@ POST /v1/devices/unregister
 
 ---
 
-## 11. Hors Scope v3
+## 12. Hors Scope v3
 
 ```text
 DiddiSend
