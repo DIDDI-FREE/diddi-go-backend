@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app_base.core.auth_deps import get_current_active_user, require_business_driver, require_role
 from app_base.core.deps import driver_service, get_driver_locations
@@ -22,6 +22,7 @@ from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.domain.entities import DriverProfile
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.presentation.driver_schemas import (
+    DriverKycResubmitRequest,
     DriverKycReviewRequest,
     DriverProfileCreateRequest,
     GoOnlineRequest,
@@ -40,6 +41,27 @@ async def create_profile(
     current_user: UserModel = Depends(get_current_active_user),
 ) -> dict:
     return await service.create_profile(
+        user_id=current_user.id,
+        license_number=payload.license_number,
+        legal_name=payload.legal_name,
+        birth_date=payload.birth_date,
+        residence_address=payload.residence_address,
+        license_document_file_id=payload.license_document_file_id,
+        national_id_document_file_id=payload.national_id_document_file_id,
+        selfie_document_file_id=payload.selfie_document_file_id,
+        license_document_url=payload.license_document_url,
+        national_id_document_url=payload.national_id_document_url,
+        selfie_document_url=payload.selfie_document_url,
+    )
+
+
+@router.post("/kyc/resubmit")
+async def resubmit_kyc(
+    payload: DriverKycResubmitRequest,
+    service: DriverService = Depends(driver_service),
+    current_user: UserModel = Depends(get_current_active_user),
+) -> dict:
+    return await service.resubmit_kyc(
         user_id=current_user.id,
         license_number=payload.license_number,
         legal_name=payload.legal_name,
@@ -78,6 +100,26 @@ async def get_my_profile(
     current_user: UserModel = Depends(get_current_active_user),
 ) -> dict:
     return await service.get_profile(current_user.id)
+
+
+@router.get("/kyc")
+async def list_driver_kyc_queue(
+    status: str = Query(default="pending_verification"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    service: DriverService = Depends(driver_service),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.list_kyc_queue(status=status, page=page, page_size=page_size)
+
+
+@router.get("/{driver_id}/kyc")
+async def get_driver_kyc_detail(
+    driver_id: UUID,
+    service: DriverService = Depends(driver_service),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.get_kyc_detail(driver_id)
 
 
 @router.post("/{driver_id}/kyc/approve")

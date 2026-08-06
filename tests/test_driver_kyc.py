@@ -28,6 +28,11 @@ class FakeDriverRepo:
         self.profile = profile
         return profile
 
+    async def list_by_status(self, statuses, *, page=1, page_size=20):
+        if self.profile and self.profile.status in statuses:
+            return [self.profile], 1
+        return [], 0
+
 
 class FakeVehicleRepo:
     def __init__(self) -> None:
@@ -98,6 +103,47 @@ async def test_admin_approval_activates_driver_profile() -> None:
     assert approved["status"] == "active"
     assert approved["kyc"]["reviewed_at"] is not None
     assert repo.profile.license_verified_at is not None
+
+
+@pytest.mark.asyncio
+async def test_driver_can_resubmit_rejected_kyc() -> None:
+    repo = FakeDriverRepo()
+    service = DriverService(driver_repo=repo, vehicle_repo=FakeVehicleRepo())
+    user_id = uuid4()
+    admin_id = uuid4()
+    new_license_file_id = uuid4()
+
+    created = await service.create_profile(user_id=user_id, license_number="CI-123456")
+    await service.reject_kyc(
+        driver_id=UUID(created["id"]),
+        reviewed_by_user_id=admin_id,
+        notes="Photo illisible",
+    )
+
+    payload = await service.resubmit_kyc(
+        user_id=user_id,
+        license_number=" CI-654321 ",
+        license_document_file_id=new_license_file_id,
+    )
+
+    assert payload["license_number"] == "CI-654321"
+    assert payload["status"] == "pending_verification"
+    assert payload["kyc"]["license_document_file_id"] == str(new_license_file_id)
+    assert payload["kyc"]["reviewed_at"] is None
+    assert payload["kyc"]["review_notes"] is None
+    assert repo.profile.license_verified_at is None
+
+
+@pytest.mark.asyncio
+async def test_admin_can_list_kyc_queue() -> None:
+    repo = FakeDriverRepo()
+    service = DriverService(driver_repo=repo, vehicle_repo=FakeVehicleRepo())
+
+    await service.create_profile(user_id=uuid4(), license_number="CI-123456")
+    payload = await service.list_kyc_queue(status="pending_verification")
+
+    assert payload["pagination"]["total"] == 1
+    assert payload["data"][0]["status"] == "pending_verification"
 
 
 @pytest.mark.asyncio

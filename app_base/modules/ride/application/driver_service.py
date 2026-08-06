@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from uuid import UUID
 
+from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
 from app_base.modules.ride.domain.entities import (
     ComfortLevel,
@@ -80,6 +81,54 @@ class DriverService:
             created_at=now,
             updated_at=now,
         )
+        await self.driver_repo.save(profile)
+        return _profile_payload(profile)
+
+    async def resubmit_kyc(
+        self,
+        *,
+        user_id: UUID,
+        license_number: str | None = None,
+        legal_name: str | None = None,
+        birth_date: date | None = None,
+        residence_address: str | None = None,
+        license_document_file_id: UUID | None = None,
+        national_id_document_file_id: UUID | None = None,
+        selfie_document_file_id: UUID | None = None,
+        license_document_url: str | None = None,
+        national_id_document_url: str | None = None,
+        selfie_document_url: str | None = None,
+    ) -> dict:
+        profile = await self._require_profile(user_id)
+        if license_number is not None:
+            if not license_number.strip():
+                raise ApiError(
+                    422,
+                    ErrorCode.INVALID_LICENSE_NUMBER,
+                    "Le numero de permis est obligatoire.",
+                    {"field": "license_number"},
+                )
+            profile.license_number = license_number.strip()
+
+        _update_optional_kyc_fields(
+            profile,
+            legal_name=legal_name,
+            birth_date=birth_date,
+            residence_address=residence_address,
+            license_document_file_id=license_document_file_id,
+            national_id_document_file_id=national_id_document_file_id,
+            selfie_document_file_id=selfie_document_file_id,
+            license_document_url=license_document_url,
+            national_id_document_url=national_id_document_url,
+            selfie_document_url=selfie_document_url,
+        )
+        now = datetime.now(UTC)
+        profile.status = DriverStatus.PENDING_VERIFICATION
+        profile.license_verified_at = None
+        profile.kyc_submitted_at = now
+        profile.kyc_reviewed_at = None
+        profile.kyc_review_notes = None
+        profile.updated_at = now
         await self.driver_repo.save(profile)
         return _profile_payload(profile)
 
@@ -163,6 +212,44 @@ class DriverService:
         payload["vehicle"] = _vehicle_payload(vehicle) if vehicle else None
         return payload
 
+    async def get_kyc_detail(self, driver_id: UUID) -> dict:
+        profile = await self.driver_repo.find_by_id(driver_id)
+        if profile is None:
+            raise ApiError(404, ErrorCode.DRIVER_PROFILE_NOT_FOUND, "Aucun profil chauffeur pour cet identifiant.")
+        vehicle = await self.vehicle_repo.find_active_for_driver(profile.id)
+        payload = _profile_payload(profile)
+        payload["vehicle"] = _vehicle_payload(vehicle) if vehicle else None
+        return payload
+
+    async def list_kyc_queue(
+        self,
+        *,
+        status: str = "pending_verification",
+        page: int = 1,
+        page_size: int = 20,
+    ) -> dict:
+        if status == "all":
+            statuses = [
+                DriverStatus.PENDING_VERIFICATION,
+                DriverStatus.ACTIVE,
+                DriverStatus.SUSPENDED,
+            ]
+        else:
+            try:
+                statuses = [DriverStatus(status)]
+            except ValueError as exc:
+                raise ApiError(
+                    422,
+                    ErrorCode.DRIVER_KYC_STATUS_INVALID,
+                    "Statut KYC chauffeur invalide.",
+                    {"field": "status", "allowed": ["pending_verification", "active", "suspended", "all"]},
+                ) from exc
+        profiles, total = await self.driver_repo.list_by_status(statuses, page=page, page_size=page_size)
+        return {
+            "data": [_profile_payload(profile) for profile in profiles],
+            "pagination": {"page": page, "page_size": page_size, "total": total},
+        }
+
     async def resolve_driver(self, user_id: UUID) -> tuple[DriverProfile, Vehicle]:
         """Profile + active vehicle for a driver about to go online or take a
         ride. Raises if either is missing — matching must never hand a ride to
@@ -220,6 +307,39 @@ def _profile_payload(profile: DriverProfile) -> dict:
             "review_notes": profile.kyc_review_notes,
         },
     }
+
+
+def _update_optional_kyc_fields(
+    profile: DriverProfile,
+    *,
+    legal_name: str | None,
+    birth_date: date | None,
+    residence_address: str | None,
+    license_document_file_id: UUID | None,
+    national_id_document_file_id: UUID | None,
+    selfie_document_file_id: UUID | None,
+    license_document_url: str | None,
+    national_id_document_url: str | None,
+    selfie_document_url: str | None,
+) -> None:
+    if legal_name is not None:
+        profile.legal_name = _blank_to_none(legal_name)
+    if birth_date is not None:
+        profile.birth_date = birth_date
+    if residence_address is not None:
+        profile.residence_address = _blank_to_none(residence_address)
+    if license_document_file_id is not None:
+        profile.license_document_file_id = license_document_file_id
+    if national_id_document_file_id is not None:
+        profile.national_id_document_file_id = national_id_document_file_id
+    if selfie_document_file_id is not None:
+        profile.selfie_document_file_id = selfie_document_file_id
+    if license_document_url is not None:
+        profile.license_document_url = _blank_to_none(license_document_url)
+    if national_id_document_url is not None:
+        profile.national_id_document_url = _blank_to_none(national_id_document_url)
+    if selfie_document_url is not None:
+        profile.selfie_document_url = _blank_to_none(selfie_document_url)
 
 
 def _vehicle_payload(vehicle: Vehicle) -> dict:

@@ -26,6 +26,9 @@ echoue, DiddiGo retourne une erreur documentee.
 Le token DiddiFreeID ne porte pas le role chauffeur. Le role chauffeur est une
 qualification metier DiddiGo via `driver_profiles` + `vehicles`.
 
+Les erreurs DiddiGo suivent toujours le format `{"error":{"code","message","details"}}`.
+Le catalogue complet des codes est maintenu dans `DiddiGo_Error_Catalog.md`.
+
 ---
 
 ## 2. Enums
@@ -68,6 +71,118 @@ Reponse :
 
 Tant que le statut reste `pending_verification`, le chauffeur peut completer son
 dossier et son vehicule, mais il ne peut pas passer en ligne.
+
+### `POST /drivers/kyc/resubmit`
+
+Route chauffeur authentifie. Permet de renvoyer un dossier KYC apres rejet ou
+correction sans recreer le profil chauffeur.
+
+Requete :
+
+```json
+{
+  "license_number": "CI-654321",
+  "legal_name": "Awa Kone",
+  "birth_date": "1992-04-20",
+  "residence_address": "Cocody, Abidjan",
+  "license_document_file_id": "8a1a0f2e-30e7-4436-a8ea-c12a1f76f3c1",
+  "national_id_document_file_id": "45a14448-7bc7-4a21-972b-ff61585a571f",
+  "selfie_document_file_id": "f9ac4c34-9c51-4772-a2d0-38bfb55bf3d9"
+}
+```
+
+Reponse :
+
+```json
+{
+  "id": "driver-profile-id",
+  "status": "pending_verification",
+  "kyc": {
+    "reviewed_at": null,
+    "review_notes": null,
+    "license_document_file_id": "8a1a0f2e-30e7-4436-a8ea-c12a1f76f3c1"
+  }
+}
+```
+
+### `GET /drivers/kyc`
+
+Route admin. Liste les dossiers KYC chauffeur pour revue.
+
+Query params :
+
+```text
+status    pending_verification | active | suspended | all
+page      defaut 1
+page_size defaut 20, max 100
+```
+
+Reponse :
+
+```json
+{
+  "data": [
+    {
+      "id": "driver-profile-id",
+      "user_id": "identity-user-id",
+      "license_number": "CI-123456",
+      "status": "pending_verification",
+      "kyc": {
+        "legal_name": "Awa Kone",
+        "license_document_file_id": "file-id",
+        "national_id_document_file_id": "file-id",
+        "selfie_document_file_id": "file-id",
+        "submitted_at": "2026-08-06T10:00:00Z",
+        "reviewed_at": null,
+        "review_notes": null
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "page_size": 20,
+    "total": 1
+  }
+}
+```
+
+### `GET /drivers/{driver_id}/kyc`
+
+Route admin. Retourne le dossier KYC complet connu par DiddiGo, avec les
+`file_id` des documents et le vehicule actif si disponible.
+
+Important : DiddiGo ne genere pas les URLs signees lui-meme. Les documents sont
+references par `file_id`; les URLs temporaires restent fournies par DiddiFiles.
+
+Reponse :
+
+```json
+{
+  "id": "driver-profile-id",
+  "user_id": "identity-user-id",
+  "license_number": "CI-123456",
+  "status": "pending_verification",
+  "kyc": {
+    "legal_name": "Awa Kone",
+    "birth_date": "1992-04-20",
+    "residence_address": "Cocody, Abidjan",
+    "license_document_file_id": "file-id",
+    "national_id_document_file_id": "file-id",
+    "selfie_document_file_id": "file-id",
+    "submitted_at": "2026-08-06T10:00:00Z",
+    "reviewed_at": null,
+    "review_notes": null
+  },
+  "vehicle": {
+    "id": "vehicle-id",
+    "plate_number": "CI-123-AA",
+    "category": "standard",
+    "comfort_level": "standard",
+    "registration_document_file_id": "file-id",
+    "active": true
+  }
+}
+```
 
 ### `POST /drivers/{driver_id}/kyc/approve`
 
@@ -137,6 +252,17 @@ Avant validation admin, retourne :
 
 Apres validation admin, le chauffeur peut passer online s'il a aussi un vehicule
 actif.
+
+Erreurs KYC principales :
+
+| HTTP | Code | Sens |
+|---|---|---|
+| `403` | `FORBIDDEN_ROLE` | Le token n'est pas admin pour une route admin |
+| `403` | `DRIVER_NOT_VERIFIED` | Le chauffeur n'est pas valide pour passer en ligne |
+| `404` | `DRIVER_PROFILE_NOT_FOUND` | Aucun profil chauffeur pour ce compte ou cet identifiant |
+| `409` | `DRIVER_PROFILE_ALREADY_EXISTS` | Un profil chauffeur existe deja pour ce compte |
+| `422` | `DRIVER_KYC_STATUS_INVALID` | Filtre `status` invalide sur la file KYC |
+| `422` | `INVALID_LICENSE_NUMBER` | Numero de permis vide ou invalide |
 
 ---
 

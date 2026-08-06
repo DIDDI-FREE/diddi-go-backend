@@ -15,6 +15,7 @@ from uuid import UUID
 
 from app_base.modules.ride.domain.entities import (
     DriverProfile,
+    DriverStatus,
     PricingRule,
     Ride,
     RideRating,
@@ -70,6 +71,16 @@ class DriverProfileRepository(Protocol):
     async def find_by_user_id(self, user_id: UUID) -> DriverProfile | None: ...
 
     async def find_by_id(self, profile_id: UUID) -> DriverProfile | None: ...
+
+    async def list_by_status(
+        self,
+        statuses: list[DriverStatus],
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[DriverProfile], int]:
+        """Return driver KYC/admin review queue entries + total count."""
+        ...
 
 
 class VehicleRepository(Protocol):

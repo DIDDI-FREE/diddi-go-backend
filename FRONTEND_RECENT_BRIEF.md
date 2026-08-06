@@ -135,11 +135,35 @@ chauffeur est local a DiddiGo et depend du profil chauffeur DiddiGo.
 Routes admin KYC ajoutees :
 
 ```http
+GET  /v1/drivers/kyc?status=pending_verification&page=1&page_size=20
+GET  /v1/drivers/{driver_id}/kyc
 POST /v1/drivers/{driver_id}/kyc/approve
 POST /v1/drivers/{driver_id}/kyc/reject
 ```
 
 Ces routes exigent un token DiddiFreeID `role=admin`.
+
+Route chauffeur de correction/resoumission KYC :
+
+```http
+POST /v1/drivers/kyc/resubmit
+```
+
+Elle repasse le dossier a `pending_verification`, efface la derniere revue
+admin et garde le meme `driver_profile_id`.
+
+Catalogue d'erreurs DiddiGo :
+
+```text
+DiddiGo_Error_Catalog.md
+```
+
+Le frontend doit utiliser `error.code` pour piloter les etats UI. Exemples :
+
+- `DRIVER_NOT_VERIFIED` : afficher "Dossier KYC en cours de verification".
+- `DRIVER_PROFILE_NOT_FOUND` : proposer de creer le dossier chauffeur.
+- `NO_ACTIVE_VEHICLE` : demander au chauffeur d'ajouter un vehicule.
+- `DRIVER_KYC_STATUS_INVALID` : erreur de filtre back-office.
 
 Pour le vehicule, `POST /v1/drivers/vehicle` accepte aussi :
 
