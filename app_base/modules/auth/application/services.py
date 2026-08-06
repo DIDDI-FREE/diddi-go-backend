@@ -57,7 +57,7 @@ class AuthService:
 
     async def register(self, phone: str, full_name: str, role: str) -> dict:
         phone = _validate_phone(phone)
-        if role not in {"passenger", "driver"}:
+        if role not in {"passenger", "driver", "admin"}:
             from app_base.core.errors import ApiError
             raise ApiError(422, "INVALID_ROLE", "Le rôle doit être passenger ou driver.", {"field": "role"})
         existing = await self.user_repo.find_by_phone(phone)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -16,6 +16,11 @@ class FakeDriverRepo:
 
     async def find_by_user_id(self, user_id):
         if self.profile and self.profile.user_id == user_id:
+            return self.profile
+        return None
+
+    async def find_by_id(self, profile_id):
+        if self.profile and self.profile.id == profile_id:
             return self.profile
         return None
 
@@ -60,6 +65,7 @@ async def test_create_driver_profile_stores_kyc_fields() -> None:
     )
 
     assert payload["license_number"] == "CI-123456"
+    assert payload["status"] == "pending_verification"
     assert payload["kyc"]["legal_name"] == "Awa Kone"
     assert payload["kyc"]["birth_date"] == "1992-04-20"
     assert payload["kyc"]["residence_address"] == "Cocody, Abidjan"
@@ -71,7 +77,27 @@ async def test_create_driver_profile_stores_kyc_fields() -> None:
     assert payload["kyc"]["selfie_document_url"] == "https://cdn.example/selfie.jpg"
     assert payload["kyc"]["submitted_at"] is not None
     assert repo.profile.user_id == user_id
+    assert repo.profile.license_verified_at is None
     assert repo.profile.license_document_file_id == license_file_id
+
+
+@pytest.mark.asyncio
+async def test_admin_approval_activates_driver_profile() -> None:
+    repo = FakeDriverRepo()
+    service = DriverService(driver_repo=repo, vehicle_repo=FakeVehicleRepo())
+    user_id = uuid4()
+    admin_id = uuid4()
+
+    created = await service.create_profile(user_id=user_id, license_number="CI-123456")
+    approved = await service.approve_kyc(
+        driver_id=UUID(created["id"]),
+        reviewed_by_user_id=admin_id,
+        notes="Documents OK",
+    )
+
+    assert approved["status"] == "active"
+    assert approved["kyc"]["reviewed_at"] is not None
+    assert repo.profile.license_verified_at is not None
 
 
 @pytest.mark.asyncio

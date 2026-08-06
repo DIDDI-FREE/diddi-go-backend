@@ -11,16 +11,18 @@ live position in the Redis pool.
 from __future__ import annotations
 
 import logging
+from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
-from app_base.core.auth_deps import get_current_active_user, require_business_driver
+from app_base.core.auth_deps import get_current_active_user, require_business_driver, require_role
 from app_base.core.deps import driver_service, get_driver_locations
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.domain.entities import DriverProfile
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.presentation.driver_schemas import (
+    DriverKycReviewRequest,
     DriverProfileCreateRequest,
     GoOnlineRequest,
     VehicleCreateRequest,
@@ -76,6 +78,34 @@ async def get_my_profile(
     current_user: UserModel = Depends(get_current_active_user),
 ) -> dict:
     return await service.get_profile(current_user.id)
+
+
+@router.post("/{driver_id}/kyc/approve")
+async def approve_driver_kyc(
+    driver_id: UUID,
+    payload: DriverKycReviewRequest,
+    service: DriverService = Depends(driver_service),
+    current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.approve_kyc(
+        driver_id,
+        reviewed_by_user_id=current_user.id,
+        notes=payload.notes,
+    )
+
+
+@router.post("/{driver_id}/kyc/reject")
+async def reject_driver_kyc(
+    driver_id: UUID,
+    payload: DriverKycReviewRequest,
+    service: DriverService = Depends(driver_service),
+    current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.reject_kyc(
+        driver_id,
+        reviewed_by_user_id=current_user.id,
+        notes=payload.notes,
+    )
 
 
 @router.post("/online")

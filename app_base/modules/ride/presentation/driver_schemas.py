@@ -38,3 +38,7 @@ class GoOnlineRequest(BaseModel):
 
     lat: float = Field(ge=-90, le=90)
     lng: float = Field(ge=-180, le=180)
+
+
+class DriverKycReviewRequest(BaseModel):
+    notes: str | None = Field(default=None, max_length=1000)

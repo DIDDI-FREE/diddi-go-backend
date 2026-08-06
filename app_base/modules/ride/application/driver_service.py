@@ -5,10 +5,7 @@ need a `ride.driver_profiles` row (licence, KYC status) and at least one
 active `ride.vehicles` row. This service owns that onboarding path.
 
 KYC note: `license_verified_at` is left NULL and `status` starts at
-`pending_verification`. An admin endpoint to approve drivers is still
-outstanding, so `APPROVE_DRIVERS_ON_CREATE` decides whether a freshly
-registered driver may go online immediately. It defaults to True while
-there is no back-office, and must be flipped off once one exists.
+`pending_verification`. Only an admin KYC review may activate the driver.
 """
 
 from __future__ import annotations
@@ -29,11 +26,6 @@ from app_base.modules.ride.domain.interfaces import (
     DriverProfileRepository,
     VehicleRepository,
 )
-
-# Until a back-office exists, a driver who submits a licence is usable right
-# away. Flip to False the moment an admin KYC endpoint ships, or unverified
-# drivers will keep being matched to passengers.
-APPROVE_DRIVERS_ON_CREATE = True
 
 
 @dataclass
@@ -73,8 +65,8 @@ class DriverService:
             id=DriverProfile.new_id(),
             user_id=user_id,
             license_number=license_number.strip(),
-            status=DriverStatus.ACTIVE if APPROVE_DRIVERS_ON_CREATE else DriverStatus.PENDING_VERIFICATION,
-            license_verified_at=now if APPROVE_DRIVERS_ON_CREATE else None,
+            status=DriverStatus.PENDING_VERIFICATION,
+            license_verified_at=None,
             legal_name=_blank_to_none(legal_name),
             birth_date=birth_date,
             residence_address=_blank_to_none(residence_address),
@@ -88,6 +80,32 @@ class DriverService:
             created_at=now,
             updated_at=now,
         )
+        await self.driver_repo.save(profile)
+        return _profile_payload(profile)
+
+    async def approve_kyc(self, driver_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None = None) -> dict:
+        profile = await self.driver_repo.find_by_id(driver_id)
+        if profile is None:
+            raise ApiError(404, "DRIVER_PROFILE_NOT_FOUND", "Aucun profil chauffeur pour cet identifiant.")
+        now = datetime.now(UTC)
+        profile.status = DriverStatus.ACTIVE
+        profile.license_verified_at = now
+        profile.kyc_reviewed_at = now
+        profile.kyc_review_notes = _review_note(notes, reviewed_by_user_id)
+        profile.updated_at = now
+        await self.driver_repo.save(profile)
+        return _profile_payload(profile)
+
+    async def reject_kyc(self, driver_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None = None) -> dict:
+        profile = await self.driver_repo.find_by_id(driver_id)
+        if profile is None:
+            raise ApiError(404, "DRIVER_PROFILE_NOT_FOUND", "Aucun profil chauffeur pour cet identifiant.")
+        now = datetime.now(UTC)
+        profile.status = DriverStatus.SUSPENDED
+        profile.license_verified_at = None
+        profile.kyc_reviewed_at = now
+        profile.kyc_review_notes = _review_note(notes, reviewed_by_user_id)
+        profile.updated_at = now
         await self.driver_repo.save(profile)
         return _profile_payload(profile)
 
@@ -225,3 +243,9 @@ def _blank_to_none(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _review_note(notes: str | None, reviewed_by_user_id: UUID) -> str:
+    cleaned = _blank_to_none(notes)
+    suffix = f"reviewed_by={reviewed_by_user_id}"
+    return f"{cleaned} ({suffix})" if cleaned else suffix

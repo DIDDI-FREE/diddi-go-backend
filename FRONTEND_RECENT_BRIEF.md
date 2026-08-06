@@ -97,6 +97,15 @@ Payload :
 `license_number` reste obligatoire. Les autres champs sont optionnels mais
 recommandes pour le dossier KYC.
 
+Important KYC :
+
+- `POST /v1/drivers/profile` retourne maintenant `status=pending_verification`.
+- Le chauffeur peut ajouter son vehicule pendant que le dossier est en attente.
+- `POST /v1/drivers/online` retourne `403 DRIVER_NOT_VERIFIED` tant que l'admin
+  n'a pas valide le dossier.
+- L'ecran "Dossier KYC en cours de verification" doit etre affiche sur ce cas.
+- Il n'y a plus d'auto-approbation en staging.
+
 Nouveau flux fichiers :
 - utiliser DiddiFiles sur son URL dediee, pas sur `go-staging`
 - URL DiddiFiles : `https://diddifiles.diddifree.com/v1`
@@ -122,6 +131,15 @@ de verite.
 
 Apres creation, DiddiGo ne demande pas `role=driver` a DiddiFreeID. Le droit
 chauffeur est local a DiddiGo et depend du profil chauffeur DiddiGo.
+
+Routes admin KYC ajoutees :
+
+```http
+POST /v1/drivers/{driver_id}/kyc/approve
+POST /v1/drivers/{driver_id}/kyc/reject
+```
+
+Ces routes exigent un token DiddiFreeID `role=admin`.
 
 Pour le vehicule, `POST /v1/drivers/vehicle` accepte aussi :
 
