@@ -9,6 +9,7 @@ behaviour that matters.
 from __future__ import annotations
 
 import asyncio
+from uuid import uuid4
 
 from app_base.core.redis import create_redis_pool
 from app_base.core.settings import settings
@@ -81,6 +82,59 @@ async def test_going_online_requires_validated_kyc(client, driver_headers) -> No
     r = await client.post("/v1/drivers/online", json=NEAR, headers=driver_headers)
     assert r.status_code == 403
     assert r.json()["error"]["code"] == "DRIVER_NOT_VERIFIED"
+
+
+async def test_admin_can_list_and_open_pending_kyc(client, driver_headers, admin_headers) -> None:
+    profile = await client.post(
+        "/v1/drivers/profile",
+        json={
+            "license_number": "CI-999",
+            "legal_name": "Awa Kone",
+            "license_document_file_id": str(uuid4()),
+        },
+        headers=driver_headers,
+    )
+    assert profile.status_code == 201
+    driver_id = profile.json()["id"]
+
+    queue = await client.get("/v1/drivers/kyc", headers=admin_headers)
+    assert queue.status_code == 200
+    assert queue.json()["pagination"]["total"] >= 1
+    assert any(item["id"] == driver_id for item in queue.json()["data"])
+
+    detail = await client.get(f"/v1/drivers/{driver_id}/kyc", headers=admin_headers)
+    assert detail.status_code == 200
+    assert detail.json()["id"] == driver_id
+    assert detail.json()["kyc"]["legal_name"] == "Awa Kone"
+
+
+async def test_driver_can_resubmit_rejected_kyc_over_http(client, driver_headers, admin_headers) -> None:
+    profile = await client.post(
+        "/v1/drivers/profile",
+        json={"license_number": "CI-999", "license_document_file_id": str(uuid4())},
+        headers=driver_headers,
+    )
+    assert profile.status_code == 201
+    driver_id = profile.json()["id"]
+
+    rejected = await client.post(
+        f"/v1/drivers/{driver_id}/kyc/reject",
+        json={"notes": "document illisible"},
+        headers=admin_headers,
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "suspended"
+
+    new_file_id = str(uuid4())
+    resubmitted = await client.post(
+        "/v1/drivers/kyc/resubmit",
+        json={"license_document_file_id": new_file_id},
+        headers=driver_headers,
+    )
+    assert resubmitted.status_code == 200
+    assert resubmitted.json()["status"] == "pending_verification"
+    assert resubmitted.json()["kyc"]["license_document_file_id"] == new_file_id
+    assert resubmitted.json()["kyc"]["reviewed_at"] is None
 
 
 async def test_going_online_requires_a_vehicle_after_kyc_approval(client, driver_headers, admin_headers) -> None:

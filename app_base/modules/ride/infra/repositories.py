@@ -347,6 +347,26 @@ class SqlAlchemyDriverProfileRepository:
             return None
         return self._to_domain(row)
 
+    async def list_by_status(
+        self,
+        statuses: list[DriverStatus],
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[DriverProfile], int]:
+        status_values = [status.value for status in statuses]
+        q = select(orm.DriverProfileModel).where(orm.DriverProfileModel.status.in_(status_values))
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self._session.execute(count_q)).scalar() or 0
+
+        q = (
+            q.order_by(orm.DriverProfileModel.kyc_submitted_at.asc(), orm.DriverProfileModel.created_at.asc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        result = await self._session.execute(q)
+        return [self._to_domain(row) for row in result.scalars().all()], int(total)
+
     @staticmethod
     def _to_domain(row: orm.DriverProfileModel) -> DriverProfile:
         return DriverProfile(
