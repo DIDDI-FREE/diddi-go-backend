@@ -128,10 +128,23 @@ DIDDIMAP_BASE_URL=http://abidjanmaps-backend-staging.diddifree.com
 PUSH_ENABLED=true
 FCM_PROJECT_ID=<firebase-project-id>
 FCM_SERVICE_ACCOUNT_JSON=<firebase-service-account-json-one-line>
+DIDDIPAY_BASE_URL=https://pay-staging.diddifree.com/payfund/v1
+DIDDIPAY_CLIENT_ID=diddigo
+DIDDIPAY_SERVICE_KEY=<diddipay-service-key-for-diddigo>
+DIDDIPAY_CALLBACK_SECRET=<diddipay-callback-hmac-secret>
+DIDDIGO_PAYMENT_CALLBACK_URL=https://go-staging.diddifree.com/payments/return
 ```
 
 Ne pas renseigner `DATABASE_URL` ni `REDIS_URL` si la stack utilise les services
 internes `db` et `redis`.
+
+Pour activer `wave` / `diddipay`, DiddiGo appelle DiddiPay en
+service-to-service avec `DIDDIPAY_SERVICE_KEY`. Cette cle ne doit jamais etre
+envoyee au frontend. DiddiPay doit livrer les callbacks signes vers :
+
+```http
+POST https://go-staging.diddifree.com/internal/webhooks/diddipay
+```
 
 Pour verifier localement le fichier Portainer sans que le `.env` de dev ne
 pollue les valeurs, utiliser :

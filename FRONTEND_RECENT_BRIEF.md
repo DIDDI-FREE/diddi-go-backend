@@ -398,7 +398,7 @@ POST /v1/devices/unregister
 Sur iOS, l'application doit envoyer un token FCM Firebase Messaging, pas un
 token APNs brut. Firebase relaie ensuite vers APNs en interne.
 
-## 5.1 Paiement prepare
+## 5.1 Paiement DiddiPay / Wave
 
 Nouveau endpoint :
 
@@ -410,25 +410,54 @@ Payload :
 
 ```json
 {
-  "method": "wave"
+  "method": "wave",
+  "customer_email": "client@example.com",
+  "customer_phone": "+2250700000000",
+  "callback_url": "https://go-staging.diddifree.com/payments/return"
 }
 ```
 
-Reponse tant que le provider n'est pas branche :
+Pour `wave` et `diddipay`, `customer_email` est obligatoire. DiddiGo appelle
+DiddiPay cote backend; le frontend ne doit jamais connaitre `X-Service-Key`.
+
+Reponse :
 
 ```json
 {
   "ride_id": "ride-id",
-  "status": "pending",
+  "status": "requires_action",
   "method": "wave",
   "amount": 3100,
   "currency": "XOF",
-  "provider": "wave",
-  "provider_status": "not_connected"
+  "provider": "diddipay",
+  "provider_status": "requires_action",
+  "payment_intent_id": "payment-intent-id",
+  "business_reference": "ride:ride-id",
+  "next_action": {
+    "type": "redirect",
+    "url": "https://checkout.paystack.com/example"
+  }
 }
 ```
 
-Pour la production initiale, l'encaissement actif reste :
+Le frontend doit executer `next_action` :
+
+- `redirect` : ouvrir l'URL de checkout.
+- `mobile_money_prompt` : afficher l'attente de validation mobile money.
+- `await_confirmation` : afficher un etat d'attente.
+- `none` : aucune action.
+
+Important : le retour navigateur ne prouve pas le paiement. Apres retour ou
+attente, relire :
+
+```http
+GET /v1/payments/{ride_id}
+GET /v1/rides/{ride_id}
+```
+
+Seul `status=succeeded` cote paiement DiddiGo confirme le paiement digital.
+
+Le cash reste disponible via :
 
 ```http
 POST /v1/payments/{ride_id}/confirm-cash

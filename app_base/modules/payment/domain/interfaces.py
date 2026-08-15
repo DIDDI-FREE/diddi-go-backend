@@ -1,8 +1,4 @@
-"""Payment domain interfaces — repository protocol.
-
-The payment module has no external adapter yet (DiddiPay comes later).
-The sole protocol defined here — `PaymentRepository` — covers the
-PostgreSQL backing that today's cash-only implementation uses."""
+"""Payment domain interfaces."""
 
 from __future__ import annotations
 
@@ -17,14 +13,32 @@ class PaymentRepository(Protocol):
 
     async def find_by_ride_id(self, ride_id: UUID) -> Transaction | None: ...
 
+    async def find_by_payment_intent_id(self, payment_intent_id: UUID) -> Transaction | None: ...
+
     async def update_collected(
         self,
         transaction_id: UUID,
         collected_by: UUID,
         amount: object,
         collected_at: object,
-    ) -> Transaction:
-        """Mark the cash transaction as collected. `amount` can be Decimal;
-        `collected_at` is a datetime. Protocols use `object` to keep the
-        type definition loose — concrete signatures in the implementation."""
+    ) -> Transaction: ...
+
+    async def mark_external_status(
+        self,
+        transaction_id: UUID,
+        status: object,
+        provider_status: str | None,
+        paid_at: object | None,
+    ) -> Transaction: ...
+
+    async def record_webhook_event(
+        self,
+        *,
+        event_id: str,
+        payment_intent_id: UUID | None,
+        event_type: str,
+        business_reference: str | None,
+        payload: str,
+    ) -> bool:
+        """Return False when the event has already been processed."""
         ...

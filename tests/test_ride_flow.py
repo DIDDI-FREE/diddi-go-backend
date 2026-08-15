@@ -343,17 +343,12 @@ async def test_payment_starts_pending(client, passenger, driver) -> None:
     assert r.json()["method"] == "cash"
 
 
-async def test_wave_payment_can_be_prepared_for_future_provider(client, passenger, driver) -> None:
-    ride_id, fare = await complete_ride(client, passenger, driver)
+async def test_wave_payment_requires_customer_email(client, passenger, driver) -> None:
+    ride_id, _ = await complete_ride(client, passenger, driver)
 
     r = await client.post(f"/v1/payments/{ride_id}/prepare", json={"method": "wave"}, headers=passenger)
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["status"] == "pending"
-    assert body["method"] == "wave"
-    assert body["amount"] == fare
-    assert body["provider"] == "wave"
-    assert body["provider_status"] == "not_connected"
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "PAYMENT_EMAIL_REQUIRED"
 
 
 async def test_driver_confirms_cash_collection(client, passenger, driver) -> None:

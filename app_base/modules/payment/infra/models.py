@@ -17,7 +17,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import DateTime, Index, Numeric, String, text
+from sqlalchemy import DateTime, Index, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,6 +30,8 @@ class TransactionModel(Base):
     __tablename__ = "transactions"
     __table_args__ = (
         Index("idx_payment_ride", "ride_id"),
+        UniqueConstraint("payment_intent_id", name="uq_payment_transactions_payment_intent_id"),
+        UniqueConstraint("idempotency_key", name="uq_payment_transactions_idempotency_key"),
         {"schema": "payment"},
     )
 
@@ -46,5 +48,24 @@ class TransactionModel(Base):
     )  # driver_profiles.id, confirmed collector
     collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )
+    payment_intent_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    business_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    provider_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class PaymentWebhookEventModel(Base):
+    __tablename__ = "webhook_events"
+    __table_args__ = {"schema": "payment"}
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    payment_intent_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    business_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    processed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()"),
     )

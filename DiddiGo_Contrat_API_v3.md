@@ -40,7 +40,7 @@ Le catalogue complet des codes est maintenu dans `DiddiGo_Error_Catalog.md`.
 | `comfort_level` | `standard`, `comfort`, `premium` |
 | `payment_method` | `cash`, `wave`, `diddipay` |
 | `ride.status` | `requested`, `matched`, `driver_en_route`, `in_progress`, `completed`, `cancelled_by_passenger`, `cancelled_by_driver`, `no_driver_found` |
-| `payment.status` | `pending`, `collected`, `disputed` |
+| `payment.status` | `pending`, `requires_action`, `processing`, `succeeded`, `failed`, `cancelled`, `partially_refunded`, `refunded`, `collected`, `disputed` |
 
 Note produit : on garde les categories vehicule existantes. `comfort_level`
 devient le niveau commercial de confort.
@@ -395,9 +395,9 @@ Requete :
 }
 ```
 
-`payment_method` accepte deja `cash`, `wave`, `diddipay`. En production initiale,
-le paiement operationnel reste `cash`; `wave` et `diddipay` sont prepares mais
-pas encore connectes a un provider.
+`payment_method` accepte `cash`, `wave`, `diddipay`. `cash` reste confirme
+localement par le chauffeur. `wave` et `diddipay` passent par DiddiPay
+PaymentIntent en service-to-service.
 
 Reponse :
 
@@ -617,31 +617,67 @@ pending avec la methode demandee sur la course.
 
 ### `POST /payments/{ride_id}/prepare`
 
-Prepare la transaction avant connexion provider.
+Prepare la transaction. Pour `cash`, DiddiGo cree une transaction locale
+pending. Pour `wave` et `diddipay`, DiddiGo cree un `PaymentIntent` dans
+DiddiPay via service-to-service.
 
 Requete :
 
 ```json
 {
-  "method": "wave"
+  "method": "wave",
+  "customer_email": "client@example.com",
+  "customer_phone": "+2250700000000",
+  "callback_url": "https://go-staging.diddifree.com/payments/return"
 }
 ```
+
+`customer_email` est obligatoire pour `wave` et `diddipay`, car le PSP actif
+derriere DiddiPay/Paystack l'exige. DiddiGo ne doit pas inventer d'email si
+l'identite ne le fournit pas.
 
 Reponse :
 
 ```json
 {
   "ride_id": "ride-id",
-  "status": "pending",
+  "status": "requires_action",
   "method": "wave",
   "amount": 3100,
   "currency": "XOF",
-  "provider": "wave",
-  "provider_status": "not_connected"
+  "provider": "diddipay",
+  "provider_status": "requires_action",
+  "payment_intent_id": "payment-intent-id",
+  "business_reference": "ride:ride-id",
+  "next_action": {
+    "type": "redirect",
+    "url": "https://checkout.paystack.com/example",
+    "instructions": null,
+    "expires_at": null
+  }
 }
 ```
 
 Pour `cash`, `provider_status` vaut `local`.
+
+Important : une redirection frontend ne prouve jamais le paiement. Le paiement
+est considere confirme seulement quand DiddiGo recoit le callback signe DiddiPay
+ou reconcilie le statut `succeeded` depuis DiddiPay.
+
+### `POST /internal/webhooks/diddipay`
+
+Endpoint interne appele par DiddiPay, sans prefixe `/v1`.
+
+Headers :
+
+```http
+X-DiddiPay-Event-ID: event-id
+X-DiddiPay-Signature: hmac-sha256-hex
+```
+
+DiddiGo verifie la signature sur le corps brut avec
+`DIDDIPAY_CALLBACK_SECRET`, deduplique l'evenement et met a jour la transaction
+locale par `payment_intent_id`.
 
 ### `POST /payments/{ride_id}/confirm-cash`
 
@@ -675,8 +711,7 @@ POST /v1/devices/unregister
 ```text
 DiddiSend
 DiddiScore
-provider Wave reel
-provider DiddiPay reel
+reconciliation periodique DiddiPay
 dispatch urgence complet
 map-matching DiddiMap Core officiel
 contrat physique /v2 ou /v3 dans l'URL
