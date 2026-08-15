@@ -1,43 +1,33 @@
-"""Payment use cases — DB-backed, cash-only at launch.
+"""Payment use cases for DiddiGo.
 
-Inter-module boundary: payment reads ride state via `RideRepository`,
-never via a direct SQL cross-schema query — the architecture doc's most
-important rule ("un module ne fait jamais de requête SQL directe sur les
-tables d'un autre module").
+Cash remains local to DiddiGo. Digital collection goes through DiddiPay's
+PaymentIntent contract; DiddiGo stores only its local payment link/status.
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
+from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
-from app_base.modules.payment.domain.entities import (
-    PaymentMethod,
-    PaymentStatus,
-    Transaction,
-)
+from app_base.core.settings import settings
+from app_base.modules.payment.domain.entities import PaymentMethod, PaymentStatus, Transaction
 from app_base.modules.payment.domain.interfaces import PaymentRepository
+from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.ride.domain.entities import RideStatus
 from app_base.modules.ride.domain.interfaces import RideRepository
 
-# Tolerance: collected amount can diverge from the ride's final Fare by
-# at most ±10% of expected OR ±200 XOF — whichever is larger. This matches
-# the previous in-memory service's tolerance logic.
 _ABSOLUTE_TOLERANCE = Decimal("200")
 _RELATIVE_TOLERANCE = Decimal("0.10")
 
 
 def _iso(dt: datetime | None) -> str | None:
-    """Render a timestamp as ISO 8601 UTC, per the API contract §0.
-
-    Timestamps read back from PostgreSQL are timezone-aware; ones built in
-    process may be naive. A naive value is taken to be UTC (that is how the
-    service writes them) rather than silently labelled `Z` while holding
-    local time.
-    """
     if dt is None:
         return None
     if dt.tzinfo is None:
@@ -49,6 +39,7 @@ def _iso(dt: datetime | None) -> str | None:
 class PaymentService:
     payment_repo: PaymentRepository
     ride_repo: RideRepository
+    diddipay: DiddiPayClient | None = None
 
     async def confirm_cash(
         self,
@@ -59,21 +50,17 @@ class PaymentService:
     ) -> dict:
         ride = await self.ride_repo.find_by_id(ride_id)
         if ride is None:
-            raise ApiError(404, "RIDE_NOT_FOUND", "Aucune course trouvée avec cet identifiant.")
+            raise ApiError(404, ErrorCode.RIDE_NOT_FOUND, "Aucune course trouvee avec cet identifiant.")
         if ride.status != RideStatus.COMPLETED:
-            raise ApiError(409, "RIDE_NOT_COMPLETED", "Impossible de confirmer un paiement avant la fin de course.")
+            raise ApiError(409, ErrorCode.RIDE_NOT_COMPLETED, "Impossible de confirmer un paiement avant la fin.")
 
         expected = ride.final_fare
         if expected is not None:
             tolerance = max(_ABSOLUTE_TOLERANCE, expected * _RELATIVE_TOLERANCE)
             if abs(amount_collected - expected) > tolerance:
-                raise ApiError(
-                    422,
-                    "AMOUNT_MISMATCH",
-                    "Le montant encaissé ne correspond pas au montant final.",
-                )
+                raise ApiError(422, "AMOUNT_MISMATCH", "Le montant encaisse ne correspond pas au montant final.")
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         payment = await self.payment_repo.find_by_ride_id(ride_id)
         if payment is None:
             payment = Transaction(
@@ -107,32 +94,132 @@ class PaymentService:
             ride = await self.ride_repo.find_by_id(ride_id)
             method = ride.payment_method.value if ride is not None else "cash"
             return {"ride_id": str(ride_id), "status": "pending", "method": method, "amount": None, "currency": "XOF"}
-        return {
+        payload = {
             "ride_id": str(payment.ride_id),
             "status": payment.status.value,
             "method": payment.method.value,
             "amount": int(payment.amount),
             "currency": payment.currency,
         }
+        if payment.payment_intent_id:
+            payload.update(
+                {
+                    "provider": "diddipay",
+                    "provider_status": payment.provider_status,
+                    "payment_intent_id": str(payment.payment_intent_id),
+                    "business_reference": payment.business_reference,
+                    "paid_at": _iso(payment.paid_at),
+                }
+            )
+        return payload
 
-    async def prepare_payment(self, ride_id: UUID, method: str) -> dict:
+    async def prepare_payment(
+        self,
+        ride_id: UUID,
+        method: str,
+        *,
+        payer_user_id: UUID,
+        customer_email: str | None = None,
+        customer_phone: str | None = None,
+        callback_url: str | None = None,
+    ) -> dict:
         ride = await self.ride_repo.find_by_id(ride_id)
         if ride is None:
-            raise ApiError(404, "RIDE_NOT_FOUND", "Aucune course trouvee avec cet identifiant.")
+            raise ApiError(404, ErrorCode.RIDE_NOT_FOUND, "Aucune course trouvee avec cet identifiant.")
+        if ride.passenger_user_id != payer_user_id:
+            raise ApiError(403, ErrorCode.RIDE_NOT_OWNED_BY_USER, "Cette course ne vous appartient pas.")
         try:
             payment_method = PaymentMethod(method)
         except ValueError as exc:
-            raise ApiError(422, "INVALID_PAYMENT_METHOD", "Methode de paiement invalide.") from exc
+            raise ApiError(422, ErrorCode.INVALID_PAYMENT_METHOD, "Methode de paiement invalide.") from exc
+
+        if payment_method is PaymentMethod.CASH:
+            return await self._prepare_cash(ride_id)
+
+        if not customer_email:
+            raise ApiError(
+                422,
+                ErrorCode.PAYMENT_EMAIL_REQUIRED,
+                "Un email client est requis pour initialiser un paiement DiddiPay/Paystack.",
+                {"field": "customer_email"},
+            )
+        return await self._prepare_diddipay(
+            ride_id,
+            payment_method,
+            payer_user_id=payer_user_id,
+            customer_email=customer_email,
+            customer_phone=customer_phone,
+            callback_url=callback_url,
+        )
+
+    async def apply_diddipay_webhook(
+        self,
+        *,
+        raw_body: bytes,
+        event_id_header: str | None,
+        signature: str | None,
+    ) -> dict:
+        if not settings.diddipay_callback_secret:
+            raise ApiError(503, ErrorCode.PAYMENT_CONFIGURATION_MISSING, "Secret callback DiddiPay non configure.")
+        expected = hmac.new(settings.diddipay_callback_secret.encode(), raw_body, hashlib.sha256).hexdigest()
+        if not signature or not hmac.compare_digest(signature, expected):
+            raise ApiError(401, ErrorCode.PAYMENT_CALLBACK_INVALID, "Signature callback DiddiPay invalide.")
+
+        try:
+            payload = json.loads(raw_body)
+        except json.JSONDecodeError as exc:
+            raise ApiError(422, ErrorCode.PAYMENT_CALLBACK_INVALID, "Payload callback DiddiPay invalide.") from exc
+
+        event_id = str(payload.get("id") or "")
+        if not event_id or event_id_header != event_id:
+            raise ApiError(422, ErrorCode.PAYMENT_CALLBACK_INVALID, "Event ID DiddiPay invalide.")
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise ApiError(422, ErrorCode.PAYMENT_CALLBACK_INVALID, "Donnees callback DiddiPay manquantes.")
+
+        intent_id = UUID(str(data["payment_intent_id"])) if data.get("payment_intent_id") else None
+        stored = await self.payment_repo.record_webhook_event(
+            event_id=event_id,
+            payment_intent_id=intent_id,
+            event_type=str(payload.get("type") or ""),
+            business_reference=data.get("business_reference"),
+            payload=raw_body.decode("utf-8"),
+        )
+        if not stored:
+            return {"status": "duplicate"}
+        if intent_id is None:
+            raise ApiError(422, ErrorCode.PAYMENT_CALLBACK_INVALID, "PaymentIntent ID manquant.")
+
+        payment = await self.payment_repo.find_by_payment_intent_id(intent_id)
+        if payment is None:
+            raise ApiError(404, ErrorCode.PAYMENT_INTENT_NOT_FOUND, "Paiement DiddiGo introuvable.")
+        if int(data.get("amount") or -1) != int(payment.amount) or data.get("currency") != payment.currency:
+            raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Montant ou devise DiddiPay incoherent.")
+
+        status = _payment_status_from_diddipay(str(data.get("status") or ""))
+        paid_at = datetime.now(UTC) if status is PaymentStatus.SUCCEEDED else None
+        await self.payment_repo.mark_external_status(
+            payment.id,
+            status,
+            provider_status=str(data.get("status") or ""),
+            paid_at=paid_at,
+        )
+        return {"status": "processed", "payment_intent_id": str(intent_id)}
+
+    async def _prepare_cash(self, ride_id: UUID) -> dict:
         payment = await self.payment_repo.find_by_ride_id(ride_id)
         if payment is None:
+            ride = await self.ride_repo.find_by_id(ride_id)
+            if ride is None:
+                raise ApiError(404, ErrorCode.RIDE_NOT_FOUND, "Aucune course trouvee avec cet identifiant.")
             payment = Transaction(
                 id=Transaction.new_id(),
                 ride_id=ride_id,
                 amount=ride.final_fare or ride.estimated_fare or Decimal("0"),
                 currency=ride.currency,
-                method=payment_method,
+                method=PaymentMethod.CASH,
                 status=PaymentStatus.PENDING,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
             )
             await self.payment_repo.save(payment)
         return {
@@ -141,10 +228,99 @@ class PaymentService:
             "method": payment.method.value,
             "amount": int(payment.amount),
             "currency": payment.currency,
-            "provider": payment.method.value,
-            "provider_status": (
-                "not_connected"
-                if payment.method in {PaymentMethod.WAVE, PaymentMethod.DIDDIPAY}
-                else "local"
-            ),
+            "provider": "cash",
+            "provider_status": "local",
         }
+
+    async def _prepare_diddipay(
+        self,
+        ride_id: UUID,
+        payment_method: PaymentMethod,
+        *,
+        payer_user_id: UUID,
+        customer_email: str,
+        customer_phone: str | None,
+        callback_url: str | None,
+    ) -> dict:
+        ride = await self.ride_repo.find_by_id(ride_id)
+        if ride is None:
+            raise ApiError(404, ErrorCode.RIDE_NOT_FOUND, "Aucune course trouvee avec cet identifiant.")
+        amount = ride.final_fare or ride.estimated_fare
+        if amount is None or amount <= 0:
+            raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Montant de course indisponible.")
+
+        existing = await self.payment_repo.find_by_ride_id(ride_id)
+        if existing and existing.payment_intent_id:
+            return _external_payment_payload(existing, next_action=None)
+        if existing:
+            raise ApiError(
+                409,
+                ErrorCode.PAYMENT_OPERATION_CONFLICT,
+                "Une transaction locale existe deja pour cette course.",
+            )
+
+        idempotency_key = f"ride:{ride_id}:collection:v1"
+        business_reference = f"ride:{ride_id}"
+        intent = await (self.diddipay or DiddiPayClient()).create_payment_intent(
+            {
+                "business_reference": business_reference,
+                "amount": int(amount),
+                "currency": ride.currency,
+                "payer_user_id": str(payer_user_id),
+                "payee_user_id": str(ride.driver_id) if ride.driver_id else None,
+                "channel": "mobile_money",
+                "network": "wave" if payment_method is PaymentMethod.WAVE else None,
+                "customer_email": customer_email,
+                "customer_phone": customer_phone,
+                "callback_url": callback_url or settings.diddigo_payment_callback_url,
+                "description": f"Course DiddiGo {ride_id}",
+                "metadata": {"ride_id": str(ride_id)},
+            },
+            idempotency_key=idempotency_key,
+        )
+        status = _payment_status_from_diddipay(str(intent.get("status") or "requires_action"))
+        payment = Transaction(
+            id=Transaction.new_id(),
+            ride_id=ride_id,
+            amount=Decimal(str(intent.get("amount") or amount)),
+            currency=str(intent.get("currency") or ride.currency),
+            method=payment_method,
+            status=status,
+            created_at=datetime.now(UTC),
+            payment_intent_id=UUID(str(intent["id"])),
+            business_reference=business_reference,
+            idempotency_key=idempotency_key,
+            provider_status=str(intent.get("status") or status.value),
+            paid_at=datetime.now(UTC) if status is PaymentStatus.SUCCEEDED else None,
+        )
+        await self.payment_repo.save(payment)
+        attempts = intent.get("attempts") if isinstance(intent.get("attempts"), list) else []
+        next_action = attempts[0].get("next_action") if attempts and isinstance(attempts[0], dict) else None
+        return _external_payment_payload(payment, next_action=next_action)
+
+
+def _payment_status_from_diddipay(status: str) -> PaymentStatus:
+    try:
+        return PaymentStatus(status)
+    except ValueError as exc:
+        raise ApiError(
+            422,
+            ErrorCode.PAYMENT_STATUS_INVALID,
+            "Statut DiddiPay non reconnu.",
+            {"status": status},
+        ) from exc
+
+
+def _external_payment_payload(payment: Transaction, *, next_action: dict | None) -> dict:
+    return {
+        "ride_id": str(payment.ride_id),
+        "status": payment.status.value,
+        "method": payment.method.value,
+        "amount": int(payment.amount),
+        "currency": payment.currency,
+        "provider": "diddipay",
+        "provider_status": payment.provider_status,
+        "payment_intent_id": str(payment.payment_intent_id) if payment.payment_intent_id else None,
+        "business_reference": payment.business_reference,
+        "next_action": next_action,
+    }

@@ -39,6 +39,7 @@ from app_base.modules.notification.application import DeviceService, PushNotific
 from app_base.modules.notification.infra.fcm import build_push_gateway
 from app_base.modules.notification.infra.repositories import SqlAlchemyUserDeviceRepository
 from app_base.modules.payment.application.services import PaymentService
+from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentRepository
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.application.matching_service import MatchingService
@@ -151,7 +152,11 @@ async def payment_service(
     payment_repo_dep: SqlAlchemyPaymentRepository = Depends(payment_repo),
     ride_repo_dep: SqlAlchemyRideRepository = Depends(ride_repo),
 ) -> PaymentService:
-    return PaymentService(payment_repo=payment_repo_dep, ride_repo=ride_repo_dep)
+    return PaymentService(
+        payment_repo=payment_repo_dep,
+        ride_repo=ride_repo_dep,
+        diddipay=DiddiPayClient(),
+    )
 
 
 async def driver_service(

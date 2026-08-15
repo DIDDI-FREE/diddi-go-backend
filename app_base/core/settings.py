@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     fcm_service_account_json: str | None = None
     fcm_service_account_file: str | None = None
 
+    diddipay_base_url: str | None = None
+    diddipay_client_id: str = "diddigo"
+    diddipay_service_key: str | None = None
+    diddipay_callback_secret: str | None = None
+    diddigo_payment_callback_url: str | None = None
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

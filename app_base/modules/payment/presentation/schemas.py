@@ -14,3 +14,6 @@ class CashConfirmationRequest(BaseModel):
 
 class PaymentPreparationRequest(BaseModel):
     method: str = Field(default="cash")
+    customer_email: str | None = Field(default=None, min_length=3, max_length=255)
+    customer_phone: str | None = Field(default=None, min_length=4, max_length=32)
+    callback_url: str | None = Field(default=None, min_length=1, max_length=1000)
