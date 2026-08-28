@@ -9,17 +9,24 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Request, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 
-from app_base.core.auth_deps import get_current_user, require_business_driver
-from app_base.core.deps import payment_service
+from app_base.core.auth_deps import get_current_user, require_business_driver, require_role
+from app_base.core.deps import driver_wallet_service, payment_service
 from app_base.core.errors import ApiError
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.payment.application.services import PaymentService
-from app_base.modules.payment.presentation.schemas import CashConfirmationRequest, PaymentPreparationRequest
+from app_base.modules.payment.application.wallet_service import DriverWalletService
+from app_base.modules.payment.presentation.schemas import (
+    CashConfirmationRequest,
+    DriverTopupRequest,
+    PaymentPreparationRequest,
+)
 from app_base.modules.ride.domain.entities import DriverProfile
 
 router = APIRouter(prefix="/payments", tags=["payment"])
+wallet_router = APIRouter(prefix="/drivers/me/wallet", tags=["driver-wallet"])
+admin_wallet_router = APIRouter(prefix="/admin/drivers", tags=["admin-driver-wallet"])
 internal_router = APIRouter(prefix="/internal/webhooks", tags=["internal-webhooks"])
 
 
@@ -64,6 +71,73 @@ async def get_payment(
     current_user: UserModel = Depends(get_current_user),
 ) -> dict:
     return await service.get_payment(ride_id)
+
+
+@wallet_router.get("")
+async def get_my_wallet(
+    service: DriverWalletService = Depends(driver_wallet_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    return await service.get_wallet(driver_user_id=current_user.id)
+
+
+@wallet_router.get("/ledger")
+async def get_my_ledger(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    service: DriverWalletService = Depends(driver_wallet_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    return await service.get_ledger(driver_user_id=current_user.id, page=page, page_size=page_size)
+
+
+@wallet_router.post("/topups", status_code=201)
+async def create_driver_topup(
+    payload: DriverTopupRequest,
+    service: DriverWalletService = Depends(driver_wallet_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    return await service.create_topup(
+        driver_user_id=current_user.id,
+        amount=Decimal(payload.amount),
+        method=payload.method,
+        customer_email=payload.customer_email,
+        customer_phone=payload.customer_phone or current_user.phone,
+        callback_url=payload.callback_url,
+    )
+
+
+@wallet_router.get("/topups/{topup_id}")
+async def get_driver_topup(
+    topup_id: UUID,
+    service: DriverWalletService = Depends(driver_wallet_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    return await service.get_topup(driver_user_id=current_user.id, topup_id=topup_id)
+
+
+@admin_wallet_router.get("/{driver_id}/wallet")
+async def admin_get_driver_wallet(
+    driver_id: UUID,
+    service: DriverWalletService = Depends(driver_wallet_service),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.admin_get_wallet(driver_id)
+
+
+@admin_wallet_router.get("/{driver_id}/wallet/ledger")
+async def admin_get_driver_ledger(
+    driver_id: UUID,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    service: DriverWalletService = Depends(driver_wallet_service),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.admin_get_ledger(driver_id, page=page, page_size=page_size)
 
 
 @internal_router.post("/diddipay", status_code=204)

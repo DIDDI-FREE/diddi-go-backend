@@ -28,6 +28,33 @@ class PaymentMethod(str, Enum):
     DIDDIPAY = "diddipay"
 
 
+class WalletEntryDirection(str, Enum):
+    CREDIT = "credit"
+    DEBIT = "debit"
+
+
+class WalletEntryStatus(str, Enum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    FAILED = "failed"
+
+
+class WalletEntryType(str, Enum):
+    RIDE_PAYOUT = "ride_payout"
+    PLATFORM_COMMISSION = "platform_commission"
+    TOPUP = "topup"
+    ADJUSTMENT = "adjustment"
+
+
+class TopupStatus(str, Enum):
+    PENDING = "pending"
+    REQUIRES_ACTION = "requires_action"
+    PROCESSING = "processing"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 @dataclass
 class Transaction:
     id: UUID
@@ -43,6 +70,59 @@ class Transaction:
     business_reference: str | None = None
     idempotency_key: str | None = None
     provider_status: str | None = None
+    paid_at: datetime | None = None
+
+    @staticmethod
+    def new_id() -> UUID:
+        return uuid4()
+
+
+@dataclass
+class DriverWallet:
+    id: UUID
+    driver_id: UUID
+    balance: Decimal = Decimal("0")
+    currency: str = "XOF"
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    @staticmethod
+    def new_id() -> UUID:
+        return uuid4()
+
+
+@dataclass
+class DriverLedgerEntry:
+    id: UUID
+    driver_id: UUID
+    amount: Decimal
+    currency: str
+    direction: WalletEntryDirection
+    entry_type: WalletEntryType
+    status: WalletEntryStatus
+    reference_type: str
+    reference_id: UUID
+    description: str | None = None
+    created_at: datetime | None = None
+
+    @staticmethod
+    def new_id() -> UUID:
+        return uuid4()
+
+
+@dataclass
+class DriverTopup:
+    id: UUID
+    driver_id: UUID
+    amount: Decimal
+    currency: str = "XOF"
+    method: PaymentMethod = PaymentMethod.DIDDIPAY
+    status: TopupStatus = TopupStatus.PENDING
+    payment_intent_id: UUID | None = None
+    business_reference: str | None = None
+    idempotency_key: str | None = None
+    provider_status: str | None = None
+    created_at: datetime | None = None
     paid_at: datetime | None = None
 
     @staticmethod

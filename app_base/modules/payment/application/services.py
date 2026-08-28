@@ -17,7 +17,16 @@ from uuid import UUID
 from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
 from app_base.core.settings import settings
-from app_base.modules.payment.domain.entities import PaymentMethod, PaymentStatus, Transaction
+from app_base.modules.payment.domain.entities import (
+    DriverLedgerEntry,
+    PaymentMethod,
+    PaymentStatus,
+    TopupStatus,
+    WalletEntryDirection,
+    WalletEntryStatus,
+    WalletEntryType,
+    Transaction,
+)
 from app_base.modules.payment.domain.interfaces import PaymentRepository
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.ride.domain.entities import RideStatus
@@ -80,6 +89,7 @@ class PaymentService:
             amount=amount_collected,
             collected_at=now,
         )
+        await self._record_ride_settlement(ride, payment.status)
         return {
             "ride_id": str(payment.ride_id),
             "status": payment.status.value,
@@ -190,21 +200,40 @@ class PaymentService:
         if intent_id is None:
             raise ApiError(422, ErrorCode.PAYMENT_CALLBACK_INVALID, "PaymentIntent ID manquant.")
 
-        payment = await self.payment_repo.find_by_payment_intent_id(intent_id)
-        if payment is None:
-            raise ApiError(404, ErrorCode.PAYMENT_INTENT_NOT_FOUND, "Paiement DiddiGo introuvable.")
-        if int(data.get("amount") or -1) != int(payment.amount) or data.get("currency") != payment.currency:
-            raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Montant ou devise DiddiPay incoherent.")
-
         status = _payment_status_from_diddipay(str(data.get("status") or ""))
         paid_at = datetime.now(UTC) if status is PaymentStatus.SUCCEEDED else None
-        await self.payment_repo.mark_external_status(
-            payment.id,
-            status,
+        payment = await self.payment_repo.find_by_payment_intent_id(intent_id)
+        if payment is not None:
+            if int(data.get("amount") or -1) != int(payment.amount) or data.get("currency") != payment.currency:
+                raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Montant ou devise DiddiPay incoherent.")
+
+            payment = await self.payment_repo.mark_external_status(
+                payment.id,
+                status,
+                provider_status=str(data.get("status") or ""),
+                paid_at=paid_at,
+            )
+            ride = await self.ride_repo.find_by_id(payment.ride_id)
+            if ride is not None:
+                await self._record_ride_settlement(ride, payment.status)
+            return {"status": "processed", "payment_intent_id": str(intent_id), "reference_type": "ride"}
+
+        topup = await self.payment_repo.find_topup_by_payment_intent_id(intent_id)
+        if topup is None:
+            raise ApiError(404, ErrorCode.PAYMENT_INTENT_NOT_FOUND, "Paiement DiddiGo introuvable.")
+        if int(data.get("amount") or -1) != int(topup.amount) or data.get("currency") != topup.currency:
+            raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Montant ou devise DiddiPay incoherent.")
+
+        topup_status = _topup_status_from_payment_status(status)
+        topup = await self.payment_repo.mark_topup_status(
+            topup.id,
+            topup_status,
             provider_status=str(data.get("status") or ""),
             paid_at=paid_at,
         )
-        return {"status": "processed", "payment_intent_id": str(intent_id)}
+        if topup.status is TopupStatus.SUCCEEDED:
+            await self._credit_driver_topup(topup)
+        return {"status": "processed", "payment_intent_id": str(intent_id), "reference_type": "driver_topup"}
 
     async def _prepare_cash(self, ride_id: UUID) -> dict:
         payment = await self.payment_repo.find_by_ride_id(ride_id)
@@ -298,6 +327,62 @@ class PaymentService:
         next_action = attempts[0].get("next_action") if attempts and isinstance(attempts[0], dict) else None
         return _external_payment_payload(payment, next_action=next_action)
 
+    async def _record_ride_settlement(self, ride, payment_status: PaymentStatus) -> None:
+        if ride.driver_id is None:
+            return
+        if ride.platform_commission is None or ride.driver_payout_estimate is None:
+            return
+        if ride.payment_method.value == PaymentMethod.CASH.value and payment_status is PaymentStatus.COLLECTED:
+            await self.payment_repo.record_ledger_entry_once(
+                DriverLedgerEntry(
+                    id=DriverLedgerEntry.new_id(),
+                    driver_id=ride.driver_id,
+                    amount=ride.platform_commission,
+                    currency=ride.currency,
+                    direction=WalletEntryDirection.DEBIT,
+                    entry_type=WalletEntryType.PLATFORM_COMMISSION,
+                    status=WalletEntryStatus.CONFIRMED,
+                    reference_type="ride",
+                    reference_id=ride.id,
+                    description="Commission DiddiGo sur course cash",
+                    created_at=datetime.now(UTC),
+                ),
+            )
+            return
+        if ride.payment_method.value in {PaymentMethod.DIDDIPAY.value, PaymentMethod.WAVE.value} and payment_status is PaymentStatus.SUCCEEDED:
+            await self.payment_repo.record_ledger_entry_once(
+                DriverLedgerEntry(
+                    id=DriverLedgerEntry.new_id(),
+                    driver_id=ride.driver_id,
+                    amount=ride.driver_payout_estimate,
+                    currency=ride.currency,
+                    direction=WalletEntryDirection.CREDIT,
+                    entry_type=WalletEntryType.RIDE_PAYOUT,
+                    status=WalletEntryStatus.CONFIRMED,
+                    reference_type="ride",
+                    reference_id=ride.id,
+                    description="Montant net chauffeur sur course digitale",
+                    created_at=datetime.now(UTC),
+                ),
+            )
+
+    async def _credit_driver_topup(self, topup) -> None:
+        await self.payment_repo.record_ledger_entry_once(
+            DriverLedgerEntry(
+                id=DriverLedgerEntry.new_id(),
+                driver_id=topup.driver_id,
+                amount=topup.amount,
+                currency=topup.currency,
+                direction=WalletEntryDirection.CREDIT,
+                entry_type=WalletEntryType.TOPUP,
+                status=WalletEntryStatus.CONFIRMED,
+                reference_type="driver_topup",
+                reference_id=topup.id,
+                description="Recharge chauffeur confirmee",
+                created_at=datetime.now(UTC),
+            ),
+        )
+
 
 def _payment_status_from_diddipay(status: str) -> PaymentStatus:
     try:
@@ -309,6 +394,18 @@ def _payment_status_from_diddipay(status: str) -> PaymentStatus:
             "Statut DiddiPay non reconnu.",
             {"status": status},
         ) from exc
+
+
+def _topup_status_from_payment_status(status: PaymentStatus) -> TopupStatus:
+    mapping = {
+        PaymentStatus.PENDING: TopupStatus.PENDING,
+        PaymentStatus.REQUIRES_ACTION: TopupStatus.REQUIRES_ACTION,
+        PaymentStatus.PROCESSING: TopupStatus.PROCESSING,
+        PaymentStatus.SUCCEEDED: TopupStatus.SUCCEEDED,
+        PaymentStatus.FAILED: TopupStatus.FAILED,
+        PaymentStatus.CANCELLED: TopupStatus.CANCELLED,
+    }
+    return mapping.get(status, TopupStatus.FAILED)
 
 
 def _external_payment_payload(payment: Transaction, *, next_action: dict | None) -> dict:

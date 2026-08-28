@@ -39,6 +39,7 @@ from app_base.modules.notification.application import DeviceService, PushNotific
 from app_base.modules.notification.infra.fcm import build_push_gateway
 from app_base.modules.notification.infra.repositories import SqlAlchemyUserDeviceRepository
 from app_base.modules.payment.application.services import PaymentService
+from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentRepository
 from app_base.modules.ride.application.driver_service import DriverService
@@ -159,6 +160,17 @@ async def payment_service(
     )
 
 
+async def driver_wallet_service(
+    payment_repo_dep: SqlAlchemyPaymentRepository = Depends(payment_repo),
+    driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
+) -> DriverWalletService:
+    return DriverWalletService(
+        payment_repo=payment_repo_dep,
+        driver_repo=driver_repo_dep,
+        diddipay=DiddiPayClient(),
+    )
+
+
 async def driver_service(
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
     vehicle_repo_dep: SqlAlchemyVehicleRepository = Depends(vehicle_repo),
@@ -209,6 +221,7 @@ __all__ = [
     "auth_service",
     "ride_service",
     "payment_service",
+    "driver_wallet_service",
     "driver_service",
     "device_service",
     "push_notification_service",

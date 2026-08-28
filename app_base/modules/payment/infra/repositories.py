@@ -12,14 +12,21 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app_base.modules.payment.domain.entities import (
+    DriverLedgerEntry,
+    DriverTopup,
+    DriverWallet,
     PaymentMethod,
     PaymentStatus,
+    TopupStatus,
     Transaction,
+    WalletEntryDirection,
+    WalletEntryStatus,
+    WalletEntryType,
 )
 from app_base.modules.payment.infra import models as orm
 
@@ -125,6 +132,139 @@ class SqlAlchemyPaymentRepository:
         result = await self._session.execute(stmt)
         return bool(result.rowcount)
 
+    async def get_or_create_wallet(self, driver_id: UUID, *, currency: str = "XOF") -> DriverWallet:
+        result = await self._session.execute(
+            select(orm.DriverWalletModel).where(orm.DriverWalletModel.driver_id == driver_id),
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            stmt = (
+                insert(orm.DriverWalletModel)
+                .values(
+                    id=DriverWallet.new_id(),
+                    driver_id=driver_id,
+                    balance=Decimal("0"),
+                    currency=currency,
+                )
+                .on_conflict_do_nothing(index_elements=[orm.DriverWalletModel.driver_id])
+            )
+            await self._session.execute(stmt)
+            result = await self._session.execute(
+                select(orm.DriverWalletModel).where(orm.DriverWalletModel.driver_id == driver_id),
+            )
+            row = result.scalar_one()
+        return self._wallet_to_domain(row)
+
+    async def list_ledger_entries(
+        self,
+        driver_id: UUID,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[DriverLedgerEntry], int]:
+        count_result = await self._session.execute(
+            select(func.count()).select_from(orm.DriverLedgerEntryModel).where(
+                orm.DriverLedgerEntryModel.driver_id == driver_id,
+            ),
+        )
+        total = int(count_result.scalar_one())
+        result = await self._session.execute(
+            select(orm.DriverLedgerEntryModel)
+            .where(orm.DriverLedgerEntryModel.driver_id == driver_id)
+            .order_by(orm.DriverLedgerEntryModel.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size),
+        )
+        return [self._ledger_to_domain(row) for row in result.scalars().all()], total
+
+    async def record_ledger_entry_once(self, entry: DriverLedgerEntry) -> DriverLedgerEntry | None:
+        await self.get_or_create_wallet(entry.driver_id, currency=entry.currency)
+        stmt = (
+            insert(orm.DriverLedgerEntryModel)
+            .values(
+                id=entry.id,
+                driver_id=entry.driver_id,
+                amount=entry.amount,
+                currency=entry.currency,
+                direction=entry.direction.value,
+                entry_type=entry.entry_type.value,
+                status=entry.status.value,
+                reference_type=entry.reference_type,
+                reference_id=entry.reference_id,
+                description=entry.description,
+                created_at=entry.created_at or datetime.utcnow(),
+            )
+            .on_conflict_do_nothing(
+                index_elements=[
+                    orm.DriverLedgerEntryModel.driver_id,
+                    orm.DriverLedgerEntryModel.entry_type,
+                    orm.DriverLedgerEntryModel.reference_type,
+                    orm.DriverLedgerEntryModel.reference_id,
+                ],
+            )
+        )
+        result = await self._session.execute(stmt)
+        if not result.rowcount:
+            return None
+
+        wallet_result = await self._session.execute(
+            select(orm.DriverWalletModel).where(orm.DriverWalletModel.driver_id == entry.driver_id),
+        )
+        wallet = wallet_result.scalar_one()
+        if entry.status is WalletEntryStatus.CONFIRMED:
+            delta = entry.amount if entry.direction is WalletEntryDirection.CREDIT else -entry.amount
+            wallet.balance = Decimal(str(wallet.balance)) + Decimal(str(delta))
+            wallet.updated_at = datetime.utcnow()
+        await self._session.flush()
+        return entry
+
+    async def save_topup(self, topup: DriverTopup) -> DriverTopup:
+        row = orm.DriverTopupModel(
+            id=topup.id,
+            driver_id=topup.driver_id,
+            amount=topup.amount,
+            currency=topup.currency,
+            method=topup.method.value,
+            status=topup.status.value,
+            payment_intent_id=topup.payment_intent_id,
+            business_reference=topup.business_reference,
+            idempotency_key=topup.idempotency_key,
+            provider_status=topup.provider_status,
+            created_at=topup.created_at or datetime.utcnow(),
+            paid_at=topup.paid_at,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return topup
+
+    async def find_topup_by_id(self, topup_id: UUID) -> DriverTopup | None:
+        row = await self._session.get(orm.DriverTopupModel, topup_id)
+        return self._topup_to_domain(row) if row else None
+
+    async def find_topup_by_payment_intent_id(self, payment_intent_id: UUID) -> DriverTopup | None:
+        result = await self._session.execute(
+            select(orm.DriverTopupModel).where(orm.DriverTopupModel.payment_intent_id == payment_intent_id),
+        )
+        row = result.scalar_one_or_none()
+        return self._topup_to_domain(row) if row else None
+
+    async def mark_topup_status(
+        self,
+        topup_id: UUID,
+        status: Any,
+        provider_status: str | None,
+        paid_at: Any | None,
+    ) -> DriverTopup:
+        row = await self._session.get(orm.DriverTopupModel, topup_id)
+        if row is None:
+            raise LookupError(f"No topup with id={topup_id}")
+        row.status = status.value if isinstance(status, TopupStatus) else str(status)
+        row.provider_status = provider_status
+        if paid_at is not None:
+            row.paid_at = paid_at
+        await self._session.flush()
+        return self._topup_to_domain(row)
+
     @staticmethod
     def _to_domain(row: orm.TransactionModel) -> Transaction:
         return Transaction(
@@ -141,5 +281,49 @@ class SqlAlchemyPaymentRepository:
             business_reference=row.business_reference,
             idempotency_key=row.idempotency_key,
             provider_status=row.provider_status,
+            paid_at=row.paid_at,
+        )
+
+    @staticmethod
+    def _wallet_to_domain(row: orm.DriverWalletModel) -> DriverWallet:
+        return DriverWallet(
+            id=row.id,
+            driver_id=row.driver_id,
+            balance=Decimal(str(row.balance)),
+            currency=row.currency,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+
+    @staticmethod
+    def _ledger_to_domain(row: orm.DriverLedgerEntryModel) -> DriverLedgerEntry:
+        return DriverLedgerEntry(
+            id=row.id,
+            driver_id=row.driver_id,
+            amount=Decimal(str(row.amount)),
+            currency=row.currency,
+            direction=WalletEntryDirection(row.direction),
+            entry_type=WalletEntryType(row.entry_type),
+            status=WalletEntryStatus(row.status),
+            reference_type=row.reference_type,
+            reference_id=row.reference_id,
+            description=row.description,
+            created_at=row.created_at,
+        )
+
+    @staticmethod
+    def _topup_to_domain(row: orm.DriverTopupModel) -> DriverTopup:
+        return DriverTopup(
+            id=row.id,
+            driver_id=row.driver_id,
+            amount=Decimal(str(row.amount)),
+            currency=row.currency,
+            method=PaymentMethod(row.method),
+            status=TopupStatus(row.status),
+            payment_intent_id=row.payment_intent_id,
+            business_reference=row.business_reference,
+            idempotency_key=row.idempotency_key,
+            provider_status=row.provider_status,
+            created_at=row.created_at,
             paid_at=row.paid_at,
         )

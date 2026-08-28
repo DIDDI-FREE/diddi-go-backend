@@ -133,6 +133,7 @@ DIDDIPAY_CLIENT_ID=diddigo
 DIDDIPAY_SERVICE_KEY=<diddipay-service-key-for-diddigo>
 DIDDIPAY_CALLBACK_SECRET=<diddipay-callback-hmac-secret>
 DIDDIGO_PAYMENT_CALLBACK_URL=https://go-staging.diddifree.com/payments/return
+DRIVER_MIN_BALANCE=0
 ```
 
 Ne pas renseigner `DATABASE_URL` ni `REDIS_URL` si la stack utilise les services
@@ -145,6 +146,10 @@ envoyee au frontend. DiddiPay doit livrer les callbacks signes vers :
 ```http
 POST https://go-staging.diddifree.com/internal/webhooks/diddipay
 ```
+
+`DRIVER_MIN_BALANCE` vaut `0` par defaut. Si une valeur positive est configuree,
+un chauffeur dont le solde DiddiGo est inferieur a ce minimum recoit
+`403 DRIVER_BALANCE_TOO_LOW` sur `POST /v1/drivers/online`.
 
 Pour verifier localement le fichier Portainer sans que le `.env` de dev ne
 pollue les valeurs, utiliser :

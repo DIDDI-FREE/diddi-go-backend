@@ -16,7 +16,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from app_base.core.auth_deps import get_current_active_user, require_business_driver, require_role
-from app_base.core.deps import driver_service, get_driver_locations
+from app_base.core.deps import driver_service, driver_wallet_service, get_driver_locations
+from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.domain.entities import DriverProfile
@@ -154,6 +155,7 @@ async def reject_driver_kyc(
 async def go_online(
     payload: GoOnlineRequest,
     service: DriverService = Depends(driver_service),
+    wallets: DriverWalletService = Depends(driver_wallet_service),
     locations: RedisDriverLocationService = Depends(get_driver_locations),
     current_user: UserModel = Depends(get_current_active_user),
     _driver_profile: DriverProfile | None = Depends(require_business_driver),
@@ -162,6 +164,7 @@ async def go_online(
     has an active vehicle — matching must never offer a ride to a driver who
     cannot legally take it."""
     profile, vehicle = await service.resolve_driver(current_user.id)
+    await wallets.ensure_driver_can_go_online(profile.id)
     position = GeoPoint(lat=payload.lat, lng=payload.lng)
     await locations.update_position(current_user.id, position)
     await locations.set_available(current_user.id, available=True)

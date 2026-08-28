@@ -369,6 +369,36 @@ async def test_driver_confirms_cash_collection(client, passenger, driver) -> Non
     assert after.json()["status"] == "collected"
 
 
+async def test_driver_wallet_records_cash_commission(client, passenger, driver) -> None:
+    before = await client.get("/v1/drivers/me/wallet", headers=driver)
+    assert before.status_code == 200, before.text
+    assert before.json()["balance"] == 0
+
+    ride_id, fare = await complete_ride(client, passenger, driver)
+    detail = (await client.get(f"/v1/rides/{ride_id}", headers=passenger)).json()
+    commission = detail["pricing"]["platform_commission"]
+
+    paid = await client.post(
+        f"/v1/payments/{ride_id}/confirm-cash",
+        json={"amount_collected": fare},
+        headers=driver,
+    )
+    assert paid.status_code == 200, paid.text
+
+    wallet = await client.get("/v1/drivers/me/wallet", headers=driver)
+    assert wallet.status_code == 200, wallet.text
+    assert wallet.json()["balance"] == -commission
+
+    ledger = await client.get("/v1/drivers/me/wallet/ledger", headers=driver)
+    assert ledger.status_code == 200, ledger.text
+    entries = ledger.json()["data"]
+    assert len(entries) == 1
+    assert entries[0]["type"] == "platform_commission"
+    assert entries[0]["direction"] == "debit"
+    assert entries[0]["reference_type"] == "ride"
+    assert entries[0]["reference_id"] == ride_id
+
+
 async def test_confirm_cash_rejects_wildly_wrong_amount(client, passenger, driver) -> None:
     ride_id, fare = await complete_ride(client, passenger, driver)
     r = await client.post(

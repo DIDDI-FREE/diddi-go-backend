@@ -5,7 +5,12 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
-from app_base.modules.payment.domain.entities import Transaction
+from app_base.modules.payment.domain.entities import (
+    DriverLedgerEntry,
+    DriverTopup,
+    DriverWallet,
+    Transaction,
+)
 
 
 class PaymentRepository(Protocol):
@@ -42,3 +47,31 @@ class PaymentRepository(Protocol):
     ) -> bool:
         """Return False when the event has already been processed."""
         ...
+
+    async def get_or_create_wallet(self, driver_id: UUID, *, currency: str = "XOF") -> DriverWallet: ...
+
+    async def list_ledger_entries(
+        self,
+        driver_id: UUID,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[DriverLedgerEntry], int]: ...
+
+    async def record_ledger_entry_once(self, entry: DriverLedgerEntry) -> DriverLedgerEntry | None:
+        """Return None when the same entry was already recorded."""
+        ...
+
+    async def save_topup(self, topup: DriverTopup) -> DriverTopup: ...
+
+    async def find_topup_by_id(self, topup_id: UUID) -> DriverTopup | None: ...
+
+    async def find_topup_by_payment_intent_id(self, payment_intent_id: UUID) -> DriverTopup | None: ...
+
+    async def mark_topup_status(
+        self,
+        topup_id: UUID,
+        status: object,
+        provider_status: str | None,
+        paid_at: object | None,
+    ) -> DriverTopup: ...
