@@ -350,6 +350,7 @@ Reponse :
   "duration_seconds": 983,
   "surge_multiplier": 1.0,
   "surge_cap": 1.6,
+  "comfort_multiplier": 1.0,
   "base_fare": 250,
   "distance_fare": 2850,
   "duration_fare": 0,
@@ -366,6 +367,7 @@ base_fare = 250 XOF
 distance_fare = distance_km * 240 XOF
 duration_fare = duration_minutes * 0 XOF
 surge_multiplier = min(rule.surge_multiplier, 1.6)
+comfort_multiplier = standard:1.00, comfort:1.15, premium:1.30
 commission_rate = 0.08
 ```
 
@@ -449,6 +451,7 @@ Reponse partielle :
     "duration_fare": 0,
     "surge_multiplier": 1.0,
     "surge_cap": 1.6,
+    "comfort_multiplier": 1.0,
     "commission_rate": 0.08,
     "platform_commission": 248,
     "driver_payout_estimate": 2852,

@@ -222,6 +222,7 @@ Reponse :
   "duration_seconds": 983,
   "surge_multiplier": 1.0,
   "surge_cap": 1.6,
+  "comfort_multiplier": 1.0,
   "base_fare": 250,
   "distance_fare": 2850,
   "duration_fare": 0,
@@ -235,6 +236,8 @@ Important :
 
 - DiddiMap donne distance/duree.
 - DiddiGo calcule le prix, la commission et le payout.
+- Le prix varie avec `comfort_level` : `standard=1.00`, `comfort=1.15`,
+  `premium=1.30`.
 - Pas de fallback silencieux si DiddiMap echoue.
 - Le prix final utilisera plus tard la distance/duree reellement parcourues,
   quand DiddiMap Core exposera le calcul officiel.

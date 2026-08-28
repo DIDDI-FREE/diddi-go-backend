@@ -61,6 +61,7 @@ async def test_pricing_estimate_matches_contract_shape(client, passenger) -> Non
         "duration_seconds",
         "surge_multiplier",
         "surge_cap",
+        "comfort_multiplier",
         "base_fare",
         "distance_fare",
         "duration_fare",
@@ -73,6 +74,7 @@ async def test_pricing_estimate_matches_contract_shape(client, passenger) -> Non
     assert body["distance_km"] > 0
     assert body["surge_multiplier"] == 1.0
     assert body["surge_cap"] == 1.6
+    assert body["comfort_multiplier"] == 1.0
     assert body["commission_rate"] == 0.08
     assert body["platform_commission"] > 0
     assert body["driver_payout_estimate"] > 0

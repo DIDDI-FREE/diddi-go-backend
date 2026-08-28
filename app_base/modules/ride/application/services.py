@@ -68,7 +68,7 @@ class RideService:
         comfort_level: str = "standard",
     ) -> dict:
         category = _vehicle_category(vehicle_category)
-        _comfort_level(comfort_level)
+        comfort = _comfort_level(comfort_level)
 
         estimate = await self.routing.estimate(origin=pickup, destination=dropoff, profile="palh_vtc")
         distance_km = _coerce_decimal(estimate.distance_km)
@@ -88,8 +88,9 @@ class RideService:
             price_per_km=price_per_km,
             price_per_min=price_per_min,
             surge_multiplier=surge_multiplier,
+            comfort_multiplier=_comfort_multiplier(comfort),
         )
-        return _pricing_response(distance_km, duration_seconds, pricing, surge_multiplier)
+        return _pricing_response(distance_km, duration_seconds, pricing, surge_multiplier, comfort)
 
     async def request_ride(
         self,
@@ -456,6 +457,7 @@ def _ride_detail_payload(ride: Ride, driver: dict | None) -> dict:
             "surge_multiplier": float(ride.surge_multiplier),
             "surge_cap": float(ride.surge_cap),
             "commission_rate": float(ride.commission_rate),
+            "comfort_multiplier": float(_comfort_multiplier(ride.comfort_level)),
             "platform_commission": int(ride.platform_commission) if ride.platform_commission is not None else None,
             "driver_payout_estimate": int(ride.driver_payout_estimate)
             if ride.driver_payout_estimate is not None
@@ -494,11 +496,12 @@ def _pricing_breakdown(
     price_per_km: Decimal,
     price_per_min: Decimal,
     surge_multiplier: Decimal,
+    comfort_multiplier: Decimal,
 ) -> dict[str, Decimal]:
     duration_minutes = Decimal(duration_seconds) / Decimal(60)
     distance_fare = distance_km * price_per_km
     duration_fare = duration_minutes * price_per_min
-    total_fare = (base_fare + distance_fare + duration_fare) * surge_multiplier
+    total_fare = (base_fare + distance_fare + duration_fare) * comfort_multiplier * surge_multiplier
     rounded_total = Decimal(round(float(total_fare)))
     platform_commission = Decimal(round(float(rounded_total * _COMMISSION_RATE)))
     return {
@@ -516,6 +519,7 @@ def _pricing_response(
     duration_seconds: int,
     pricing: dict[str, Decimal],
     surge_multiplier: Decimal,
+    comfort: ComfortLevel,
 ) -> dict:
     return {
         "estimated_fare": int(pricing["total_fare"]),
@@ -524,6 +528,7 @@ def _pricing_response(
         "duration_seconds": duration_seconds,
         "surge_multiplier": float(surge_multiplier),
         "surge_cap": float(_SURGE_CAP),
+        "comfort_multiplier": float(_comfort_multiplier(comfort)),
         "base_fare": int(pricing["base_fare"]),
         "distance_fare": int(pricing["distance_fare"]),
         "duration_fare": int(pricing["duration_fare"]),
@@ -545,6 +550,14 @@ def _comfort_level(value: str) -> ComfortLevel:
         return ComfortLevel(value)
     except ValueError as exc:
         raise ApiError(422, "INVALID_COMFORT_LEVEL", "Niveau de confort invalide.") from exc
+
+
+def _comfort_multiplier(value: ComfortLevel) -> Decimal:
+    return {
+        ComfortLevel.STANDARD: Decimal("1.00"),
+        ComfortLevel.COMFORT: Decimal("1.15"),
+        ComfortLevel.PREMIUM: Decimal("1.30"),
+    }[value]
 
 
 def _payment_method(value: str) -> PaymentMethod:
