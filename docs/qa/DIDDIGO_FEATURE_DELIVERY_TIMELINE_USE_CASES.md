@@ -16,11 +16,13 @@ sans melanger les responsabilites des modules.
 - Le frontend ne doit pas deviner les regles metier : il affiche les statuts
   et actions autorisees renvoyes par DiddiGo.
 
-## Version 1.0 - MVP stabilisation terrain
+## Version 1.0 - MVP commercial testable
 
 Objectif :
 Prouver qu'une course reelle peut etre creee, attribuee, suivie, terminee et
-payee en cash.
+payee, avec commission DiddiGo et solde chauffeur visibles. La version 1 ne
+doit pas seulement prouver le transport, elle doit aussi prouver le modele
+economique minimum.
 
 Use cases inclus :
 
@@ -38,6 +40,15 @@ Use cases inclus :
 - UC-012 Passager note la course.
 - UC-013 Passager partage un lien de suivi.
 - UC-014 Passager ou chauffeur declare une urgence.
+- UC-015 DiddiGo calcule la commission plateforme sur chaque course terminee.
+- UC-016 DiddiGo calcule le montant net chauffeur.
+- UC-017 Chauffeur voit son solde DiddiGo.
+- UC-018 Chauffeur recharge son compte via DiddiPay ou Wave quand disponible.
+- UC-019 Chauffeur est bloque ou alerte si son solde devient insuffisant selon
+  la regle produit.
+- UC-020 Passager peut payer cash, DiddiPay ou Wave selon disponibilite.
+- UC-021 Admin/support peut voir le statut paiement, commission et payout d'une
+  course.
 
 Livrable attendu :
 
@@ -46,14 +57,31 @@ Livrable attendu :
 - protocole QA humain execute avec 10 chauffeurs;
 - erreurs critiques documentees;
 - logs lisibles par ride ID, driver ID, user ID et request ID.
+- politique commission et solde chauffeur testable;
+- cash, DiddiPay et Wave representes dans le contrat meme si tout n'est pas
+  encore actif en production.
 
 Critere de sortie :
 
 - aucune erreur 500 non documentee sur le happy path;
 - une course cash completee de bout en bout;
+- une course DiddiPay ou Wave testable en staging si les dependances sont
+  disponibles;
+- commission et montant net chauffeur presents dans les donnees de course ou de
+  paiement;
+- solde chauffeur visible ou au minimum consultable par API;
 - matching fonctionnel avec chauffeur proche;
 - KYC bloque bien les chauffeurs non valides;
 - DiddiMap est le seul fournisseur geo et les erreurs geo sont explicites.
+
+Regle produit a figer avant production :
+
+- taux commission DiddiGo;
+- solde minimum chauffeur;
+- comportement si solde insuffisant : blocage passage en ligne, alerte simple,
+  ou delai de grace;
+- ordre de priorite des moyens de paiement : cash, DiddiPay, Wave;
+- responsabilite du recouvrement si cash non confirme.
 
 ## Version 1.1 - KYC chauffeur robuste
 
@@ -136,10 +164,11 @@ Critere de sortie :
 - logs clairs quand DiddiMap echoue;
 - distance/duree utilisees pour pricing clairement identifiables.
 
-## Version 1.4 - Pricing VTC DiddiGo
+## Version 1.4 - Pricing, commission et solde chauffeur
 
 Objectif :
-Stabiliser la politique de prix propre a DiddiGo.
+Stabiliser la politique de prix propre a DiddiGo, la commission plateforme, le
+montant net chauffeur et le solde chauffeur.
 
 Use cases inclus :
 
@@ -151,6 +180,12 @@ Use cases inclus :
 - UC-406 DiddiGo calcule platform_commission.
 - UC-407 DiddiGo calcule driver_payout_estimate.
 - UC-408 DiddiGo recalcule le payout final selon distance/duree reelles quand disponible.
+- UC-409 DiddiGo enregistre la commission definitive apres completion.
+- UC-410 DiddiGo alimente un ledger chauffeur lisible et auditable.
+- UC-411 Chauffeur consulte son solde.
+- UC-412 Chauffeur recharge son solde via DiddiPay.
+- UC-413 Chauffeur recharge son solde via Wave si active.
+- UC-414 DiddiGo applique la regle solde minimum avant passage en ligne.
 
 Parametres actuels :
 
@@ -164,11 +199,16 @@ Critere de sortie :
 - estimation et prix final sont audites;
 - le frontend recoit tous les champs contractuels;
 - aucun prix ne depend d'une regle cachee cote frontend.
+- chaque course terminee cree une ecriture commission/payout;
+- le solde chauffeur est coherent apres recharge et apres course;
+- le blocage ou l'alerte solde insuffisant est explicite.
 
-## Version 1.5 - Paiements cash, DiddiPay et Wave
+## Version 1.5 - Paiements cash, DiddiPay, Wave et recharge
 
 Objectif :
-Preparer les paiements digitaux sans casser le cash.
+Rendre les paiements et recharges testables dans la version 1 sans casser le
+cash. DiddiGo orchestre le paiement rattache a la course et le solde chauffeur;
+DiddiPay execute les paiements digitaux.
 
 Use cases inclus :
 
@@ -180,6 +220,12 @@ Use cases inclus :
 - UC-506 DiddiGo marque paiement paye/echec/en attente.
 - UC-507 Passager choisit Wave quand l'integration est disponible.
 - UC-508 Admin voit les paiements ambigus.
+- UC-509 Chauffeur initie une recharge de compte.
+- UC-510 DiddiGo cree une recharge via DiddiPay.
+- UC-511 DiddiGo recoit le callback de recharge.
+- UC-512 DiddiGo credite le solde chauffeur apres paiement confirme.
+- UC-513 Chauffeur voit l'historique des recharges.
+- UC-514 Admin voit les recharges echouees ou ambigues.
 
 Dependances :
 
@@ -191,6 +237,9 @@ Critere de sortie :
 - cash reste toujours testable;
 - DiddiPay n'est jamais un fallback silencieux;
 - les erreurs paiement ont des codes DiddiGo explicites.
+- une recharge chauffeur peut etre simulee ou executee sur staging;
+- le solde chauffeur change seulement apres confirmation paiement;
+- le frontend affiche clairement pending, paid, failed, expired.
 
 ## Version 1.6 - Securite course et partage
 
@@ -267,8 +316,8 @@ Ameliorer l'experience chauffeur apres stabilisation MVP.
 
 Use cases possibles :
 
-- UC-901 Chauffeur voit historique gains.
-- UC-902 Chauffeur voit estimation commission.
+- UC-901 Chauffeur voit historique gains detaille.
+- UC-902 Chauffeur voit projections et statistiques de commission.
 - UC-903 Chauffeur voit zones de forte demande.
 - UC-904 Chauffeur definit zone preferee.
 - UC-905 Chauffeur definit destination de retour.
@@ -276,7 +325,7 @@ Use cases possibles :
 
 Critere de sortie :
 
-- ne pas demarrer avant wallet/paiement plus stable;
+- ne pas demarrer avant solde/recharge/paiement version 1 stable;
 - ne pas melanger avec DiddiSend.
 
 ## Version 3.0 - Preparation DiddiSend
@@ -309,12 +358,12 @@ Critere de sortie :
 ## Ordre recommande
 
 ```text
-1.0 Stabilisation MVP terrain
+1.0 MVP commercial testable
 1.1 KYC chauffeur robuste
 1.2 Notifications
 1.3 DiddiMap avance
-1.4 Pricing
-1.5 Paiements
+1.4 Pricing, commission et solde chauffeur
+1.5 Paiements cash, DiddiPay, Wave et recharge
 1.6 Securite/partage
 1.7 Matching qualite
 2.0 Production minimale
