@@ -69,3 +69,76 @@ class PaymentWebhookEventModel(Base):
     processed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()"),
     )
+
+
+class DriverWalletModel(Base):
+    __tablename__ = "driver_wallets"
+    __table_args__ = (
+        UniqueConstraint("driver_id", name="uq_payment_driver_wallets_driver_id"),
+        {"schema": "payment"},
+    )
+
+    id: Mapped[UUID] = mapped_column(_PG_UUID, primary_key=True, server_default=text("uuid_generate_v4()"))
+    driver_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False, index=True)
+    balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal("0"))
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="XOF")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )
+
+
+class DriverLedgerEntryModel(Base):
+    __tablename__ = "driver_ledger_entries"
+    __table_args__ = (
+        UniqueConstraint(
+            "driver_id",
+            "entry_type",
+            "reference_type",
+            "reference_id",
+            name="uq_payment_driver_ledger_reference",
+        ),
+        Index("idx_payment_driver_ledger_driver_created", "driver_id", "created_at"),
+        {"schema": "payment"},
+    )
+
+    id: Mapped[UUID] = mapped_column(_PG_UUID, primary_key=True, server_default=text("uuid_generate_v4()"))
+    driver_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="XOF")
+    direction: Mapped[str] = mapped_column(String(12), nullable=False)
+    entry_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    reference_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    reference_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )
+
+
+class DriverTopupModel(Base):
+    __tablename__ = "driver_topups"
+    __table_args__ = (
+        UniqueConstraint("payment_intent_id", name="uq_payment_driver_topups_payment_intent_id"),
+        UniqueConstraint("idempotency_key", name="uq_payment_driver_topups_idempotency_key"),
+        Index("idx_payment_driver_topups_driver_created", "driver_id", "created_at"),
+        {"schema": "payment"},
+    )
+
+    id: Mapped[UUID] = mapped_column(_PG_UUID, primary_key=True, server_default=text("uuid_generate_v4()"))
+    driver_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="XOF")
+    method: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    payment_intent_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    business_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    provider_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -41,6 +41,10 @@ Le catalogue complet des codes est maintenu dans `DiddiGo_Error_Catalog.md`.
 | `payment_method` | `cash`, `wave`, `diddipay` |
 | `ride.status` | `requested`, `matched`, `driver_en_route`, `in_progress`, `completed`, `cancelled_by_passenger`, `cancelled_by_driver`, `no_driver_found` |
 | `payment.status` | `pending`, `requires_action`, `processing`, `succeeded`, `failed`, `cancelled`, `partially_refunded`, `refunded`, `collected`, `disputed` |
+| `wallet.direction` | `credit`, `debit` |
+| `wallet.entry_type` | `ride_payout`, `platform_commission`, `topup`, `adjustment` |
+| `wallet.entry_status` | `pending`, `confirmed`, `failed` |
+| `topup.status` | `pending`, `requires_action`, `processing`, `succeeded`, `failed`, `cancelled` |
 
 Note produit : on garde les categories vehicule existantes. `comfort_level`
 devient le niveau commercial de confort.
@@ -251,7 +255,8 @@ Avant validation admin, retourne :
 ```
 
 Apres validation admin, le chauffeur peut passer online s'il a aussi un vehicule
-actif.
+actif et, si la variable `DRIVER_MIN_BALANCE` est superieure a zero, un solde
+chauffeur suffisant.
 
 Erreurs KYC principales :
 
@@ -259,6 +264,7 @@ Erreurs KYC principales :
 |---|---|---|
 | `403` | `FORBIDDEN_ROLE` | Le token n'est pas admin pour une route admin |
 | `403` | `DRIVER_NOT_VERIFIED` | Le chauffeur n'est pas valide pour passer en ligne |
+| `403` | `DRIVER_BALANCE_TOO_LOW` | Solde chauffeur insuffisant pour passer en ligne |
 | `404` | `DRIVER_PROFILE_NOT_FOUND` | Aucun profil chauffeur pour ce compte ou cet identifiant |
 | `409` | `DRIVER_PROFILE_ALREADY_EXISTS` | Un profil chauffeur existe deja pour ce compte |
 | `422` | `DRIVER_KYC_STATUS_INVALID` | Filtre `status` invalide sur la file KYC |
@@ -682,6 +688,147 @@ locale par `payment_intent_id`.
 ### `POST /payments/{ride_id}/confirm-cash`
 
 Confirme l'encaissement cash par le chauffeur.
+
+Effet wallet V1 :
+
+```text
+cash = le chauffeur garde le cash physiquement
+DiddiGo debite le wallet chauffeur du montant de la commission plateforme
+```
+
+Pour `wave` et `diddipay`, le callback `succeeded` credite le wallet chauffeur
+du montant net chauffeur (`driver_payout_estimate`) lorsque la course a un
+chauffeur assigne.
+
+---
+
+## 10.1 Wallet chauffeur
+
+### `GET /drivers/me/wallet`
+
+Route chauffeur authentifie. Retourne le solde DiddiGo du chauffeur.
+
+Reponse :
+
+```json
+{
+  "driver_id": "driver-profile-id",
+  "balance": -248,
+  "currency": "XOF",
+  "min_balance": 0,
+  "can_go_online": true
+}
+```
+
+`min_balance` vient de la configuration backend `DRIVER_MIN_BALANCE`. Si
+`min_balance > 0` et que `balance < min_balance`, `POST /drivers/online`
+retourne `403 DRIVER_BALANCE_TOO_LOW`.
+
+### `GET /drivers/me/wallet/ledger`
+
+Route chauffeur authentifie. Liste les mouvements du wallet.
+
+Query params :
+
+```text
+page      defaut 1
+page_size defaut 20, max 100
+```
+
+Reponse :
+
+```json
+{
+  "data": [
+    {
+      "id": "ledger-entry-id",
+      "driver_id": "driver-profile-id",
+      "amount": 248,
+      "currency": "XOF",
+      "direction": "debit",
+      "type": "platform_commission",
+      "status": "confirmed",
+      "reference_type": "ride",
+      "reference_id": "ride-id",
+      "description": "Commission DiddiGo sur course cash",
+      "created_at": "2026-08-28T22:30:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "page_size": 20,
+    "total": 1
+  }
+}
+```
+
+### `POST /drivers/me/wallet/topups`
+
+Route chauffeur authentifie. Initialise une recharge chauffeur via DiddiPay ou
+Wave.
+
+Requete :
+
+```json
+{
+  "amount": 5000,
+  "method": "wave",
+  "customer_email": "driver@example.com",
+  "customer_phone": "+2250700000000",
+  "callback_url": "https://go-staging.diddifree.com/wallet/return"
+}
+```
+
+Reponse :
+
+```json
+{
+  "id": "topup-id",
+  "driver_id": "driver-profile-id",
+  "amount": 5000,
+  "currency": "XOF",
+  "method": "wave",
+  "status": "requires_action",
+  "provider": "diddipay",
+  "provider_status": "requires_action",
+  "payment_intent_id": "payment-intent-id",
+  "business_reference": "driver_topup:topup-id",
+  "paid_at": null,
+  "next_action": {
+    "type": "redirect",
+    "url": "https://checkout.paystack.com/example"
+  }
+}
+```
+
+Important :
+
+```text
+La recharge ne credite le solde chauffeur qu'apres callback DiddiPay succeeded.
+Un callback rejoue ne double pas le solde.
+```
+
+### `GET /drivers/me/wallet/topups/{topup_id}`
+
+Route chauffeur authentifie. Retourne le statut d'une recharge.
+
+---
+
+## 10.2 Admin/support financier
+
+### `GET /admin/drivers/{driver_id}/wallet`
+
+Route admin. Retourne le wallet d'un chauffeur.
+
+### `GET /admin/drivers/{driver_id}/wallet/ledger`
+
+Route admin. Retourne le ledger financier d'un chauffeur.
+
+Objectif support :
+
+```text
+repondre rapidement a la question : qui doit quoi a qui ?
+```
 
 ---
 

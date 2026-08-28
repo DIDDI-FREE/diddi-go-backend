@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     diddipay_service_key: str | None = None
     diddipay_callback_secret: str | None = None
     diddigo_payment_callback_url: str | None = None
+    driver_min_balance: int = 0
 
     @property
     def cors_origin_list(self) -> list[str]:

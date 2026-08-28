@@ -11,7 +11,8 @@ import pytest
 
 from app_base.core.errors import ApiError
 from app_base.modules.payment.application.services import PaymentService
-from app_base.modules.payment.domain.entities import PaymentStatus
+from app_base.modules.payment.application.wallet_service import DriverWalletService
+from app_base.modules.payment.domain.entities import PaymentStatus, WalletEntryDirection, WalletEntryType
 from app_base.modules.ride.domain.entities import PaymentMethod as RidePaymentMethod
 from app_base.modules.ride.domain.entities import Ride, RideStatus
 from app_base.shared_kernel.types import GeoPoint
@@ -23,6 +24,9 @@ class FakePaymentRepo:
     def __init__(self) -> None:
         self.payment = None
         self.events: set[str] = set()
+        self.ledger = []
+        self.wallets = {}
+        self.topups = {}
 
     async def save(self, transaction):
         self.payment = transaction
@@ -57,6 +61,54 @@ class FakePaymentRepo:
         self.events.add(event_id)
         return True
 
+    async def get_or_create_wallet(self, driver_id, *, currency="XOF"):
+        from app_base.modules.payment.domain.entities import DriverWallet
+
+        if driver_id not in self.wallets:
+            self.wallets[driver_id] = DriverWallet(id=uuid4(), driver_id=driver_id, currency=currency)
+        return self.wallets[driver_id]
+
+    async def list_ledger_entries(self, driver_id, *, page=1, page_size=20):
+        entries = [entry for entry in self.ledger if entry.driver_id == driver_id]
+        return entries[(page - 1) * page_size : page * page_size], len(entries)
+
+    async def record_ledger_entry_once(self, entry):
+        for existing in self.ledger:
+            if (
+                existing.driver_id == entry.driver_id
+                and existing.entry_type == entry.entry_type
+                and existing.reference_type == entry.reference_type
+                and existing.reference_id == entry.reference_id
+            ):
+                return None
+        wallet = await self.get_or_create_wallet(entry.driver_id, currency=entry.currency)
+        if entry.direction is WalletEntryDirection.CREDIT:
+            wallet.balance += entry.amount
+        else:
+            wallet.balance -= entry.amount
+        self.ledger.append(entry)
+        return entry
+
+    async def save_topup(self, topup):
+        self.topups[topup.id] = topup
+        return topup
+
+    async def find_topup_by_id(self, topup_id):
+        return self.topups.get(topup_id)
+
+    async def find_topup_by_payment_intent_id(self, payment_intent_id):
+        for topup in self.topups.values():
+            if topup.payment_intent_id == payment_intent_id:
+                return topup
+        return None
+
+    async def mark_topup_status(self, topup_id, status, provider_status, paid_at):
+        topup = self.topups[topup_id]
+        topup.status = status
+        topup.provider_status = provider_status
+        topup.paid_at = paid_at
+        return topup
+
 
 class FakeRideRepo:
     def __init__(self, ride):
@@ -64,6 +116,17 @@ class FakeRideRepo:
 
     async def find_by_id(self, ride_id):
         return self.ride if self.ride.id == ride_id else None
+
+
+class FakeDriverRepo:
+    def __init__(self, driver_id: UUID, user_id: UUID) -> None:
+        self.driver_id = driver_id
+        self.user_id = user_id
+
+    async def find_by_user_id(self, user_id):
+        if user_id != self.user_id:
+            return None
+        return type("DriverProfile", (), {"id": self.driver_id})()
 
 
 class FakeDiddiPay:
@@ -103,6 +166,8 @@ def make_completed_ride() -> Ride:
         currency="XOF",
         payment_method=RidePaymentMethod.WAVE,
         driver_id=uuid4(),
+        platform_commission=Decimal("248"),
+        driver_payout_estimate=Decimal("2852"),
     )
 
 
@@ -191,3 +256,100 @@ async def test_diddipay_webhook_marks_payment_succeeded(monkeypatch) -> None:
     assert duplicate["status"] == "duplicate"
     assert repo.payment.status is PaymentStatus.SUCCEEDED
     assert repo.payment.paid_at is not None
+
+
+@pytest.mark.asyncio
+async def test_cash_confirmation_debits_driver_commission_once() -> None:
+    ride = make_completed_ride()
+    ride.payment_method = RidePaymentMethod.CASH
+    repo = FakePaymentRepo()
+    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddipay=FakeDiddiPay(uuid4()))
+
+    await service.confirm_cash(ride.id, Decimal("3100"), collected_by=ride.driver_id)
+    await service.confirm_cash(ride.id, Decimal("3100"), collected_by=ride.driver_id)
+
+    assert len(repo.ledger) == 1
+    assert repo.ledger[0].entry_type is WalletEntryType.PLATFORM_COMMISSION
+    assert repo.ledger[0].direction is WalletEntryDirection.DEBIT
+    assert repo.wallets[ride.driver_id].balance == Decimal("-248")
+
+
+@pytest.mark.asyncio
+async def test_digital_payment_webhook_credits_driver_payout_once(monkeypatch) -> None:
+    ride = make_completed_ride()
+    intent_id = uuid4()
+    repo = FakePaymentRepo()
+    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddipay=FakeDiddiPay(intent_id))
+    await service.prepare_payment(
+        ride.id,
+        "wave",
+        payer_user_id=ride.passenger_user_id,
+        customer_email="client@example.com",
+    )
+
+    monkeypatch.setattr("app_base.modules.payment.application.services.settings.diddipay_callback_secret", "secret")
+    body = {
+        "id": "evt_driver_payout",
+        "type": "payment.succeeded",
+        "occurred_at": datetime.now(UTC).isoformat(),
+        "data": {
+            "payment_intent_id": str(intent_id),
+            "business_reference": f"ride:{ride.id}",
+            "amount": 3100,
+            "currency": "XOF",
+            "status": "succeeded",
+        },
+    }
+    raw = json.dumps(body, separators=(",", ":")).encode()
+    signature = hmac.new(b"secret", raw, hashlib.sha256).hexdigest()
+
+    await service.apply_diddipay_webhook(raw_body=raw, event_id_header="evt_driver_payout", signature=signature)
+    await service.apply_diddipay_webhook(raw_body=raw, event_id_header="evt_driver_payout", signature=signature)
+
+    assert len(repo.ledger) == 1
+    assert repo.ledger[0].entry_type is WalletEntryType.RIDE_PAYOUT
+    assert repo.ledger[0].direction is WalletEntryDirection.CREDIT
+    assert repo.wallets[ride.driver_id].balance == Decimal("2852")
+
+
+@pytest.mark.asyncio
+async def test_driver_topup_callback_credits_wallet_once(monkeypatch) -> None:
+    user_id = uuid4()
+    driver_id = uuid4()
+    intent_id = uuid4()
+    repo = FakePaymentRepo()
+    wallet_service = DriverWalletService(
+        payment_repo=repo,
+        driver_repo=FakeDriverRepo(driver_id=driver_id, user_id=user_id),
+        diddipay=FakeDiddiPay(intent_id),
+    )
+    payment_service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(make_completed_ride()))
+    topup = await wallet_service.create_topup(
+        driver_user_id=user_id,
+        amount=Decimal("5000"),
+        method="wave",
+        customer_email="driver@example.com",
+    )
+
+    monkeypatch.setattr("app_base.modules.payment.application.services.settings.diddipay_callback_secret", "secret")
+    body = {
+        "id": "evt_topup",
+        "type": "payment.succeeded",
+        "occurred_at": datetime.now(UTC).isoformat(),
+        "data": {
+            "payment_intent_id": topup["payment_intent_id"],
+            "business_reference": topup["business_reference"],
+            "amount": 5000,
+            "currency": "XOF",
+            "status": "succeeded",
+        },
+    }
+    raw = json.dumps(body, separators=(",", ":")).encode()
+    signature = hmac.new(b"secret", raw, hashlib.sha256).hexdigest()
+
+    await payment_service.apply_diddipay_webhook(raw_body=raw, event_id_header="evt_topup", signature=signature)
+    await payment_service.apply_diddipay_webhook(raw_body=raw, event_id_header="evt_topup", signature=signature)
+
+    assert len(repo.ledger) == 1
+    assert repo.ledger[0].entry_type is WalletEntryType.TOPUP
+    assert repo.wallets[driver_id].balance == Decimal("5000")

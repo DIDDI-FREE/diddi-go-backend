@@ -18,6 +18,7 @@ Ajouts majeurs :
 - `comfort_level` sur pricing, creation de course et vehicule.
 - pricing detaille avec commission plateforme et payout chauffeur estime.
 - preparation `cash`, `wave`, `diddipay`.
+- wallet chauffeur : solde, ledger, recharge DiddiPay/Wave.
 - traces GPS chauffeur via REST.
 - lien public de partage de course sans login.
 - endpoint urgence course.
@@ -461,6 +462,73 @@ Le cash reste disponible via :
 
 ```http
 POST /v1/payments/{ride_id}/confirm-cash
+```
+
+## 5.2 Wallet chauffeur, commission et recharge
+
+Nouveaux endpoints chauffeur :
+
+```http
+GET  /v1/drivers/me/wallet
+GET  /v1/drivers/me/wallet/ledger?page=1&page_size=20
+POST /v1/drivers/me/wallet/topups
+GET  /v1/drivers/me/wallet/topups/{topup_id}
+```
+
+`GET /v1/drivers/me/wallet` retourne :
+
+```json
+{
+  "driver_id": "driver-profile-id",
+  "balance": -248,
+  "currency": "XOF",
+  "min_balance": 0,
+  "can_go_online": true
+}
+```
+
+Pour le cash :
+
+```text
+le chauffeur encaisse le cash physiquement
+DiddiGo debite le wallet chauffeur du montant de la commission plateforme
+```
+
+Pour DiddiPay/Wave :
+
+```text
+quand le paiement digital est confirme, DiddiGo credite le wallet chauffeur
+du montant net chauffeur
+```
+
+Recharge chauffeur :
+
+```json
+{
+  "amount": 5000,
+  "method": "wave",
+  "customer_email": "driver@example.com",
+  "customer_phone": "+2250700000000",
+  "callback_url": "https://go-staging.diddifree.com/wallet/return"
+}
+```
+
+Le frontend execute `next_action` comme pour un paiement course. Le solde ne
+change que quand le backend recoit le callback `succeeded`.
+
+Si `POST /v1/drivers/online` retourne :
+
+```text
+DRIVER_BALANCE_TOO_LOW
+```
+
+Afficher un message simple et proposer la recharge.
+
+Endpoints admin/support :
+
+```http
+GET /v1/admin/drivers/{driver_id}/wallet
+GET /v1/admin/drivers/{driver_id}/wallet/ledger
 ```
 
 ## 6. WebSocket chauffeur

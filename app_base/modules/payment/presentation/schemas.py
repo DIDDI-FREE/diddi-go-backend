@@ -17,3 +17,11 @@ class PaymentPreparationRequest(BaseModel):
     customer_email: str | None = Field(default=None, min_length=3, max_length=255)
     customer_phone: str | None = Field(default=None, min_length=4, max_length=32)
     callback_url: str | None = Field(default=None, min_length=1, max_length=1000)
+
+
+class DriverTopupRequest(BaseModel):
+    amount: int = Field(gt=0)
+    method: str = Field(default="diddipay")
+    customer_email: str = Field(min_length=3, max_length=255)
+    customer_phone: str | None = Field(default=None, min_length=4, max_length=32)
+    callback_url: str | None = Field(default=None, min_length=1, max_length=1000)
