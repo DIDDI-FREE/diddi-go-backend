@@ -45,6 +45,7 @@ async def test_pricing_uses_diddigo_policy_with_diddimap_distance():
         "duration_seconds": 983,
         "surge_multiplier": 1.0,
         "surge_cap": 1.6,
+        "comfort_multiplier": 1.0,
         "base_fare": 250,
         "distance_fare": 2850,
         "duration_fare": 0,
@@ -53,3 +54,28 @@ async def test_pricing_uses_diddigo_policy_with_diddimap_distance():
         "driver_payout_estimate": 2852,
     }
     assert pricing_rules.called is True
+
+
+@pytest.mark.asyncio
+async def test_pricing_increases_with_comfort_level():
+    service = RideService(
+        ride_repo=None,
+        routing=FakeRouting(),
+        pricing_rules=FakePricingRules(),
+    )
+
+    standard = await service.estimate_pricing(
+        GeoPoint(lat=5.3599, lng=-4.0083),
+        GeoPoint(lat=5.3167, lng=-4.0333),
+        "standard",
+        "standard",
+    )
+    premium = await service.estimate_pricing(
+        GeoPoint(lat=5.3599, lng=-4.0083),
+        GeoPoint(lat=5.3167, lng=-4.0333),
+        "standard",
+        "premium",
+    )
+
+    assert premium["comfort_multiplier"] == 1.3
+    assert premium["estimated_fare"] > standard["estimated_fare"]
