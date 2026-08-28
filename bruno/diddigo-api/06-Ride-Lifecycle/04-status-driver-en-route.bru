@@ -1,0 +1,30 @@
+meta {
+  name: 04 Status -> driver_en_route
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{base_url}}/rides/{{ride_id}}/status
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+body:json {
+  {
+    "status": "driver_en_route"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("ride status updated", function () {
+    expect(res.body.status).to.equal("driver_en_route");
+  });
+}

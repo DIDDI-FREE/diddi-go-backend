@@ -1,0 +1,40 @@
+meta {
+  name: 03 Autocomplete Plateau
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{diddimap_base_url}}/geocoding/autocomplete?q=pla&bias_lat=5.3599&bias_lng=-4.0083&limit=8
+  body: none
+  auth: none
+}
+
+params:query {
+  q: pla
+  bias_lat: 5.3599
+  bias_lng: -4.0083
+  limit: 8
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("autocomplete contract is frontend friendly", function () {
+    expect(res.body.status).to.equal("ok");
+    expect(res.body.results).to.be.an("array");
+    expect(res.body.count).to.equal(res.body.results.length);
+  });
+  test("results expose display fields when present", function () {
+    if (res.body.results.length > 0) {
+      expect(res.body.results[0]).to.have.property("label");
+      expect(res.body.results[0]).to.have.property("location");
+    }
+  });
+}
+
+docs {
+  Tests DiddiMap v1.3 autocomplete. Human QA still decides if the suggestions are
+  useful and correctly ranked around the bias position.
+}

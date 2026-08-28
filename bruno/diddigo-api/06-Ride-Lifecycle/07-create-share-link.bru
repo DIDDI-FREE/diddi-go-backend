@@ -1,0 +1,30 @@
+meta {
+  name: 07 Create Share Link (passenger)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/rides/{{ride_id}}/share-link
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("ride_share_token", res.body.share_token);
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("returns a share_token", function () {
+    expect(res.body).to.have.property("share_token");
+  });
+}

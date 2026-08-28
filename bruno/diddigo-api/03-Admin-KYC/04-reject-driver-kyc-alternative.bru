@@ -1,0 +1,37 @@
+meta {
+  name: 04 Reject Driver KYC (alternative branch)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/drivers/{{driver_profile_id}}/kyc/reject
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{admin_access_token}}
+}
+
+body:json {
+  {
+    "notes": "Rejected by the Bruno E2E suite — missing legible ID document"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("driver status is now suspended", function () {
+    expect(res.body.status).to.equal("suspended");
+  });
+}
+
+docs {
+  ALTERNATIVE BRANCH — do not run this in the same pass as "03 Approve Driver KYC" for
+  the same driver_profile_id; the second call will just re-set the same terminal state.
+  Use this request to test the rejection path specifically, then run
+  "02-Driver-Onboarding / 04 KYC Resubmit" and re-approve to get back to the happy path.
+}

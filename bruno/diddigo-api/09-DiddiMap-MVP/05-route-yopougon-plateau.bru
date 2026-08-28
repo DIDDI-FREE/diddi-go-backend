@@ -1,0 +1,42 @@
+meta {
+  name: 05 Route Yopougon To Plateau
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{diddimap_base_url}}/route
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "start": { "lat": 5.3367, "lng": -4.0840 },
+    "end": { "lat": 5.3204, "lng": -4.0160 },
+    "profile": "car"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("route contract is valid", function () {
+    expect(res.body.status).to.equal("ok");
+    expect(res.body.route).to.have.property("distance_m");
+    expect(res.body.route).to.have.property("duration_s");
+    expect(res.body.route.geometry.type).to.equal("LineString");
+  });
+  test("distance and duration are plausible for Abidjan", function () {
+    const distanceKm = res.body.route.distance_m / 1000;
+    const durationMin = res.body.route.duration_s / 60;
+    expect(distanceKm).to.be.within(6, 25);
+    expect(durationMin).to.be.within(8, 90);
+  });
+}
+
+docs {
+  One known Abidjan route. This proves OSRM routing returns a usable geometry,
+  not that the route is perfect. Human QA should still mark route quality.
+}

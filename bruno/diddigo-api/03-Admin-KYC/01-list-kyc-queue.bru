@@ -1,0 +1,36 @@
+meta {
+  name: 01 List KYC Queue (pending)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/drivers/kyc?status=pending_verification&page=1&page_size=20
+  body: none
+  auth: bearer
+}
+
+params:query {
+  status: pending_verification
+  page: 1
+  page_size: 20
+}
+
+auth:bearer {
+  token: {{admin_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("the test driver appears in the queue", function () {
+    const expectedId = bru.getVar("driver_profile_id") || bru.getEnvVar("driver_profile_id");
+    const ids = res.body.data.map((p) => p.id);
+    expect(ids).to.include(expectedId);
+  });
+}
+
+docs {
+  Admin-only (`require_role("admin")`). Requires "09 OTP Verify Admin" to have run.
+}

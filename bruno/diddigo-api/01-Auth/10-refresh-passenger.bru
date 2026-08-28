@@ -1,0 +1,40 @@
+meta {
+  name: 10 Refresh Passenger Token
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{auth_prefix}}/refresh
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "refresh_token": "{{passenger_refresh_token}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("passenger_access_token", res.body.access_token);
+    bru.setVar("passenger_refresh_token", res.body.refresh_token);
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Rotates the passenger's refresh token (old one is revoked on both DiddiGo and
+  DiddiFreeID). Run this any time later requests start failing with `401 TOKEN_EXPIRED`
+  (access tokens live 15 minutes — `JWT_ACCESS_LIFETIME_MINUTES`).
+}

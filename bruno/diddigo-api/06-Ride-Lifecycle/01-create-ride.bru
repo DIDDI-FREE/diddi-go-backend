@@ -1,0 +1,55 @@
+meta {
+  name: 01 Create Ride
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/rides
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+body:json {
+  {
+    "pickup": { "lat": 5.3610, "lng": -4.0090, "address": "Rue des Jardins, Plateau" },
+    "dropoff": { "lat": 5.3450, "lng": -4.0210, "address": "Rue Princesse, Cocody" },
+    "vehicle_category": "standard",
+    "comfort_level": "standard",
+    "payment_method": "cash",
+    "scheduled_at": null
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("ride_id", res.body.ride_id);
+  }
+}
+
+tests {
+  test("status is 201", function () {
+    expect(res.status).to.equal(201);
+  });
+  test("contractual status is always requested", function () {
+    expect(res.body.status).to.equal("requested");
+  });
+}
+
+docs {
+  Matching runs synchronously inside this request (`app_base/modules/ride/presentation/router.py:111`)
+  — by the time this response comes back, the offer has already been opened (or the ride
+  is already `no_driver_found` in the DB) even though the response always reports
+  `status: "requested"` per the API contract.
+
+  Requires, in this exact order: "04-Driver-Availability / 01 Go Online" run within the
+  last 30 seconds, with a `vehicle_category`/`comfort_level` matching this request
+  (both "standard" here, matching "02-Driver-Onboarding / 02 Register Vehicle").
+
+  `payment_method: cash` keeps this flow self-contained (no DiddiPay dependency). See
+  folder 07 for the DiddiPay path.
+}

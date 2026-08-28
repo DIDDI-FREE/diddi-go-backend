@@ -1,0 +1,50 @@
+meta {
+  name: 03 ALT Prepare Payment (DiddiPay/Wave)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/payments/{{cancel_test_ride_id}}/prepare
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+body:json {
+  {
+    "method": "wave",
+    "customer_email": "bruno-test@example.com",
+    "customer_phone": "{{passenger_phone}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.payment_intent_id) {
+    bru.setVar("diddipay_payment_intent_id", res.body.payment_intent_id);
+  }
+}
+
+tests {
+  test("status is 200 if DiddiPay is configured, 503 otherwise", function () {
+    expect([200, 503]).to.include(res.status);
+  });
+}
+
+docs {
+  ALTERNATIVE BRANCH, digital payment path (not the folder 06 happy path, which uses
+  cash). Uses `cancel_test_ride_id` (folder 06's "90 ALT Create Ride") since that ride
+  is still in `requested`/`cancelled_by_passenger` state and untouched by the cash flow
+  — any ride owned by the passenger works, `prepare_payment` doesn't require
+  `completed`.
+
+  **Expect `503 PAYMENT_CONFIGURATION_MISSING` right now on the currently deployed
+  staging stack** — `DiddiPayClient.configured` requires `DIDDIPAY_BASE_URL` +
+  `DIDDIPAY_SERVICE_KEY`, and neither was set on `diddi-go-backend` as of the last
+  Portainer redeploy. That's a real environment gap to fix, not a bug in this request.
+  Locally it will also 503 unless you set `DIDDIPAY_BASE_URL`/`DIDDIPAY_SERVICE_KEY` in
+  `.env` and run a reachable DiddiPay instance.
+}

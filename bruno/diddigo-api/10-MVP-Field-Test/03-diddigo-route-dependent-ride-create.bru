@@ -1,0 +1,55 @@
+meta {
+  name: 03 DiddiGo Route Dependent Ride Create
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/rides
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+body:json {
+  {
+    "pickup": { "lat": 5.3367, "lng": -4.0840, "address": "Yopougon Siporex" },
+    "dropoff": { "lat": 5.3204, "lng": -4.0160, "address": "Plateau" },
+    "vehicle_category": "standard",
+    "comfort_level": "standard",
+    "payment_method": "cash",
+    "scheduled_at": null
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("field_test_ride_id", res.body.ride_id);
+  }
+}
+
+tests {
+  test("ride is created or business-blocked explicitly", function () {
+    expect([201, 409, 503]).to.include(res.status);
+  });
+  test("successful response keeps contractual status requested", function () {
+    if (res.status === 201) {
+      expect(res.body.status).to.equal("requested");
+      expect(res.body.ride_id).to.be.a("string");
+    }
+  });
+  test("DiddiMap failure is explicit when it happens", function () {
+    if (res.status === 503) {
+      expect(res.body.error.code).to.equal("DIDDIMAP_UNAVAILABLE");
+    }
+  });
+}
+
+docs {
+  Creates a real DiddiGo ride using DiddiMap distance/duration. Run a driver
+  online shortly before this if you want a match; otherwise no_driver_found is
+  possible and should be recorded in the QA sheet.
+}

@@ -1,0 +1,47 @@
+meta {
+  name: 04 Register Driver
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{auth_prefix}}/register
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+script:pre-request {
+  const existing = bru.getVar("driver_phone") || bru.getEnvVar("driver_phone");
+  if (existing) {
+    bru.setVar("driver_phone", existing);
+  } else {
+    const suffix = (Date.now() + 1).toString().slice(-8);
+    bru.setVar("driver_phone", "+225" + suffix);
+  }
+}
+
+body:json {
+  {
+    "phone": "{{driver_phone}}",
+    "full_name": "Bruno Test Driver",
+    "role": "driver"
+  }
+}
+
+tests {
+  test("status is 201 (or 409 on rerun with a reused phone)", function () {
+    expect([201, 409]).to.include(res.status);
+  });
+}
+
+docs {
+  Same notes as "01 Register Passenger". `role: driver` is accepted locally but ignored
+  by DiddiFreeID on staging — that's fine, DiddiGo's driver-only endpoints
+  (`/drivers/*`) gate on DiddiGo's own local `driver_profiles` table via
+  `require_business_driver`, not on the identity-provider role. See
+  `app_base/core/auth_deps.py:87-106`.
+}

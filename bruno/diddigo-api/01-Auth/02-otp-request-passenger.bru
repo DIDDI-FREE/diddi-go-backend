@@ -1,0 +1,41 @@
+meta {
+  name: 02 OTP Request Passenger
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{auth_prefix}}/otp/request
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "phone": "{{passenger_phone}}"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  ## Manual step required before the next request
+
+  SMS delivery is a stub (`app_base/modules/auth/application/services.py:113`) — no
+  real SMS is sent. Read the code yourself, then paste it into the runtime variable
+  `passenger_otp_code` (Bruno sidebar → Runtime Variables, or edit this collection's
+  active environment) before running "03 OTP Verify Passenger".
+
+  - **Local**: read the uvicorn console. Line looks like:
+    `OTP stub — in dev, code for phone=+225... is 482913. SMS integration pending.`
+  - **Staging**: read the `diddi-auth` container logs in Portainer (DiddiFreeID stubs
+    SMS the same way). Filter for the phone number from `passenger_phone`.
+}

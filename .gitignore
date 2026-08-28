@@ -36,3 +36,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Generated local analysis/artifact helpers
+graphify-out/
+outputs/qa/workbook-build/
+outputs/**/*.preview.png

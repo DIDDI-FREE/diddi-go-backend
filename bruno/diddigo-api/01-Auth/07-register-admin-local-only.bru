@@ -1,0 +1,55 @@
+meta {
+  name: 07 Register Admin (local only)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{auth_prefix}}/register
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+script:pre-request {
+  const existing = bru.getVar("admin_phone") || bru.getEnvVar("admin_phone");
+  if (existing) {
+    bru.setVar("admin_phone", existing);
+  } else {
+    const suffix = (Date.now() + 2).toString().slice(-8);
+    bru.setVar("admin_phone", "+225" + suffix);
+  }
+}
+
+body:json {
+  {
+    "phone": "{{admin_phone}}",
+    "full_name": "Bruno Test Admin",
+    "role": "admin"
+  }
+}
+
+tests {
+  test("status is 201 (or 409 on rerun with a reused phone)", function () {
+    expect([201, 409]).to.include(res.status);
+  });
+}
+
+docs {
+  ## SKIP THIS REQUEST ON STAGING
+
+  DiddiFreeID has no self-service `role=admin` registration — every account is created
+  as `role=user` (see `DiddiFreeID_Contrat_API.md` §1). Admin status only comes from
+  `PATCH /users/{id}/role`, an admin-only DiddiFreeID operation this collection cannot
+  bootstrap itself.
+
+  **On staging**: before running "08 OTP Request Admin", manually set `admin_phone` in
+  the `staging` environment to the phone number of an already-provisioned DiddiFreeID
+  admin account, then skip this request entirely.
+
+  **On local**: this request is self-sufficient — DiddiGo's own `/v1/auth/register`
+  accepts `role: admin` directly.
+}

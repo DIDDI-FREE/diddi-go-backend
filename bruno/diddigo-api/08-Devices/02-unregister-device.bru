@@ -1,0 +1,27 @@
+meta {
+  name: 02 Unregister Device (passenger)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/devices/unregister
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+body:json {
+  {
+    "push_token": "{{device_push_token}}"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}

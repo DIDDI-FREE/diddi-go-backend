@@ -1,0 +1,25 @@
+meta {
+  name: 02 DiddiMap DB Health
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{diddimap_base_url}}/db-health
+  body: none
+  auth: none
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("database is available", function () {
+    expect(res.body.database).to.equal("available");
+  });
+}
+
+docs {
+  Confirms DiddiMap can reach PostGIS. If this fails, autocomplete and route
+  enrichment can become unreliable even if the HTTP service is up.
+}

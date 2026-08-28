@@ -1,0 +1,59 @@
+meta {
+  name: 01 Create Driver Profile
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/drivers/profile
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+script:pre-request {
+  const existing = bru.getVar("driver_license_number") || bru.getEnvVar("driver_license_number");
+  if (existing) {
+    bru.setVar("driver_license_number", existing);
+  } else {
+    bru.setVar("driver_license_number", "BRUNO-" + Date.now());
+  }
+}
+
+body:json {
+  {
+    "license_number": "{{driver_license_number}}",
+    "legal_name": "Bruno Test Driver",
+    "birth_date": "1990-01-01",
+    "residence_address": "Cocody, Abidjan",
+    "license_document_url": "https://example.com/docs/license.jpg",
+    "national_id_document_url": "https://example.com/docs/national-id.jpg",
+    "selfie_document_url": "https://example.com/docs/selfie.jpg"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("driver_profile_id", res.body.id);
+  }
+}
+
+tests {
+  test("status is 201", function () {
+    expect(res.status).to.equal(201);
+  });
+  test("status starts pending_verification", function () {
+    expect(res.body.status).to.equal("pending_verification");
+  });
+}
+
+docs {
+  Requires "06 OTP Verify Driver" to have run first (needs `driver_access_token`).
+
+  Uses the `*_document_url` fields rather than `*_document_file_id` — this collection
+  does not exercise the DiddiFiles upload flow, so plain placeholder URLs are enough to
+  satisfy validation. Swap in real DiddiFiles URLs/UUIDs if you need to test that path.
+}

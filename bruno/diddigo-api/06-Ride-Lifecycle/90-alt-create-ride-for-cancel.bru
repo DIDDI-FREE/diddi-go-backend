@@ -1,0 +1,46 @@
+meta {
+  name: 90 ALT Create Ride (for cancel test)
+  type: http
+  seq: 90
+}
+
+post {
+  url: {{base_url}}/rides
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+body:json {
+  {
+    "pickup": { "lat": 5.3610, "lng": -4.0090, "address": "Rue des Jardins, Plateau" },
+    "dropoff": { "lat": 5.3450, "lng": -4.0210, "address": "Rue Princesse, Cocody" },
+    "vehicle_category": "standard",
+    "comfort_level": "standard",
+    "payment_method": "cash",
+    "scheduled_at": null
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("cancel_test_ride_id", res.body.ride_id);
+  }
+}
+
+tests {
+  test("status is 201", function () {
+    expect(res.status).to.equal(201);
+  });
+}
+
+docs {
+  ALTERNATIVE BRANCH — throwaway ride kept in its own `cancel_test_ride_id` variable so
+  it never clobbers the main `ride_id` used by the 01-12 linear happy path. Requires the
+  driver to still be online (folder 04) so the ride reaches `requested`/offer-open
+  rather than `no_driver_found` — cancellation is blocked once a ride is
+  `no_driver_found` (`409 RIDE_NOT_CANCELLABLE`).
+}

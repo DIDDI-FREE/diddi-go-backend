@@ -1,0 +1,30 @@
+meta {
+  name: 03 Accept Ride (driver)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/rides/{{ride_id}}/accept
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("ride is now matched", function () {
+    expect(res.body.status).to.equal("matched");
+  });
+}
+
+docs {
+  Only the driver actually holding the offer can accept — a second driver (or the same
+  driver retried after the 15s offer TTL, `OFFER_TTL_SECONDS`) gets
+  `409 RIDE_ALREADY_MATCHED` / `409 OFFER_EXPIRED`.
+}

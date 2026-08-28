@@ -1,0 +1,25 @@
+meta {
+  name: 01 DiddiMap Health
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{diddimap_base_url}}/health
+  body: none
+  auth: none
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("service reports ok", function () {
+    expect(res.body.status).to.equal("ok");
+  });
+}
+
+docs {
+  Public health check for DiddiMap/AbidjanMaps. This must pass before testing
+  places, routes, pricing, or DiddiGo ride creation.
+}

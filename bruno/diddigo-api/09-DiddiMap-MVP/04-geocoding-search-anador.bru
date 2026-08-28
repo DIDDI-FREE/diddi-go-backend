@@ -1,0 +1,39 @@
+meta {
+  name: 04 Geocoding Search Anador
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{diddimap_base_url}}/geocoding/search?q=Anador&bias_lat=5.3367&bias_lng=-4.0840&limit=10
+  body: none
+  auth: none
+}
+
+params:query {
+  q: Anador
+  bias_lat: 5.3367
+  bias_lng: -4.0840
+  limit: 10
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("response is a list", function () {
+    expect(res.body).to.be.an("array");
+  });
+  test("items are geocoding candidates", function () {
+    if (res.body.length > 0) {
+      expect(res.body[0]).to.have.property("type");
+      expect(res.body[0]).to.have.property("label");
+      expect(res.body[0]).to.have.property("location");
+    }
+  });
+}
+
+docs {
+  Broader DiddiMap search endpoint used by DiddiGo today through its routing
+  adapter. It may return places and roads.
+}

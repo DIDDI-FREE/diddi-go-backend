@@ -1,0 +1,40 @@
+meta {
+  name: 01 Search Places
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/places/search?q=Cocody&bias_lat=5.3600&bias_lng=-4.0083&limit=5
+  body: none
+  auth: bearer
+}
+
+params:query {
+  q: Cocody
+  bias_lat: 5.3600
+  bias_lng: -4.0083
+  limit: 5
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Proxies to DiddiMap/AbidjanMaps (`DIDDIMAP_BASE_URL`). DiddiGo does no silent
+  fallback — if DiddiMap is unreachable this returns a 503, which is correct
+  behaviour, not a bug in this collection.
+
+  - **Local**: `DIDDIMAP_BASE_URL` defaults to `http://localhost:4000` — only works if
+    you also run DiddiMap locally. Otherwise expect this request to fail; that's a
+    known local-only gap, not a DiddiGo bug.
+  - **Staging**: points at `abidjanmaps-backend-staging.diddifree.com`, which should be
+    reachable — a failure here on staging is worth investigating for real.
+}

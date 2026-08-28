@@ -1,0 +1,38 @@
+meta {
+  name: 05 Add Location Samples (driver)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/rides/{{ride_id}}/location-samples
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+body:json {
+  {
+    "samples": [
+      { "lat": 5.3605, "lng": -4.0087, "heading": 90, "speed_kmh": 22.5, "source": "driver" },
+      { "lat": 5.3590, "lng": -4.0110, "heading": 95, "speed_kmh": 24.0, "source": "driver" }
+    ]
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  This is the REST-batched sample trail stored in `ride.ride_route_points` for audit
+  (`app_base/modules/ride/infra/driver_location.py:1-6`) — a different thing from the
+  live `ride.driver_location` broadcast, which only travels over the WebSocket via
+  `driver.location_push`. This request does NOT make the passenger's socket receive a
+  live update; that needs the WebSocket harness.
+}

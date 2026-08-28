@@ -1,0 +1,33 @@
+meta {
+  name: 08 OTP Request Admin
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{auth_prefix}}/otp/request
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "phone": "{{admin_phone}}"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Manual step again: read the OTP from logs (uvicorn console locally, `diddi-auth`
+  container on staging) and paste it into the runtime variable `admin_otp_code`
+  before running "09 OTP Verify Admin".
+}

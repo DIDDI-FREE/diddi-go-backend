@@ -1,0 +1,34 @@
+meta {
+  name: 11 Rate Ride (passenger rates driver)
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{base_url}}/rides/{{ride_id}}/rating
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+body:json {
+  {
+    "rating": 5,
+    "comment": "Great ride, tested by Bruno"
+  }
+}
+
+tests {
+  test("status is 201", function () {
+    expect(res.status).to.equal(201);
+  });
+}
+
+docs {
+  One rating per role per ride — a second call returns
+  `409 RATING_ALREADY_SUBMITTED`. Only works once the ride is `completed`; run after
+  "10 Status -> completed".
+}

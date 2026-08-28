@@ -1,0 +1,46 @@
+meta {
+  name: 01 Go Online
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/drivers/online
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+body:json {
+  {
+    "lat": 5.3600,
+    "lng": -4.0083
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("status is online", function () {
+    expect(res.body.status).to.equal("online");
+  });
+}
+
+docs {
+  Requires the driver's KYC to be approved (folder 03) and a vehicle registered
+  (folder 02) — otherwise `403 DRIVER_NOT_VERIFIED` or `409 NO_ACTIVE_VEHICLE`
+  (`app_base/modules/ride/application/driver_service.py:253-270`).
+
+  This single REST call seeds BOTH the Redis presence marker (`drivers:seen:{id}`,
+  30s TTL) and the availability marker (`drivers:available:{id}`, 300s TTL) — see
+  `app_base/modules/ride/infra/driver_location.py:56-84`. No WebSocket connection is
+  needed to make this driver matchable.
+
+  **Timing**: run "06-Ride-Lifecycle / 01 Create Ride" within 30 seconds of this
+  request, or the presence marker expires and the driver silently drops out of
+  matching (`find_available_nearby`) even though `AVAILABLE_KEY` is still set.
+}

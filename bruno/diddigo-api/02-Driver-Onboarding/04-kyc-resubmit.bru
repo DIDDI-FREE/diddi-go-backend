@@ -1,0 +1,39 @@
+meta {
+  name: 04 KYC Resubmit (only after a rejection)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/drivers/kyc/resubmit
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+body:json {
+  {
+    "license_number": "{{driver_license_number}}",
+    "legal_name": "Bruno Test Driver (corrected)",
+    "residence_address": "Marcory, Abidjan",
+    "license_document_url": "https://example.com/docs/license-v2.jpg"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("status resets to pending_verification", function () {
+    expect(res.body.status).to.equal("pending_verification");
+  });
+}
+
+docs {
+  Only meaningful after "02 Reject KYC" (folder 03) has run for this driver — resets
+  the profile from `suspended` back to `pending_verification` so it can be re-reviewed.
+  Skip this request in the happy-path run (approve directly instead of rejecting).
+}

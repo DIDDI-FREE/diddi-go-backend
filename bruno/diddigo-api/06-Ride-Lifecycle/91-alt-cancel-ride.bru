@@ -1,0 +1,35 @@
+meta {
+  name: 91 ALT Cancel Ride (passenger)
+  type: http
+  seq: 91
+}
+
+post {
+  url: {{base_url}}/rides/{{cancel_test_ride_id}}/cancel
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+body:json {
+  {
+    "reason": "passenger_changed_mind"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("ride is cancelled by passenger", function () {
+    expect(res.body.status).to.equal("cancelled_by_passenger");
+  });
+}
+
+docs {
+  Valid `reason` values: passenger_changed_mind, passenger_no_show, driver_unavailable,
+  found_alternative, other (`app_base/modules/ride/domain/entities.py:92-98`).
+}

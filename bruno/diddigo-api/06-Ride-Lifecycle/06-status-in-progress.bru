@@ -1,0 +1,30 @@
+meta {
+  name: 06 Status -> in_progress
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{base_url}}/rides/{{ride_id}}/status
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+body:json {
+  {
+    "status": "in_progress"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("ride status updated", function () {
+    expect(res.body.status).to.equal("in_progress");
+  });
+}
