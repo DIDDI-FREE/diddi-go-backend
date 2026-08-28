@@ -1,0 +1,35 @@
+meta {
+  name: 03 Approve Driver KYC
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/drivers/{{driver_profile_id}}/kyc/approve
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{admin_access_token}}
+}
+
+body:json {
+  {
+    "notes": "Approved by the Bruno E2E suite"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("driver status is now active", function () {
+    expect(res.body.status).to.equal("active");
+  });
+}
+
+docs {
+  This is the happy-path branch — run this, not "04 Reject Driver KYC", to unblock
+  "04 Driver Availability / 01 Go Online" and the whole ride flow in folder 06.
+}

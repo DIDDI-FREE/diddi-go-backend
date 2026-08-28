@@ -1,0 +1,39 @@
+meta {
+  name: 06 OTP Verify Driver
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{auth_prefix}}/otp/verify
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "phone": "{{driver_phone}}",
+    "code": "{{driver_otp_code}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("driver_access_token", res.body.access_token);
+    bru.setVar("driver_refresh_token", res.body.refresh_token);
+    bru.setVar("driver_user_id", res.body.user.id);
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("returns an access_token", function () {
+    expect(res.body).to.have.property("access_token");
+  });
+}

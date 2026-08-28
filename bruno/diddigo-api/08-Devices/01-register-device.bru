@@ -1,0 +1,46 @@
+meta {
+  name: 01 Register Device (passenger)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/devices/register
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+script:pre-request {
+  const existing = bru.getVar("device_push_token") || bru.getEnvVar("device_push_token");
+  if (existing) {
+    bru.setVar("device_push_token", existing);
+  } else {
+    bru.setVar("device_push_token", "bruno-fake-fcm-token-" + Date.now());
+  }
+}
+
+body:json {
+  {
+    "platform": "android",
+    "push_token": "{{device_push_token}}",
+    "push_provider": "fcm",
+    "device_id": "bruno-test-device"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Only tests that the API *accepts* a device registration — it cannot verify a real
+  push notification is actually delivered to a phone. `push_token` here is a fake
+  string, not a real FCM token, so no push will actually be sent even if
+  `PUSH_ENABLED=true` on the target environment.
+}

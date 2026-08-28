@@ -1,0 +1,39 @@
+meta {
+  name: 02 Estimate Pricing
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/rides/pricing/estimate
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+body:json {
+  {
+    "pickup": { "lat": 5.3610, "lng": -4.0090, "address": "Rue des Jardins, Plateau" },
+    "dropoff": { "lat": 5.3450, "lng": -4.0210, "address": "Rue Princesse, Cocody" },
+    "vehicle_category": "standard",
+    "comfort_level": "standard"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Same DiddiMap dependency as "01 Search Places" — distance/duration come from DiddiMap,
+  only the pricing formula itself is DiddiGo's own. See `PRODUCTION_READINESS.md`
+  "Garde-fous backend": no silent geographic fallback.
+
+  Pickup/dropoff coordinates here match "06-Ride-Lifecycle / 01 Create Ride" — keep them
+  in sync if you change one.
+}

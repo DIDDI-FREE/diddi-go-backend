@@ -1,0 +1,33 @@
+meta {
+  name: 93 ALT Decline Ride (driver)
+  type: http
+  seq: 93
+}
+
+post {
+  url: {{base_url}}/rides/{{decline_test_ride_id}}/decline
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("no other driver to reoffer to (single-driver test env)", function () {
+    expect(res.body.reoffered).to.equal(false);
+  });
+}
+
+docs {
+  With only one driver online in this collection's test env, declining leaves no next
+  candidate — the ride falls to `no_driver_found` and `reoffered: false`. To actually
+  test the reoffer-to-next-candidate path, run "01 Register Driver" through
+  "04-Driver-Availability / 01 Go Online" a second time under a second `driver2_*`
+  variable set before running this request — not scaffolded here to keep the main flow
+  simple.
+}

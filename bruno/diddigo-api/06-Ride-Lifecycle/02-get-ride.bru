@@ -1,0 +1,41 @@
+meta {
+  name: 02 Get Ride (passenger view)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/rides/{{ride_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("still requested, driver not yet assigned (offer is pending accept)", function () {
+    expect(res.body.status).to.equal("requested");
+    expect(res.body.driver).to.equal(null);
+  });
+}
+
+docs {
+  `driver` is correctly `null` here — an offer being open is not the same as a driver
+  being assigned. `ride.driver_id` is only set inside `MatchingService.accept()`
+  (`matching_service.py:130`), i.e. after "03 Accept Ride" runs. Checking `driver !=
+  null` at this point in the sequence was this collection's own bug, caught by running
+  it against a real local server: the server logged `matching_offer_opened` correctly,
+  but this request ran before the driver had accepted, so the assertion was checking
+  the wrong state for its position in the flow.
+
+  If you genuinely see NO offer at all (check the `matching_nearby_candidates` /
+  `matching_no_candidate` log lines), the real checklist still applies: was "Go Online"
+  run within the last 30s, does the vehicle's category/comfort_level match the ride
+  request, and is the driver's KYC actually approved (`GET /drivers/me` shows
+  `status: "active"`).
+}

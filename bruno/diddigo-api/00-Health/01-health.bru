@@ -1,0 +1,27 @@
+meta {
+  name: 01 Health
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url_root}}/health
+  body: none
+  auth: none
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("status ok", function () {
+    expect(res.body.status).to.equal("ok");
+  });
+}
+
+docs {
+  Note: `/health` is mounted at the app root, NOT under `/v1`
+  (`app_base/main.py:39-41`) — this request needs `base_url_root` (no `/v1` suffix), a
+  separate variable from `base_url`. Add it to your environment if missing:
+  local = `http://localhost:8000`, staging = `https://go-staging.diddifree.com`.
+}

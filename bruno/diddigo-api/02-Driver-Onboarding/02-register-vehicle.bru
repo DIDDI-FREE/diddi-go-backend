@@ -1,0 +1,57 @@
+meta {
+  name: 02 Register Vehicle
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/drivers/vehicle
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+script:pre-request {
+  const existing = bru.getVar("vehicle_plate_number") || bru.getEnvVar("vehicle_plate_number");
+  if (existing) {
+    bru.setVar("vehicle_plate_number", existing);
+  } else {
+    bru.setVar("vehicle_plate_number", "BR-" + Date.now().toString().slice(-6));
+  }
+}
+
+body:json {
+  {
+    "plate_number": "{{vehicle_plate_number}}",
+    "make": "Toyota",
+    "model": "Corolla",
+    "color": "Grey",
+    "category": "standard",
+    "comfort_level": "standard"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("vehicle_id", res.body.id);
+  }
+}
+
+tests {
+  test("status is 201", function () {
+    expect(res.status).to.equal(201);
+  });
+  test("vehicle is active by default", function () {
+    expect(res.body.active).to.equal(true);
+  });
+}
+
+docs {
+  `category` / `comfort_level` here must match whatever "Create Ride" (folder 06) requests
+  later, otherwise the matching engine rejects this driver with
+  `vehicle_category_mismatch` / `comfort_level_mismatch` — see
+  `app_base/modules/ride/application/matching_service.py:239-242`.
+}

@@ -1,0 +1,33 @@
+meta {
+  name: 09 Request Emergency (passenger)
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{base_url}}/rides/{{ride_id}}/emergency
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+body:json {
+  {
+    "note": "Bruno E2E test — simulated emergency, no real dispatch expected"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Does not change `ride.status` — only stamps `emergency_requested_at` /
+  `emergency_status` / `emergency_note` on the ride. Safe to run mid-flow without
+  disrupting the rest of the sequence.
+}

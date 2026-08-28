@@ -1,0 +1,45 @@
+meta {
+  name: 06 Route Proposals Detail
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{diddimap_base_url}}/routes/proposals/detail
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "start": { "lat": 5.3575, "lng": -3.9775 },
+    "end": { "lat": 5.3204, "lng": -4.0160 },
+    "profile": "car",
+    "vehicle_width_m": 1.9,
+    "vehicle_weight_t": 2.5
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("proposal contract is valid", function () {
+    expect(res.body.status).to.equal("ok");
+    expect(res.body.proposals).to.be.an("array");
+    expect(res.body.proposals.length).to.be.greaterThan(0);
+  });
+  test("best proposal has score, route, price and enrichment", function () {
+    const best = res.body.proposals[0];
+    expect(best).to.have.property("rank");
+    expect(best).to.have.property("score");
+    expect(best).to.have.property("route");
+    expect(best).to.have.property("price");
+    expect(best).to.have.property("score_breakdown");
+  });
+}
+
+docs {
+  Tests the richer DiddiMap v1.3 route proposal contract. This is not consumed
+  by DiddiGo yet, but it is part of the MVP Map validation.
+}

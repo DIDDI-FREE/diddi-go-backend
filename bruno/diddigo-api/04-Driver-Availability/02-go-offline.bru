@@ -1,0 +1,29 @@
+meta {
+  name: 02 Go Offline
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/drivers/offline
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("status is offline", function () {
+    expect(res.body.status).to.equal("offline");
+  });
+}
+
+docs {
+  Run this at the end of a pass to leave the pool cleanly, or any time you want to
+  re-test the "no driver found" branch of ride creation.
+}

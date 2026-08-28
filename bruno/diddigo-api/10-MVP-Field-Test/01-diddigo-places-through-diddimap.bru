@@ -1,0 +1,41 @@
+meta {
+  name: 01 DiddiGo Places Through DiddiMap
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/places/search?q=Plateau&bias_lat=5.3599&bias_lng=-4.0083&limit=8
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+params:query {
+  q: Plateau
+  bias_lat: 5.3599
+  bias_lng: -4.0083
+  limit: 8
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("DiddiGo returns place candidates", function () {
+    expect(res.body).to.be.an("array");
+    if (res.body.length > 0) {
+      expect(res.body[0]).to.have.property("label");
+      expect(res.body[0]).to.have.property("lat");
+      expect(res.body[0]).to.have.property("lng");
+    }
+  });
+}
+
+docs {
+  This is the actual endpoint the DiddiGo frontend should use for pickup/dropoff
+  search during MVP tests. It proves DiddiGo can reach DiddiMap.
+}

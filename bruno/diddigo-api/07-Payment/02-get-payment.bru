@@ -1,0 +1,21 @@
+meta {
+  name: 02 Get Payment
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/payments/{{ride_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}

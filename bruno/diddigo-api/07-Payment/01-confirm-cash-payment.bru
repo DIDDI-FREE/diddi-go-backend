@@ -1,0 +1,46 @@
+meta {
+  name: 01 Confirm Cash Payment (driver)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/payments/{{ride_id}}/confirm-cash
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+body:json {
+  {
+    "amount_collected": 1500
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("payment status is collected/succeeded", function () {
+    expect(["collected", "succeeded"]).to.include(res.body.status);
+  });
+}
+
+docs {
+  Requires "06-Ride-Lifecycle" to have reached step 10 (`status: completed`) for
+  `{{ride_id}}` — `confirm_cash` rejects with `409 RIDE_NOT_COMPLETED` otherwise
+  (`app_base/modules/payment/application/services.py:54-55`).
+
+  No need to call "03 Prepare Payment" first for cash — `confirm_cash` auto-creates the
+  local `Transaction` row if one doesn't already exist
+  (`payment/application/services.py:64-75`).
+
+  `amount_collected: 1500` is a guess — if DiddiMap wasn't reachable when the ride
+  completed, `final_fare` may be null and the amount tolerance check is skipped
+  entirely; if DiddiMap WAS reachable and the real fare differs by more than ~10%
+  (or 200 XOF, whichever is larger), expect `422 AMOUNT_MISMATCH` instead. Adjust the
+  amount to match if that happens.
+}

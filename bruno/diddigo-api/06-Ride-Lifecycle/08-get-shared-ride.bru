@@ -1,0 +1,22 @@
+meta {
+  name: 08 Get Shared Ride (public, no auth)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{base_url}}/rides/shared/{{ride_share_token}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  No `Authorization` header — this is the public tracking-link view a passenger can
+  send to a third party. Confirms the share token actually works unauthenticated.
+}

@@ -1,0 +1,31 @@
+meta {
+  name: 12 List Rides (passenger)
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{base_url}}/rides?page=1&page_size=20
+  body: none
+  auth: bearer
+}
+
+params:query {
+  page: 1
+  page_size: 20
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("the completed ride appears in the list", function () {
+    const expectedId = bru.getVar("ride_id") || bru.getEnvVar("ride_id");
+    const ids = res.body.data.map((r) => r.id);
+    expect(ids).to.include(expectedId);
+  });
+}

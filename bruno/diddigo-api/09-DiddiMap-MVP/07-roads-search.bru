@@ -1,0 +1,32 @@
+meta {
+  name: 07 Roads Search
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{diddimap_base_url}}/roads/search?q=boulevard&bias_lat=5.3599&bias_lng=-4.0083&limit=10
+  body: none
+  auth: none
+}
+
+params:query {
+  q: boulevard
+  bias_lat: 5.3599
+  bias_lng: -4.0083
+  limit: 10
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("response is a list", function () {
+    expect(res.body).to.be.an("array");
+  });
+}
+
+docs {
+  Validates DiddiMap road search. Empty results are not automatically a backend
+  failure; human QA should record whether expected roads were missing.
+}

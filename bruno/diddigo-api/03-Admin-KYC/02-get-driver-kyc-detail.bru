@@ -1,0 +1,24 @@
+meta {
+  name: 02 Get Driver KYC Detail
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/drivers/{{driver_profile_id}}/kyc
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{admin_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("vehicle is attached to the KYC detail", function () {
+    expect(res.body.vehicle).to.not.equal(null);
+  });
+}

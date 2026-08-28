@@ -1,0 +1,47 @@
+meta {
+  name: 02 DiddiGo Pricing Yopougon Plateau
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/rides/pricing/estimate
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+body:json {
+  {
+    "pickup": { "lat": 5.3367, "lng": -4.0840, "address": "Yopougon Siporex" },
+    "dropoff": { "lat": 5.3204, "lng": -4.0160, "address": "Plateau" },
+    "vehicle_category": "standard",
+    "comfort_level": "standard"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("pricing fields are present", function () {
+    expect(res.body).to.have.property("estimated_fare");
+    expect(res.body).to.have.property("distance_km");
+    expect(res.body).to.have.property("duration_seconds");
+    expect(res.body).to.have.property("platform_commission");
+    expect(res.body).to.have.property("driver_payout_estimate");
+  });
+  test("pricing values are positive", function () {
+    expect(res.body.estimated_fare).to.be.greaterThan(0);
+    expect(res.body.distance_km).to.be.greaterThan(0);
+    expect(res.body.duration_seconds).to.be.greaterThan(0);
+  });
+}
+
+docs {
+  DiddiMap supplies distance/duration; DiddiGo applies its own VTC pricing
+  policy. This catches integration failures before creating real rides.
+}

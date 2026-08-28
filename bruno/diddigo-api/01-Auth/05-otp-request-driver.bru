@@ -1,0 +1,32 @@
+meta {
+  name: 05 OTP Request Driver
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{auth_prefix}}/otp/request
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "phone": "{{driver_phone}}"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Same manual step as "02 OTP Request Passenger" — read the code from logs, paste it
+  into the runtime variable `driver_otp_code` before running "06 OTP Verify Driver".
+}

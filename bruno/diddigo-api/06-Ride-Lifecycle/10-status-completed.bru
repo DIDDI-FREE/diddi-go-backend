@@ -1,0 +1,38 @@
+meta {
+  name: 10 Status -> completed
+  type: http
+  seq: 10
+}
+
+patch {
+  url: {{base_url}}/rides/{{ride_id}}/status
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+body:json {
+  {
+    "status": "completed"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("ride status updated", function () {
+    expect(res.body.status).to.equal("completed");
+  });
+}
+
+docs {
+  Also triggers `matching.release_driver()` server-side
+  (`app_base/modules/ride/presentation/router.py:249-251`) — the driver goes back into
+  the available pool. Run "04-Driver-Availability / 01 Go Online" again if you want to
+  chain a second ride against the same driver afterwards (their presence marker will
+  otherwise have long expired anyway).
+}

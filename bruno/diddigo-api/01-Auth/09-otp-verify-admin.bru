@@ -1,0 +1,45 @@
+meta {
+  name: 09 OTP Verify Admin
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{auth_prefix}}/otp/verify
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "phone": "{{admin_phone}}",
+    "code": "{{admin_otp_code}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("admin_access_token", res.body.access_token);
+    bru.setVar("admin_refresh_token", res.body.refresh_token);
+    bru.setVar("admin_user_id", res.body.user.id);
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("role is admin", function () {
+    expect(res.body.user.role).to.equal("admin");
+  });
+}
+
+docs {
+  The "role is admin" assertion will fail on staging if `admin_phone` does not point to
+  a real DiddiFreeID admin account — that is expected and tells you the environment
+  variable needs fixing, not a bug in the collection.
+}

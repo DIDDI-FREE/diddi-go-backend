@@ -1,0 +1,45 @@
+meta {
+  name: 03 OTP Verify Passenger
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{auth_prefix}}/otp/verify
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "phone": "{{passenger_phone}}",
+    "code": "{{passenger_otp_code}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("passenger_access_token", res.body.access_token);
+    bru.setVar("passenger_refresh_token", res.body.refresh_token);
+    bru.setVar("passenger_user_id", res.body.user.id);
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("returns an access_token", function () {
+    expect(res.body).to.have.property("access_token");
+  });
+}
+
+docs {
+  Requires `passenger_otp_code` to be set manually first — see docs on the previous request.
+  On success, stores `passenger_access_token` / `passenger_refresh_token` / `passenger_user_id`
+  for every later request in this collection.
+}
