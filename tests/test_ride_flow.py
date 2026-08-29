@@ -90,6 +90,16 @@ async def test_pricing_rejects_unknown_vehicle_category(client, passenger) -> No
     assert r.json()["error"]["code"] == "INVALID_VEHICLE_CATEGORY"
 
 
+async def test_pricing_defaults_vehicle_category_for_simplified_frontend(client, passenger) -> None:
+    payload = {key: value for key, value in RIDE_BODY.items() if key != "vehicle_category"}
+    payload["comfort_level"] = "comfort"
+
+    r = await client.post("/v1/rides/pricing/estimate", json=payload, headers=passenger)
+
+    assert r.status_code == 200, r.text
+    assert r.json()["comfort_multiplier"] == 1.15
+
+
 # --- creation --------------------------------------------------------------
 
 async def test_create_ride_returns_requested(client, passenger) -> None:
@@ -106,6 +116,26 @@ async def test_create_ride_returns_requested(client, passenger) -> None:
 async def test_create_ride_requires_authentication(client) -> None:
     r = await client.post("/v1/rides", json={**RIDE_BODY, "scheduled_at": None})
     assert r.status_code == 401
+
+
+async def test_create_ride_defaults_vehicle_category_for_simplified_frontend(
+    client, passenger, online_driver,
+) -> None:
+    payload = {key: value for key, value in RIDE_BODY.items() if key != "vehicle_category"}
+    payload["comfort_level"] = "premium"
+    payload["scheduled_at"] = None
+
+    r = await client.post("/v1/rides", json=payload, headers=passenger)
+    assert r.status_code == 201, r.text
+
+    ride_id = r.json()["ride_id"]
+    accepted = await client.post(f"/v1/rides/{ride_id}/accept", headers=online_driver)
+    assert accepted.status_code == 200, accepted.text
+
+    detail = (await client.get(f"/v1/rides/{ride_id}", headers=passenger)).json()
+    assert detail["vehicle_category"] == "standard"
+    assert detail["comfort_level"] == "premium"
+    assert detail["driver"]["vehicle"]["category"] == "standard"
 
 
 async def test_passenger_cannot_have_two_active_rides(client, passenger, driver) -> None:

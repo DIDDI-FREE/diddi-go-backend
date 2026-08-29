@@ -32,7 +32,7 @@ class FakeVehicleRepo:
 
 
 @pytest.mark.asyncio
-async def test_matching_rejects_vehicle_with_wrong_comfort_level() -> None:
+async def test_matching_accepts_vehicle_when_only_comfort_level_differs() -> None:
     driver_user_id = uuid4()
     driver_id = uuid4()
     service = MatchingService(
@@ -61,5 +61,5 @@ async def test_matching_rejects_vehicle_with_wrong_comfort_level() -> None:
 
     can_take, reason = await service._can_take_ride(driver_user_id, ride)
 
-    assert can_take is False
-    assert reason == "comfort_level_mismatch:standard!=premium"
+    assert can_take is True
+    assert reason is None

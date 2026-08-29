@@ -273,7 +273,7 @@ Use cases inclus :
 - UC-701 Chauffeur online reste eligible tant que sa presence est fraiche.
 - UC-702 Chauffeur offline ne recoit plus d'offre.
 - UC-703 Matching respecte distance pickup.
-- UC-704 Matching respecte categorie et comfort level.
+- UC-704 Matching respecte la categorie vehicule; `comfort_level` reste un choix prix/UX non bloquant.
 - UC-705 Offre expire proprement.
 - UC-706 Offre refusee passe au chauffeur suivant.
 - UC-707 Course sans chauffeur passe en no_driver_found avec raison observable.

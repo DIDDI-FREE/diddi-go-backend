@@ -28,7 +28,7 @@ Le prix doit varier selon :
 
 - distance DiddiMap;
 - duree DiddiMap;
-- categorie vehicule;
+- categorie vehicule backend, avec `standard` par defaut pour le passager MVP;
 - comfort_level;
 - profil de course;
 - surge_multiplier;
@@ -75,14 +75,15 @@ Use cases :
 
 - UC-V1-001 Passager demande un prix pour une course standard.
 - UC-V1-002 Passager demande un prix avec comfort_level different.
-- UC-V1-003 Passager demande un prix avec categorie vehicule differente.
+- UC-V1-003 Passager demande un prix sans categorie vehicule explicite.
 - UC-V1-004 DiddiGo refuse un comfort_level invalide.
 - UC-V1-005 DiddiGo refuse une categorie vehicule invalide.
 - UC-V1-006 Admin/support peut comprendre comment le prix a ete calcule.
 
 Backend :
 
-- verifier les valeurs supportees de `vehicle_category`;
+- verifier les valeurs supportees de `vehicle_category` si elle est envoyee;
+- confirmer que `vehicle_category` est optionnelle et vaut `standard` par defaut;
 - verifier les valeurs supportees de `comfort_level`;
 - ajouter ou confirmer `ride_profile`;
 - retourner le breakdown complet dans `/rides/pricing/estimate`;

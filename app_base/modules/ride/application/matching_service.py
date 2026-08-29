@@ -238,8 +238,9 @@ class MatchingService:
             return False, "no_active_vehicle"
         if vehicle.category != ride.vehicle_category:
             return False, f"vehicle_category_mismatch:{vehicle.category.value}!={ride.vehicle_category.value}"
-        if vehicle.comfort_level != ride.comfort_level:
-            return False, f"comfort_level_mismatch:{vehicle.comfort_level.value}!={ride.comfort_level.value}"
+        # For the MVP, comfort_level is a commercial/pricing choice, not a hard
+        # availability lock. This keeps the passenger flow simple: the frontend
+        # can default vehicle_category and only expose comfort level.
         return True, None
 
     async def _give_up(self, ride: Ride) -> None:
