@@ -1,0 +1,110 @@
+WHATS GOING ON?
+{"detail":"Not Found"}  [12 h 53]ok, jai relance, cest bon ca pass Je constat un souci au nuveai de paiemt, pourqoi ca marche pas comme ca devrait?voici la requetefetch("[https://go-staging.diddifree.com/v1/drivers/me/wallet/topups/4af13b6a-a5a7-43a1-806e-a3acf2eee2b0](https://go-staging.diddifree.com/v1/drivers/me/wallet/topups/4af13b6a-a5a7-43a1-806e-a3acf2eee2b0)", { "headers": { "accept": "/", "accept-language": "en-US,en;q=0.9,fr;q=0.8", "authorization": "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6ImRldi0yMDI2LTA3LTAxIiwidHlwIjoiSldUIn0.eyJzdWIiOiIwODQ5ZDNlZS01MGFmLTRiNjgtOTBmYi00NDJkMTk3OGExODQiLCJyb2xlIjoidXNlciIsInN0YXR1cyI6ImFjdGl2ZSIsImlzcyI6ImRpZGRpZnJlZS1pZCIsImlhdCI6MTc4ODAwMzc5MiwiZXhwIjoxNzg4MDA0NjkyfQ.gw41aziexyCaYUXUpJWE20zDtnkE6htn1nLeNCviHERzq3dCRlRYQiI5PXwhnZA4R5MxNtgjdJIge96NpCSCIk95pCFP4gt5Sg6uukvp9IQzTCohlPcbFx6PuDVWNt\_9dpToiuPxAYYh8fm9y9uL4wuue6IHFcL1lHsCYLDXQ5RfRHtg\_hckN01wD3v-SWhWVb03GMaTb36Ao8j8Krf8OXVId\_i68rY\_wCN9ut3sI7ltrTSOl9lGtW1sK3K-XtjD53OVm3lJGNIqjN-rulPCJo7RzAHseb5f5XXFGGh2lJvUeeLJGJmftGa2joHrciwgPoohkfw0Czhb6pGV8DDjYA", "content-type": "application/json", "sec-ch-ua": ""Chromium";v="152", "Not?A\_Brand";v="24", "Google Chrome";v="152"", "sec-ch-ua-mobile": "?1", "sec-ch-ua-platform": ""Android"", "sec-fetch-dest": "empty", "sec-fetch-mode": "cors", "sec-fetch-site": "cross-site" }, "referrer": "[http://localhost:56344/](http://localhost:56344/)", "body": null, "method": "GET", "mode": "cors", "credentials": "include" });et voici la reposne{"id":"4af13b6a-a5a7-43a1-806e-a3acf2eee2b0","driver\_id":"884e6666-0b9c-4319-842d-7f1639ce098e","amount":4500,"currency":"XOF","method":"diddipay","status":"requires\_action","provider":"diddipay","provider\_status":"requires\_action","payment\_intent\_id":"a9d4567a-a188-4be4-bf5e-b16057215dc4","business\_reference":"driver\_topup:4af13b6a-a5a7-43a1-806e-a3acf2eee2b0","paid\_at":null,"next\_action":null}je ne pense pas que ca ai quelque chose a voir avec le fait quon ai lancee enn local regarde la documentation[12 h 53]Dans GET /drivers/me/wallet/topups/{id}, le champ next\_action est toujours null même quand le statut est requires\_action. Le frontend attend que ce champ contienne { type, url } extrait de attempts[0].next\_action du PaymentIntent DiddiPay correspondant.
+
+
+
+
+
+Afficher plus
+
+12:54
+
+
+
+
+
+
+Je vais traiter ça côté DiddiGo uniquement: le 404 sur /payments/return et le next_action:null sur le GET topup sont deux sujets différents. Je vérifie le code wallet/paiement pour confirmer pourquoi l’URL checkout n’est pas persistée ou reconstruite après création.
+
+
+
+
+a consulté plusieurs fichiers
+
+
+Diagnostic clair: GET topup renvoie next_action:null parce que DiddiGo ne stocke pas le next_action reçu lors de la création. Donc après refresh/page retour, il ne peut plus renvoyer l’URL checkout. Le 404 /payments/return, lui, est attendu si on met une URL backend qui n’existe pas comme callback_url navigateur; cette URL doit idéalement être une page frontend, ou alors DiddiGo doit fournir une route de retour minimale.
+
+
+
+
+a consulté plusieurs fichiers et A exécuté plusieurs commandes
+
+
+Je vais corriger la vraie cause dans DiddiGo: persister next_action au moment où DiddiGo reçoit la réponse DiddiPay. Sans ça, le premier POST topups peut avoir l’URL, mais le GET topups/{id} après redirection/reload ne peut renvoyer que null.
+
+
+
+
+a consulté plusieurs fichiers
+
+
+Je vais faire le correctif complet, pas un pansement: ajouter un champ persistant provider_next_action aux paiements et topups. Comme ça, GET /payments/{ride_id} et GET /drivers/me/wallet/topups/{id} pourront rendre l’action checkout tant que le paiement est encore en requires_action.
+
+
+
+
+A modifié des fichiers
+
+
+Le modèle domaine et les tables ORM savent maintenant porter provider_next_action. Je branche la persistance dans le repository, puis les services qui créent les paiements/topups.
+
+
+
+
+Modifié repositories.py+11-7
+
+
+
+
+
+
+La persistance est branchée. Maintenant je fais en sorte que la création DiddiPay capture attempts[0].next_action avant de sauvegarder, et que les GET le renvoient depuis la base.
+
+
+
+
+Modifié wallet_service.py+11-3
+
+
+
+
+
+
+Le bug topup est corrigé dans la logique. Je fais la même chose pour les paiements de course, parce que le même piège existe aussi là: un second GET/replay pouvait perdre next_action.
+
+
+
+
+Commande exécutée : Get-Content app_base/modules/payment/application/services.py | Select-Object -Skip 250 -First 190
+
+
+
+
+Je vais aussi noter l’autre point: l’URL https://go-staging.diddifree.com/payments/return?... n’est pas une confirmation serveur, c’est juste une page de retour navigateur. Si cette page n’existe pas côté frontend/proxy, le 404 est normal et ne veut pas dire que le paiement a échoué.
+
+
+
+
+Commande exécutée : Get-Content app_base/modules/payment/application/services.py | Select-Object -First 80
+
+
+
+
+Je continue le correctif côté code; ensuite je lancerai les tests ciblés. Pour le topup déjà créé en staging, il faudra probablement créer une nouvelle recharge après déploiement, parce que l’ancienne ligne n’a pas l’URL en base.
+
+
+
+
+Modifié services.py+26-18
+
+
+
+
+
+
+Durée d’exécution : 1min 38s
+
+
+
+
+Le service paiement et wallet renvoient maintenant le next_action persisté. J’ajoute la migration DB pour que Portainer crée les colonnes au redéploiement.

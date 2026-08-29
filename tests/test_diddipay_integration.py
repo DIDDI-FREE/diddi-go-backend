@@ -12,7 +12,14 @@ import pytest
 from app_base.core.errors import ApiError
 from app_base.modules.payment.application.services import PaymentService
 from app_base.modules.payment.application.wallet_service import DriverWalletService
-from app_base.modules.payment.domain.entities import PaymentStatus, WalletEntryDirection, WalletEntryType
+from app_base.modules.payment.domain.entities import (
+    KEEP,
+    PENDING_PAYMENT_STATUSES,
+    PENDING_TOPUP_STATUSES,
+    PaymentStatus,
+    WalletEntryDirection,
+    WalletEntryType,
+)
 from app_base.modules.ride.domain.entities import PaymentMethod as RidePaymentMethod
 from app_base.modules.ride.domain.entities import Ride, RideStatus
 from app_base.shared_kernel.types import GeoPoint
@@ -49,11 +56,20 @@ class FakePaymentRepo:
         self.payment.collected_at = collected_at
         return self.payment
 
-    async def mark_external_status(self, transaction_id, status, provider_status, paid_at):
+    async def mark_external_status(self, transaction_id, status, provider_status, paid_at, next_action=KEEP):
         self.payment.status = status
         self.payment.provider_status = provider_status
         self.payment.paid_at = paid_at
+        if next_action is not KEEP:
+            self.payment.provider_next_action = next_action
         return self.payment
+
+    async def list_stale_transactions(self, *, created_before, created_after, limit):
+        if self.payment is None or self.payment.payment_intent_id is None:
+            return []
+        if self.payment.status not in PENDING_PAYMENT_STATUSES:
+            return []
+        return [self.payment][:limit]
 
     async def record_webhook_event(self, *, event_id, payment_intent_id, event_type, business_reference, payload):
         if event_id in self.events:
@@ -102,12 +118,22 @@ class FakePaymentRepo:
                 return topup
         return None
 
-    async def mark_topup_status(self, topup_id, status, provider_status, paid_at):
+    async def mark_topup_status(self, topup_id, status, provider_status, paid_at, next_action=KEEP):
         topup = self.topups[topup_id]
         topup.status = status
         topup.provider_status = provider_status
         topup.paid_at = paid_at
+        if next_action is not KEEP:
+            topup.provider_next_action = next_action
         return topup
+
+    async def list_stale_topups(self, *, created_before, created_after, limit):
+        pending = [
+            topup
+            for topup in self.topups.values()
+            if topup.payment_intent_id is not None and topup.status in PENDING_TOPUP_STATUSES
+        ]
+        return pending[:limit]
 
 
 class FakeRideRepo:
@@ -129,28 +155,61 @@ class FakeDriverRepo:
         return type("DriverProfile", (), {"id": self.driver_id})()
 
 
+CHECKOUT_ACTION = {"type": "redirect", "url": "https://checkout.paystack.com/test"}
+
+
 class FakeDiddiPay:
-    def __init__(self, intent_id: UUID):
+    """Stand-in for DiddiPay: records what was created, serves what is read.
+
+    `read_status` / `read_next_action` model what the provider reports on
+    GET — that is what reconciliation trusts, and it may differ from whatever
+    DiddiGo stored at creation time.
+    """
+
+    def __init__(
+        self,
+        intent_id: UUID,
+        *,
+        read_status: str = "requires_action",
+        read_next_action: dict | None = CHECKOUT_ACTION,
+        read_amount: int | None = None,
+        read_currency: str = "XOF",
+        known: bool = True,
+    ):
         self.intent_id = intent_id
         self.last_payload = None
         self.last_idempotency_key = None
+        self.read_status = read_status
+        self.read_next_action = read_next_action
+        self.read_amount = read_amount
+        self.read_currency = read_currency
+        self.known = known
+        self.reads: list[str] = []
 
     async def create_payment_intent(self, payload, *, idempotency_key):
         self.last_payload = payload
         self.last_idempotency_key = idempotency_key
+        if self.read_amount is None:
+            self.read_amount = payload["amount"]
         return {
             "id": str(self.intent_id),
             "amount": payload["amount"],
             "currency": "XOF",
             "status": "requires_action",
-            "attempts": [
-                {
-                    "next_action": {
-                        "type": "redirect",
-                        "url": "https://checkout.paystack.com/test",
-                    }
-                }
-            ],
+            "attempts": [{"next_action": dict(CHECKOUT_ACTION)}],
+        }
+
+    async def get_payment_intent(self, payment_intent_id):
+        self.reads.append(str(payment_intent_id))
+        if not self.known:
+            return None
+        attempts = [{"next_action": self.read_next_action}] if self.read_next_action is not None else []
+        return {
+            "id": str(payment_intent_id),
+            "amount": self.read_amount,
+            "currency": self.read_currency,
+            "status": self.read_status,
+            "attempts": attempts,
         }
 
 

@@ -18,6 +18,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import DateTime, Index, Numeric, String, Text, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -54,6 +55,7 @@ class TransactionModel(Base):
     business_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
     provider_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    provider_next_action: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -138,6 +140,7 @@ class DriverTopupModel(Base):
     business_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
     provider_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    provider_next_action: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()"),
     )

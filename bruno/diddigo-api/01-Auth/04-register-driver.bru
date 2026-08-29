@@ -14,6 +14,18 @@ headers {
   Content-Type: application/json
 }
 
+body:json {
+  {
+    "phone": "{{driver_phone}}",
+    "full_name": "Bruno Test Driver",
+    "role": "driver"
+  }
+}
+
+vars:pre-request {
+  driver_phone: 2259090092345
+}
+
 script:pre-request {
   const existing = bru.getVar("driver_phone") || bru.getEnvVar("driver_phone");
   if (existing) {
@@ -21,14 +33,6 @@ script:pre-request {
   } else {
     const suffix = (Date.now() + 1).toString().slice(-8);
     bru.setVar("driver_phone", "+225" + suffix);
-  }
-}
-
-body:json {
-  {
-    "phone": "{{driver_phone}}",
-    "full_name": "Bruno Test Driver",
-    "role": "driver"
   }
 }
 

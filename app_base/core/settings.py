@@ -61,6 +61,18 @@ class Settings(BaseSettings):
     diddigo_payment_callback_url: str | None = None
     driver_min_balance: int = 0
 
+    # Reconciliation re-reads GET /payment-intents/{id} for anything still
+    # waiting on a DiddiPay callback, so a lost webhook self-heals instead of
+    # stranding a payment in `requires_action` forever.
+    payment_reconciliation_enabled: bool = True
+    payment_reconciliation_interval_seconds: int = 300
+    payment_reconciliation_batch_size: int = 50
+    # Grace period before an intent is considered late — the payer may still be
+    # on the checkout page.
+    payment_reconciliation_min_age_seconds: int = 120
+    # Past this age DiddiPay has expired the intent; chasing it is pointless.
+    payment_reconciliation_max_age_seconds: int = 259_200  # 72h
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

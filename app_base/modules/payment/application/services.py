@@ -9,8 +9,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from dataclasses import dataclass
-from datetime import UTC, datetime
+import logging
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -18,7 +19,9 @@ from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
 from app_base.core.settings import settings
 from app_base.modules.payment.domain.entities import (
+    KEEP,
     DriverLedgerEntry,
+    DriverTopup,
     PaymentMethod,
     PaymentStatus,
     TopupStatus,
@@ -32,8 +35,34 @@ from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.ride.domain.entities import RideStatus
 from app_base.modules.ride.domain.interfaces import RideRepository
 
+logger = logging.getLogger(__name__)
+
 _ABSOLUTE_TOLERANCE = Decimal("200")
 _RELATIVE_TOLERANCE = Decimal("0.10")
+
+
+@dataclass
+class ReconciliationReport:
+    """Outcome of one reconciliation sweep — logged and returned to admins."""
+
+    checked: int = 0
+    updated: int = 0
+    unchanged: int = 0
+    missing: int = 0
+    mismatched: int = 0
+    errors: int = 0
+    updated_references: list[str] = field(default_factory=list)
+
+    def as_dict(self) -> dict:
+        return {
+            "checked": self.checked,
+            "updated": self.updated,
+            "unchanged": self.unchanged,
+            "missing": self.missing,
+            "mismatched": self.mismatched,
+            "errors": self.errors,
+            "updated_references": self.updated_references,
+        }
 
 
 def _iso(dt: datetime | None) -> str | None:
@@ -207,15 +236,12 @@ class PaymentService:
             if int(data.get("amount") or -1) != int(payment.amount) or data.get("currency") != payment.currency:
                 raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Montant ou devise DiddiPay incoherent.")
 
-            payment = await self.payment_repo.mark_external_status(
-                payment.id,
-                status,
+            await self._apply_transaction_status(
+                payment,
+                status=status,
                 provider_status=str(data.get("status") or ""),
                 paid_at=paid_at,
             )
-            ride = await self.ride_repo.find_by_id(payment.ride_id)
-            if ride is not None:
-                await self._record_ride_settlement(ride, payment.status)
             return {"status": "processed", "payment_intent_id": str(intent_id), "reference_type": "ride"}
 
         topup = await self.payment_repo.find_topup_by_payment_intent_id(intent_id)
@@ -224,16 +250,260 @@ class PaymentService:
         if int(data.get("amount") or -1) != int(topup.amount) or data.get("currency") != topup.currency:
             raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Montant ou devise DiddiPay incoherent.")
 
-        topup_status = _topup_status_from_payment_status(status)
-        topup = await self.payment_repo.mark_topup_status(
-            topup.id,
-            topup_status,
+        await self._apply_topup_status(
+            topup,
+            status=_topup_status_from_payment_status(status),
             provider_status=str(data.get("status") or ""),
             paid_at=paid_at,
         )
+        return {"status": "processed", "payment_intent_id": str(intent_id), "reference_type": "driver_topup"}
+
+    # --- reconciliation ----------------------------------------------------
+    #
+    # Callbacks get lost: DiddiGo can be redeploying when DiddiPay fires, the
+    # HMAC secret can be rotated mid-flight, the network can drop the POST. The
+    # sweep below re-reads GET /payment-intents/{id} — DiddiPay is the source of
+    # truth — and replays the exact same state transition the webhook would
+    # have. Every effect it triggers (wallet credit, driver settlement) is
+    # guarded by the ledger's uniqueness constraint, so a payment already
+    # settled by its callback is a no-op here.
+
+    async def reconcile_pending(
+        self,
+        *,
+        limit: int | None = None,
+        min_age_seconds: int | None = None,
+        max_age_seconds: int | None = None,
+    ) -> ReconciliationReport:
+        """Re-read every intent still awaiting a callback and apply its state.
+
+        `min_age_seconds` leaves freshly created intents alone — the passenger
+        may still be on the checkout page and the callback is simply not due
+        yet. `max_age_seconds` stops the job from chasing intents so old that
+        DiddiPay has already expired them.
+        """
+        limit = limit if limit is not None else settings.payment_reconciliation_batch_size
+        min_age = min_age_seconds if min_age_seconds is not None else settings.payment_reconciliation_min_age_seconds
+        max_age = max_age_seconds if max_age_seconds is not None else settings.payment_reconciliation_max_age_seconds
+
+        now = datetime.now(UTC)
+        created_before = now - timedelta(seconds=min_age)
+        created_after = now - timedelta(seconds=max_age)
+        report = ReconciliationReport()
+
+        transactions = await self.payment_repo.list_stale_transactions(
+            created_before=created_before,
+            created_after=created_after,
+            limit=limit,
+        )
+        for payment in transactions:
+            await self._reconcile_transaction(payment, report)
+
+        topups = await self.payment_repo.list_stale_topups(
+            created_before=created_before,
+            created_after=created_after,
+            limit=limit,
+        )
+        for topup in topups:
+            await self._reconcile_topup(topup, report)
+
+        return report
+
+    async def reconcile_transaction(self, ride_id: UUID) -> ReconciliationReport:
+        """Reconcile a single ride payment on demand (admin repair path)."""
+        report = ReconciliationReport()
+        payment = await self.payment_repo.find_by_ride_id(ride_id)
+        if payment is None or payment.payment_intent_id is None:
+            raise ApiError(404, ErrorCode.PAYMENT_INTENT_NOT_FOUND, "Aucun paiement DiddiPay pour cette course.")
+        await self._reconcile_transaction(payment, report)
+        return report
+
+    async def reconcile_topup(self, topup_id: UUID) -> ReconciliationReport:
+        """Reconcile a single driver topup on demand (admin repair path)."""
+        report = ReconciliationReport()
+        topup = await self.payment_repo.find_topup_by_id(topup_id)
+        if topup is None or topup.payment_intent_id is None:
+            raise ApiError(404, ErrorCode.PAYMENT_INTENT_NOT_FOUND, "Aucune recharge DiddiPay pour cet identifiant.")
+        await self._reconcile_topup(topup, report)
+        return report
+
+    async def _reconcile_transaction(self, payment: Transaction, report: ReconciliationReport) -> None:
+        reference = f"ride:{payment.ride_id}"
+        report.checked += 1
+        intent = await self._read_intent(payment.payment_intent_id, reference, report)
+        if intent is None:
+            return
+
+        mismatch = _amount_mismatch_reason(intent, amount=payment.amount, currency=payment.currency)
+        if mismatch is not None:
+            report.mismatched += 1
+            logger.error(
+                "reconciliation refused %s (%s) intent=%s local=%s%s provider=%s%s",
+                reference,
+                mismatch,
+                payment.payment_intent_id,
+                int(payment.amount),
+                payment.currency,
+                intent.get("amount"),
+                intent.get("currency"),
+            )
+            return
+
+        provider_status = str(intent.get("status") or "")
+        try:
+            status = _payment_status_from_diddipay(provider_status)
+        except ApiError:
+            report.errors += 1
+            logger.exception("reconciliation got an unknown DiddiPay status reference=%s", reference)
+            return
+
+        next_action = _next_action_from_intent(intent)
+        if status is payment.status and next_action == payment.provider_next_action:
+            report.unchanged += 1
+            return
+
+        await self._apply_transaction_status(
+            payment,
+            status=status,
+            provider_status=provider_status,
+            paid_at=datetime.now(UTC) if status is PaymentStatus.SUCCEEDED else None,
+            next_action=next_action,
+        )
+        report.updated += 1
+        report.updated_references.append(reference)
+        logger.info(
+            "reconciliation repaired reference=%s intent=%s %s -> %s",
+            reference,
+            payment.payment_intent_id,
+            payment.status.value,
+            status.value,
+        )
+
+    async def _reconcile_topup(self, topup: DriverTopup, report: ReconciliationReport) -> None:
+        reference = f"driver_topup:{topup.id}"
+        report.checked += 1
+        intent = await self._read_intent(topup.payment_intent_id, reference, report)
+        if intent is None:
+            return
+
+        mismatch = _amount_mismatch_reason(intent, amount=topup.amount, currency=topup.currency)
+        if mismatch is not None:
+            report.mismatched += 1
+            logger.error(
+                "reconciliation refused %s (%s) intent=%s local=%s%s provider=%s%s",
+                reference,
+                mismatch,
+                topup.payment_intent_id,
+                int(topup.amount),
+                topup.currency,
+                intent.get("amount"),
+                intent.get("currency"),
+            )
+            return
+
+        provider_status = str(intent.get("status") or "")
+        try:
+            status = _topup_status_from_payment_status(_payment_status_from_diddipay(provider_status))
+        except ApiError:
+            report.errors += 1
+            logger.exception("reconciliation got an unknown DiddiPay status reference=%s", reference)
+            return
+
+        next_action = _next_action_from_intent(intent)
+        if status is topup.status and next_action == topup.provider_next_action:
+            report.unchanged += 1
+            return
+
+        await self._apply_topup_status(
+            topup,
+            status=status,
+            provider_status=provider_status,
+            paid_at=datetime.now(UTC) if status is TopupStatus.SUCCEEDED else None,
+            next_action=next_action,
+        )
+        report.updated += 1
+        report.updated_references.append(reference)
+        logger.info(
+            "reconciliation repaired reference=%s intent=%s %s -> %s",
+            reference,
+            topup.payment_intent_id,
+            topup.status.value,
+            status.value,
+        )
+
+    async def _read_intent(
+        self,
+        payment_intent_id: UUID | None,
+        reference: str,
+        report: ReconciliationReport,
+    ) -> dict | None:
+        """Fetch one intent, converting any failure into a counted outcome.
+
+        A sweep must survive a single bad row: one 5xx from DiddiPay cannot be
+        allowed to abandon the rest of the batch.
+        """
+        if payment_intent_id is None:
+            report.missing += 1
+            return None
+        try:
+            intent = await (self.diddipay or DiddiPayClient()).get_payment_intent(payment_intent_id)
+        except Exception:
+            report.errors += 1
+            logger.exception(
+                "reconciliation could not read intent reference=%s intent=%s",
+                reference,
+                payment_intent_id,
+            )
+            return None
+        if intent is None:
+            report.missing += 1
+            logger.error(
+                "reconciliation found no DiddiPay intent reference=%s intent=%s",
+                reference,
+                payment_intent_id,
+            )
+        return intent
+
+    async def _apply_transaction_status(
+        self,
+        payment: Transaction,
+        *,
+        status: PaymentStatus,
+        provider_status: str,
+        paid_at: datetime | None,
+        next_action: object = KEEP,
+    ) -> Transaction:
+        payment = await self.payment_repo.mark_external_status(
+            payment.id,
+            status,
+            provider_status=provider_status,
+            paid_at=paid_at,
+            next_action=next_action,
+        )
+        ride = await self.ride_repo.find_by_id(payment.ride_id)
+        if ride is not None:
+            await self._record_ride_settlement(ride, payment.status)
+        return payment
+
+    async def _apply_topup_status(
+        self,
+        topup: DriverTopup,
+        *,
+        status: TopupStatus,
+        provider_status: str,
+        paid_at: datetime | None,
+        next_action: object = KEEP,
+    ) -> DriverTopup:
+        topup = await self.payment_repo.mark_topup_status(
+            topup.id,
+            status,
+            provider_status=provider_status,
+            paid_at=paid_at,
+            next_action=next_action,
+        )
         if topup.status is TopupStatus.SUCCEEDED:
             await self._credit_driver_topup(topup)
-        return {"status": "processed", "payment_intent_id": str(intent_id), "reference_type": "driver_topup"}
+        return topup
 
     async def _prepare_cash(self, ride_id: UUID) -> dict:
         payment = await self.payment_repo.find_by_ride_id(ride_id)
@@ -280,7 +550,7 @@ class PaymentService:
 
         existing = await self.payment_repo.find_by_ride_id(ride_id)
         if existing and existing.payment_intent_id:
-            return _external_payment_payload(existing, next_action=None)
+            return _external_payment_payload(existing, next_action=existing.provider_next_action)
         if existing:
             raise ApiError(
                 409,
@@ -308,6 +578,7 @@ class PaymentService:
             idempotency_key=idempotency_key,
         )
         status = _payment_status_from_diddipay(str(intent.get("status") or "requires_action"))
+        next_action = _next_action_from_intent(intent)
         payment = Transaction(
             id=Transaction.new_id(),
             ride_id=ride_id,
@@ -320,11 +591,10 @@ class PaymentService:
             business_reference=business_reference,
             idempotency_key=idempotency_key,
             provider_status=str(intent.get("status") or status.value),
+            provider_next_action=next_action,
             paid_at=datetime.now(UTC) if status is PaymentStatus.SUCCEEDED else None,
         )
         await self.payment_repo.save(payment)
-        attempts = intent.get("attempts") if isinstance(intent.get("attempts"), list) else []
-        next_action = attempts[0].get("next_action") if attempts and isinstance(attempts[0], dict) else None
         return _external_payment_payload(payment, next_action=next_action)
 
     async def _record_ride_settlement(self, ride, payment_status: PaymentStatus) -> None:
@@ -421,3 +691,29 @@ def _external_payment_payload(payment: Transaction, *, next_action: dict | None)
         "business_reference": payment.business_reference,
         "next_action": next_action,
     }
+
+
+def _amount_mismatch_reason(intent: dict, *, amount: Decimal, currency: str) -> str | None:
+    """Refuse to move a local row unless the intent is unambiguously the same money.
+
+    An absent field is reported separately from a differing one: the first
+    means DiddiPay's read model doesn't carry what we compare on (a contract
+    problem to fix), the second means the intent genuinely isn't ours.
+    """
+    if intent.get("amount") is None or intent.get("currency") is None:
+        return "provider response carries no amount/currency to verify against"
+    try:
+        provider_amount = int(intent["amount"])
+    except (TypeError, ValueError):
+        return "provider amount is not a number"
+    if provider_amount != int(amount) or str(intent["currency"]) != currency:
+        return "provider amount/currency differs from the local record"
+    return None
+
+
+def _next_action_from_intent(intent: dict) -> dict | None:
+    attempts = intent.get("attempts") if isinstance(intent.get("attempts"), list) else []
+    if not attempts or not isinstance(attempts[0], dict):
+        return None
+    next_action = attempts[0].get("next_action")
+    return next_action if isinstance(next_action, dict) else None

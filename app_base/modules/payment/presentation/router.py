@@ -10,9 +10,10 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app_base.core.auth_deps import get_current_user, require_business_driver, require_role
-from app_base.core.deps import driver_wallet_service, payment_service
+from app_base.core.deps import driver_wallet_service, payment_service, session_dep
 from app_base.core.errors import ApiError
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.payment.application.services import PaymentService
@@ -27,6 +28,7 @@ from app_base.modules.ride.domain.entities import DriverProfile
 router = APIRouter(prefix="/payments", tags=["payment"])
 wallet_router = APIRouter(prefix="/drivers/me/wallet", tags=["driver-wallet"])
 admin_wallet_router = APIRouter(prefix="/admin/drivers", tags=["admin-driver-wallet"])
+admin_payment_router = APIRouter(prefix="/admin/payments", tags=["admin-payment"])
 internal_router = APIRouter(prefix="/internal/webhooks", tags=["internal-webhooks"])
 
 
@@ -138,6 +140,43 @@ async def admin_get_driver_ledger(
     _current_user: UserModel = Depends(require_role("admin")),
 ) -> dict:
     return await service.admin_get_ledger(driver_id, page=page, page_size=page_size)
+
+
+@admin_payment_router.post("/reconcile")
+async def reconcile_pending_payments(
+    limit: int | None = Query(default=None, ge=1, le=500),
+    service: PaymentService = Depends(payment_service),
+    session: AsyncSession = Depends(session_dep),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    """Force a DiddiPay reconciliation sweep instead of waiting for the timer."""
+    report = await service.reconcile_pending(limit=limit)
+    await session.commit()
+    return report.as_dict()
+
+
+@admin_payment_router.post("/rides/{ride_id}/reconcile")
+async def reconcile_ride_payment(
+    ride_id: UUID,
+    service: PaymentService = Depends(payment_service),
+    session: AsyncSession = Depends(session_dep),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    report = await service.reconcile_transaction(ride_id)
+    await session.commit()
+    return report.as_dict()
+
+
+@admin_payment_router.post("/topups/{topup_id}/reconcile")
+async def reconcile_driver_topup(
+    topup_id: UUID,
+    service: PaymentService = Depends(payment_service),
+    session: AsyncSession = Depends(session_dep),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    report = await service.reconcile_topup(topup_id)
+    await session.commit()
+    return report.as_dict()
 
 
 @internal_router.post("/diddipay", status_code=204)

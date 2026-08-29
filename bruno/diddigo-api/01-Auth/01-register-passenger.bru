@@ -14,6 +14,18 @@ headers {
   Content-Type: application/json
 }
 
+body:json {
+  {
+    "phone": "{{passenger_phone}}",
+    "full_name": "Bruno Test Passenger",
+    "role": "passenger"
+  }
+}
+
+vars:pre-request {
+  passenger_phone: 2251707070705
+}
+
 script:pre-request {
   const existing = bru.getVar("passenger_phone") || bru.getEnvVar("passenger_phone");
   if (existing) {
@@ -21,14 +33,6 @@ script:pre-request {
   } else {
     const suffix = Date.now().toString().slice(-8);
     bru.setVar("passenger_phone", "+225" + suffix);
-  }
-}
-
-body:json {
-  {
-    "phone": "{{passenger_phone}}",
-    "full_name": "Bruno Test Passenger",
-    "role": "passenger"
   }
 }
 
@@ -42,10 +46,10 @@ docs {
   Local: hits DiddiGo's own `/v1/auth/register` (role accepted: passenger/driver/admin).
   Staging: hits DiddiFreeID's `/identity/v1/auth/register` — DiddiFreeID ignores `role`,
   every account is created as `role=user` (DiddiGo maps that to `passenger`).
-
+  
   A fresh phone number is generated on first run (pre-request script) and reused for
   every later Auth request in this run, so re-running the whole collection is safe.
-
+  
   Checks `bru.getEnvVar()` before generating — set `passenger_phone` in the active
   environment (or pass `--env-var passenger_phone=...` on the CLI) to pin a specific
   number instead of a random one. Runtime vars (`bru.getVar`) and environment vars
