@@ -1,317 +1,354 @@
-# DiddiGo - Document administratif de deploiement
+# DiddiGo - Rapport administratif de livraison
 
 Public : administration, direction produit, operations, support, QA, equipe
 technique.
 
 Date de mise a jour : 2026-08-29.
 
-Objectif : donner une vision courte et exploitable des vagues de livraison
-DiddiGo, en parlant en use cases et en decisions operationnelles.
+Objectif : clarifier ce qui existe deja dans DiddiGo, ce qu'il faut tester pour
+livrer rapidement une V1 propre, puis ce qui doit etre ajoute dans la V2.
 
-## Vision generale
+## Position produit
 
-DiddiGo doit etre lance progressivement. Le but n'est pas seulement de prouver
-qu'une course peut etre creee, mais de verifier toute la chaine terrain :
-passager, chauffeur, KYC, matching, paiement, commission, solde chauffeur,
-support et securite.
+DiddiGo est deja tres avance. La prochaine etape ne doit pas etre presentee
+comme "plusieurs semaines pour tester les notifications, l'urgence, le KYC ou
+le wallet", car ces briques existent deja cote backend.
 
-Responsabilites des modules :
+La bonne lecture est :
 
-- DiddiGo gere le metier VTC : chauffeurs, vehicules, courses, matching,
-  pricing, commission, wallet chauffeur, statut paiement, partage et urgence.
-- DiddiFreeID gere l'identite : inscription, connexion, profil utilisateur
-  global, roles globaux user/admin.
-- DiddiMap gere la geographie : recherche de lieux, routes, distances, durees,
-  traces et futurs insights.
-- DiddiPay gere l'execution des paiements digitaux : DiddiPay, Wave, callbacks
-  et statuts fournisseur.
-- DiddiFiles gere les documents : permis, piece, selfie, carte grise, images et
-  URLs signees.
+- version actuelle : `0.9`, backend MVP fonctionnel mais encore a stabiliser en
+  conditions terrain;
+- version `1.0` : version terrain propre, livrable rapidement a la direction et
+  aux testeurs;
+- version `2.0` : version produit plus complete, avec les fonctions restantes
+  qui demandent du vrai developpement;
+- production limitee : apres validation terrain, pas avant.
 
-## Etat actuel DiddiGo
+## Ce qui existe deja cote DiddiGo
 
-Deja implemente cote backend :
+Use cases deja couverts par le backend :
 
-- authentification via token DiddiFreeID et shadow user DiddiGo;
+- passager authentifie via DiddiFreeID;
+- shadow user local DiddiGo;
 - creation profil chauffeur;
-- documents KYC references par `file_id`;
-- validation/rejet KYC par admin;
-- blocage passage en ligne si chauffeur non valide;
-- creation vehicule avec categorie et niveau de confort;
+- references documents KYC via `file_id`;
+- validation ou rejet KYC par admin;
+- blocage chauffeur non valide sur passage en ligne;
+- creation vehicule;
+- categorie vehicule;
+- niveau de confort;
 - recherche de lieux via DiddiMap;
-- estimation de prix avec distance/duree DiddiMap;
-- politique de prix DiddiGo avec commission et payout estime;
-- creation, acceptation, refus, annulation, progression et notation de course;
-- WebSocket chauffeur/passager quand l'application est active;
-- enregistrement device FCM pour notifications push;
+- estimation de prix via distance/duree DiddiMap;
+- politique de prix DiddiGo;
+- commission plateforme;
+- payout chauffeur estime;
+- creation course;
+- matching chauffeur proche;
+- acceptation/refus course;
+- statuts de course;
+- annulation;
+- notation;
+- WebSocket chauffeur/passager;
+- FCM device register/unregister;
+- notification d'offre chauffeur via FCM quand configure;
+- bouton urgence journalise;
+- lien de partage public sans login;
+- samples GPS chauffeur pendant la course;
 - paiement cash;
-- paiement digital `diddipay` et `wave` via DiddiPay;
-- recharge wallet chauffeur via DiddiPay/Wave;
-- wallet chauffeur, ledger, commission et payout;
-- reconciliation admin des paiements/recharges DiddiPay;
-- lien public de partage de course sans login;
-- bouton urgence journalise cote backend;
-- stockage des samples GPS chauffeur pendant la course;
-- catalogue d'erreurs DiddiGo documente;
-- suite Bruno et documents QA disponibles.
+- paiement `diddipay` et `wave` via DiddiPay;
+- wallet chauffeur;
+- recharge chauffeur;
+- ledger chauffeur;
+- reconciliation admin paiement/recharge;
+- catalogue d'erreurs;
+- tests automatises backend;
+- suite Bruno pour tests API.
 
-Points a surveiller en test :
+Conclusion : la V1 ne doit pas etre un gros chantier fonctionnel. La V1 est un
+chantier de stabilisation, validation terrain et correction des vrais bugs.
 
-- le niveau de confort n'est pas encore un filtre dur de matching;
-- le prix final reel base sur la distance/duree reellement parcourue depend
-  encore du futur traitement de traces DiddiMap;
-- les appels/messagerie instantanee ne sont pas dans DiddiGo actuellement;
-- DiddiSend doit rester un service separe, pas une extension interne de DiddiGo.
+## Version 1.0 - Stabilisation terrain rapide
 
-## Vague 1.0 - MVP terrain controle
+Objectif : livrer une version propre et testable en conditions reelles.
 
-But : valider que DiddiGo fonctionne avec de vrais chauffeurs et passagers sur
-une zone pilote.
+Duree cible : 5 a 7 jours ouvrables.
 
-Use cases :
+Use cases a tester bout en bout :
 
 - un passager se connecte;
-- un passager cherche son depart et sa destination;
-- un passager obtient un prix;
-- un passager cree une course;
-- un chauffeur KYC valide passe en ligne;
-- un chauffeur proche recoit une offre;
-- le chauffeur accepte ou refuse;
-- le passager suit l'etat de la course;
-- le chauffeur termine la course;
+- un chauffeur se connecte;
+- le chauffeur cree son profil et son vehicule;
+- un admin valide le KYC chauffeur;
+- le chauffeur passe en ligne;
+- le passager cherche une destination;
+- le passager obtient un prix;
+- le passager cree une course;
+- le chauffeur recoit l'offre;
+- le chauffeur accepte;
+- le passager suit le chauffeur;
+- le chauffeur met a jour les statuts;
+- le passager partage la course;
+- une personne externe ouvre le lien de partage;
+- le bouton urgence cree un signal visible/loggue;
+- la course est terminee;
 - le paiement cash est confirme;
-- le support retrouve la course avec son identifiant.
+- une recharge chauffeur est testee;
+- le support retrouve la course, le paiement, la commission et le wallet.
 
-Critere de sortie :
+Tests a faire dans la semaine :
 
-- 10 chauffeurs testeurs actifs;
-- matching fiable sur les scenarios simples;
-- pas de faux `no_driver_found` inexpliques;
-- pas de 500 non documente sur le happy path;
+- tests Bruno sur routes critiques;
+- test WebSocket reel avec chauffeur/passager;
+- test FCM sur au moins un telephone Android reel;
+- test KYC admin avant/apres validation;
+- test DiddiMap indisponible ou erreur explicite;
+- test DiddiPay/Wave si environnement DiddiPay disponible;
+- test partage public;
+- test urgence;
+- test solde minimum si la valeur est activee;
+- test 10 chauffeurs et plusieurs passagers.
+
+Critere de sortie V1 :
+
+- le happy path fonctionne sans intervention technique;
+- pas de 500 non documente sur les parcours critiques;
+- les erreurs sont compréhensibles cote frontend;
+- les logs permettent de retrouver `request_id`, `ride_id`, `driver_id`,
+  `user_id`;
 - KYC bloque bien les chauffeurs non valides;
-- logs lisibles par `request_id`, `ride_id`, `driver_id` et `user_id`.
+- matching fonctionne dans un cas simple et reproductible;
+- cash fonctionne;
+- DiddiPay/Wave sont soit testables, soit explicitement marques non actifs;
+- la direction peut voir une demo fiable.
 
-Statut : pret pour test terrain controle, sous reserve de validation Portainer
-et donnees de test.
+Livrable V1 :
 
-## Vague 1.1 - Stabilisation terrain
+- backend DiddiGo staging stable;
+- protocole de test terrain rempli;
+- rapport des bugs trouves/corriges;
+- liste claire des limites restantes;
+- decision go/no-go pour production limitee.
 
-But : corriger les problemes observes pendant les premiers tests reels.
+## Ce qui doit etre ajoute apres V1
 
-Use cases :
+Ces elements ne sont pas de simples tests. Ce sont les vrais chantiers V2.
 
-- un chauffeur perd la connexion puis revient en ligne;
-- un token expire et l'application sait relancer l'authentification;
-- DiddiMap indisponible provoque une erreur claire, pas un fallback silencieux;
-- un testeur peut refaire le meme scenario plusieurs fois;
-- le support comprend pourquoi une course a echoue.
+### 1. Matching confort garanti
 
-Critere de sortie :
+Probleme :
 
-- bugs critiques terrain corriges;
-- erreurs principales connues par le frontend;
-- tests Bruno verts sur les parcours MVP;
-- protocole QA humain rempli.
+- aujourd'hui le confort influence le prix, mais n'est pas encore un filtre dur
+  suffisant de matching.
 
-Statut : a executer apres les premiers retours chauffeurs/passagers.
+Objectif V2 :
 
-## Vague 1.2 - Paiements et wallet chauffeur
+- si un passager paie `premium`, il ne doit pas recevoir un vehicule `standard`;
+- definir une matrice claire entre categorie vehicule, comfort_level et offre
+  eligible;
+- exposer la raison si aucun chauffeur compatible n'est trouve.
 
-But : tester le modele commercial minimum.
+Duree estimee : 3 a 5 jours.
 
-Use cases :
+### 2. Prix final reel
 
-- le passager paie en cash;
-- le passager paie via DiddiPay;
-- le passager paie via Wave quand disponible;
-- DiddiGo cree le paiement mais ne decide pas le statut fournisseur;
-- DiddiPay confirme le paiement par callback;
-- si le callback est perdu, l'admin lance une reconciliation;
-- le chauffeur voit son solde;
-- le chauffeur recharge son solde;
-- le support voit paiement, commission et payout.
+Probleme :
 
-Critere de sortie :
+- DiddiGo stocke deja des samples GPS, mais ne recalcule pas encore le prix
+  final avec la distance/duree reellement parcourue.
 
-- cash reste toujours disponible;
-- DiddiPay/Wave testables en staging;
-- aucun montant n'est accepte depuis le frontend;
-- `next_action` est renvoye pour ouvrir le checkout;
-- le solde chauffeur change seulement apres confirmation paiement;
-- callback rejoue deux fois ne double pas le solde.
+Objectif V2 :
 
-Statut : implemente cote DiddiGo; a valider bout en bout avec DiddiPay staging.
+- envoyer la trace finale a DiddiMap;
+- recevoir distance/duree reelles;
+- comparer estimation vs reel;
+- calculer `driver_payout_final`;
+- figer commission finale;
+- documenter les regles d'ajustement.
 
-## Vague 1.3 - KYC et operations chauffeur
+Duree estimee : 1 a 2 semaines, depend du contrat DiddiMap traces.
 
-But : rendre l'activation chauffeur controlable sans intervention SQL.
+### 3. Admin/support complet
 
-Use cases :
+Probleme :
 
-- le chauffeur soumet ses informations metier;
-- le chauffeur associe ses documents via DiddiFiles;
-- l'admin consulte un dossier KYC;
-- l'admin approuve ou rejette;
-- le chauffeur approuve peut passer en ligne;
-- le chauffeur rejete ou en attente reste bloque.
+- des routes admin existent, mais l'exploitation support doit devenir plus
+  confortable.
 
-Critere de sortie :
+Objectif V2 :
 
-- validation admin possible via API;
-- front chauffeur affiche clairement le statut KYC;
-- documents consultables via URLs signees DiddiFiles;
-- raison de rejet visible et exploitable.
+- recherche course par telephone, user_id, driver_id, ride_id;
+- dashboard courses en cours;
+- vue incidents;
+- vue paiements ambigus;
+- actions admin tracees;
+- export support/finance.
 
-Statut : implemente cote DiddiGo pour les references `file_id` et revue KYC;
-depend de DiddiFiles pour l'upload/lecture des documents.
+Duree estimee : 1 a 2 semaines cote backend, hors UI complete.
 
-## Vague 1.4 - Notifications et temps reel
+### 4. Paiement production et regles commerciales
 
-But : assurer que chauffeur et passager recoivent les informations importantes.
+Probleme :
 
-Use cases :
+- les paiements et recharges existent, mais la politique produit doit etre
+  verrouillee avant production large.
 
-- chauffeur recoit une offre via WebSocket si l'app est ouverte;
-- chauffeur recoit une notification FCM si l'app est en arriere-plan;
-- passager recoit les changements d'etat;
-- device FCM peut etre enregistre et desactive;
-- logs indiquent si une notification est envoyee ou ignoree.
+Objectif V2 :
 
-Critere de sortie :
+- regle officielle solde minimum;
+- comportement si solde insuffisant;
+- delai de grace ou blocage strict;
+- reconciliation planifiee surveillee;
+- procedure support paiement `requires_action`;
+- rapports commission/payout.
 
-- FCM configure en staging;
-- frontend Android active le foreground service pour les tests chauffeurs;
-- aucun scenario critique ne depend uniquement d'un WebSocket en arriere-plan;
-- payload notification stable.
+Duree estimee : 1 semaine si DiddiPay est stable.
 
-Statut : base backend implemente; a valider sur vrais telephones.
+### 5. Notifications production
 
-## Vague 1.5 - Securite et partage de course
+Probleme :
 
-But : rassurer passager, proches et support.
+- FCM est prevu, mais la fiabilite doit etre prouvee sur vrais appareils.
 
-Use cases :
+Objectif V2 :
 
-- le passager cree un lien de partage;
-- un proche ouvre le lien sans compte;
-- le proche voit une vue limitee de la course;
-- la position partagee suit le chauffeur;
-- le passager ou chauffeur signale une urgence;
-- le support retrouve rapidement la course concernee.
+- templates notifications;
+- payload stable versionne;
+- retry/logs par notification;
+- notification passager plus complete;
+- strategie Android/iOS documentee;
+- tableau des notifications critiques.
 
-Critere de sortie :
+Duree estimee : 3 a 7 jours.
 
-- lien public limite et expirant;
-- aucune donnee sensible inutile exposee;
-- urgence journalisee avec contexte;
-- mecanisme temps reel ou polling raisonnable choisi pour la page publique.
+### 6. Partage course temps reel
 
-Statut : base backend implemente; experience frontend publique a finaliser.
+Probleme :
 
-## Vague 1.6 - Confort garanti
+- le lien public existe, mais l'experience publique doit etre finalisee.
 
-But : garantir que le client recoit le niveau de service qu'il paie.
+Objectif V2 :
 
-Use cases :
+- page publique officielle;
+- flux temps reel WebSocket ou SSE;
+- limite des donnees visibles;
+- expiration/revocation claire;
+- affichage position chauffeur;
+- aucun besoin de login.
 
-- le passager choisit Standard, Comfort ou Premium;
-- le prix varie selon le confort;
-- un choix Premium ne doit pas etre servi par un vehicule Standard;
-- le chauffeur voit une offre compatible avec son vehicule.
+Duree estimee : 3 a 7 jours, depend surtout du frontend.
 
-Critere de sortie :
+### 7. Urgence et securite operationnelle
 
-- regles de compatibilite vehicule/confort validees;
-- matching refuse les vehicules trop bas pour le niveau paye;
-- tests Bruno couvrent Standard, Comfort et Premium.
+Probleme :
 
-Statut : prix par confort implemente; filtre dur de matching a renforcer.
+- le signal urgence existe, mais ce n'est pas encore un vrai workflow support.
 
-## Vague 1.7 - GPS reel et DiddiMap avance
+Objectif V2 :
 
-But : preparer le prix final reel, les traces et l'amelioration DiddiMap.
+- statut urgence;
+- assignation support;
+- historique actions;
+- contacts d'urgence;
+- event/log prioritaire;
+- procedure interne d'intervention.
 
-Use cases :
+Duree estimee : 1 semaine.
 
-- le chauffeur envoie des positions pendant la course;
-- DiddiGo stocke les samples GPS lies au ride;
-- en fin de course, DiddiGo transmet la trace a DiddiMap quand le contrat est
-  pret;
-- DiddiMap analyse la trace et produit des insights;
-- un admin valide ou rejette les insights.
+### 8. Messagerie et appels
 
-Critere de sortie :
+Probleme :
 
-- donnees GPS coherentes et auditees;
-- pas de recalcul silencieux si DiddiMap echoue;
-- future base pour prix final reel et amelioration de route.
+- non implemente dans DiddiGo actuellement.
 
-Statut : collecte samples GPS implemente; integration finale DiddiMap traces a
-terminer quand le contrat DiddiMap est fige.
+Objectif V2 :
 
-## Vague 2.0 - Pre-production
+- chat passager/chauffeur pendant la course;
+- masquage numerique ou appel relaye;
+- historique limite;
+- moderation/support si incident.
 
-But : figer une version stable avant ouverture commerciale.
+Decision architecture :
 
-Use cases :
+- peut etre dans DiddiGo pour le contexte course uniquement;
+- ou dans un futur service commun DiddiCom si tous les modules en ont besoin.
 
-- test avec plus de chauffeurs;
-- test passager/chauffeur sur plusieurs telephones;
-- verification Portainer staging/prod;
-- verification secrets et variables d'environnement;
-- verification sauvegardes;
-- verification monitoring;
-- validation support et operations.
+Duree estimee : 2 a 3 semaines selon choix technique.
 
-Critere de sortie :
+### 9. Qualite dispatch 10+ chauffeurs
 
-- decision go/no-go documentee;
-- branche `stage` validee;
-- branche `main` prete pour prod;
-- rollback connu;
-- support capable de diagnostiquer auth, KYC, matching et paiement.
+Probleme :
 
-Statut : a planifier apres vagues 1.0 a 1.7.
+- le matching simple doit etre observe en charge terrain.
 
-## Vague 2.1 - Production limitee
+Objectif V2 :
 
-But : ouvrir petit, mesurer et corriger vite.
+- raison detaillee d'exclusion chauffeur;
+- anti-double-assign;
+- timeout offre;
+- reproposition apres refus;
+- presence chauffeur plus robuste;
+- metriques matching.
 
-Use cases :
+Duree estimee : 1 a 2 semaines selon bugs observes en V1.
 
-- zone pilote active;
-- chauffeurs selectionnes;
-- support disponible;
-- cash prioritaire au debut;
-- DiddiPay/Wave actives progressivement;
-- suivi quotidien des incidents.
+## Timeline recommandee
 
-Critere de sortie :
+```text
+Semaine 1
+V1.0 stabilisation terrain DiddiGo
+Tests reels 10 chauffeurs + passagers
+Correction bugs bloquants
+Demo direction
 
-- exploitation reelle sous controle;
-- incidents critiques sous seuil acceptable;
-- donnees terrain suffisantes pour prioriser la suite.
+Semaines 2-3
+V2.0 lot A : matching confort garanti + notifications production + partage
+public finalise
 
-Statut : non demarre.
+Semaines 4-5
+V2.0 lot B : prix final reel + traces DiddiMap + commission finale
 
-## Decisions administratives restantes
+Semaines 6-7
+V2.0 lot C : admin/support complet + urgence operationnelle + paiement
+production
 
-- taux de commission officiel;
-- solde minimum chauffeur;
-- blocage strict ou simple alerte si solde bas;
-- regle finale de compatibilite Comfort/Premium;
-- timing exact du paiement digital passager;
-- activation Wave en meme temps que DiddiPay ou plus tard;
-- procedure support en cas de paiement `requires_action` trop long;
-- procedure support en cas de chauffeur KYC rejete;
-- seuils de lancement de la zone pilote.
+Semaines 8-10
+V2.1 : messagerie/appels + qualite dispatch avancee + durcissement production
+```
 
-## Resume executif
+## Projection administrative
 
-La base DiddiGo est suffisamment avancee pour lancer une vague de test terrain
-controlee. La priorite immediate n'est plus d'ajouter beaucoup de nouvelles
-fonctionnalites, mais de verifier les parcours reels avec chauffeurs,
-passagers, DiddiMap, DiddiPay, FCM et Portainer.
+Version `1.0` :
 
-La production limitee ne doit commencer qu'apres validation terrain, paiement,
-KYC, notifications et support.
+- objectif : montrer vite un produit utilisable;
+- delai : 1 semaine;
+- risque principal : bugs terrain, configuration DiddiMap/DiddiPay/FCM;
+- resultat attendu : demo fiable + test controle.
+
+Version `2.0` :
+
+- objectif : produit commercial plus solide;
+- delai : 4 a 7 semaines apres V1 selon dependances;
+- risque principal : DiddiMap traces, DiddiPay production, frontend temps reel,
+  workflow support;
+- resultat attendu : production limitee serieuse.
+
+Version `2.1` :
+
+- objectif : experience avancee;
+- delai : 8 a 10 semaines apres V1 si messagerie/appels inclus;
+- resultat attendu : meilleure qualite operationnelle et confort utilisateur.
+
+## Message simple pour la direction
+
+DiddiGo n'est plus au stade conceptuel. Le backend couvre deja les parcours
+essentiels : chauffeur, passager, KYC, course, matching, paiement, wallet,
+notifications, partage et urgence.
+
+La prochaine etape est une V1 terrain rapide sur une semaine : tester en vrai,
+corriger les bugs bloquants, documenter les limites et faire une demonstration
+fiable.
+
+La V2 ajoutera les fonctions produit plus lourdes : confort garanti dans le
+matching, prix final reel via traces DiddiMap, support/admin plus complet,
+notifications production, partage temps reel finalise, urgence operationnelle,
+messagerie et appels.
