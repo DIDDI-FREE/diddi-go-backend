@@ -46,8 +46,10 @@ Le catalogue complet des codes est maintenu dans `DiddiGo_Error_Catalog.md`.
 | `wallet.entry_status` | `pending`, `confirmed`, `failed` |
 | `topup.status` | `pending`, `requires_action`, `processing`, `succeeded`, `failed`, `cancelled` |
 
-Note produit : on garde les categories vehicule existantes. `comfort_level`
-devient le niveau commercial de confort.
+Note produit : on garde les categories vehicule existantes cote backend.
+Pour reduire la friction MVP, le frontend passager peut omettre
+`vehicle_category`; DiddiGo applique alors `standard`. `comfort_level` devient
+le seul choix commercial visible au passager.
 
 ---
 
@@ -335,10 +337,12 @@ Requete :
     "lng": -4.0333,
     "address": "Plateau, Rue du Commerce"
   },
-  "vehicle_category": "standard",
   "comfort_level": "standard"
 }
 ```
+
+`vehicle_category` est optionnel et vaut `standard` par defaut. Le frontend
+passager doit surtout envoyer `comfort_level`.
 
 Reponse :
 
@@ -396,7 +400,6 @@ Requete :
     "lng": -4.0333,
     "address": "Plateau, Rue du Commerce"
   },
-  "vehicle_category": "standard",
   "comfort_level": "standard",
   "payment_method": "cash",
   "scheduled_at": null
@@ -406,6 +409,9 @@ Requete :
 `payment_method` accepte `cash`, `wave`, `diddipay`. `cash` reste confirme
 localement par le chauffeur. `wave` et `diddipay` passent par DiddiPay
 PaymentIntent en service-to-service.
+
+`vehicle_category` reste accepte pour compatibilite et pour des evolutions
+futures, mais il est optionnel. Si absent, DiddiGo utilise `standard`.
 
 Reponse :
 
@@ -426,9 +432,13 @@ Matching :
 chauffeur actif
 vehicule actif
 vehicle.category == ride.vehicle_category
-vehicle.comfort_level == ride.comfort_level
 position dans le rayon de matching
 ```
+
+`comfort_level` n'est pas un filtre dur de matching dans le MVP. Il influence
+le prix et l'experience commerciale vendue au passager, sans empecher un
+chauffeur eligible de recevoir la course uniquement parce que son vehicule est
+enregistre en confort `standard`.
 
 ### `GET /rides/{ride_id}`
 

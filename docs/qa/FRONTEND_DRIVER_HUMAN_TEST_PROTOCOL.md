@@ -270,13 +270,13 @@ Resultat attendu :
 
 - vehicule cree;
 - plaque et categorie visibles;
-- comfort level visible ou applique;
+- comfort level visible si le frontend chauffeur l'expose;
 - erreurs claires si plaque deja utilisee.
 
 Bloquant si :
 
 - aucun vehicule ne peut etre ajoute;
-- le matching ignore la categorie/comfort level;
+- le matching ignore la categorie vehicule;
 - vehicule actif non reconnu au passage en ligne.
 
 ## Use Case DRV-008 - Passage en ligne
@@ -651,6 +651,7 @@ Mesures a noter :
 - chauffeur qui recoit l'offre;
 - distance chauffeur-pickup;
 - categorie vehicule;
+- comfort level choisi par le passager;
 - statut final;
 - raison si no_driver_found;
 - notification recue ou non;

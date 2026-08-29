@@ -15,7 +15,9 @@ pas encore une URL `/v3`.
 
 Ajouts majeurs :
 
-- `comfort_level` sur pricing, creation de course et vehicule.
+- `comfort_level` sur pricing et creation de course.
+- `vehicle_category` reste cote backend mais le frontend passager peut l'omettre
+  pour le MVP; DiddiGo applique `standard` par defaut.
 - pricing detaille avec commission plateforme et payout chauffeur estime.
 - preparation `cash`, `wave`, `diddipay`.
 - wallet chauffeur : solde, ledger, recharge DiddiPay/Wave.
@@ -207,10 +209,13 @@ Regles frontend :
 {
   "pickup": {"lat": 5.3599, "lng": -4.0083, "address": "Carrefour Anador"},
   "dropoff": {"lat": 5.3167, "lng": -4.0333, "address": "Plateau"},
-  "vehicle_category": "standard",
   "comfort_level": "standard"
 }
 ```
+
+`vehicle_category` est optionnel. Pour reduire la friction UX, ne pas afficher
+de choix categorie vehicule au passager pour le MVP: envoyer seulement
+`comfort_level`.
 
 Reponse :
 
@@ -253,6 +258,15 @@ Important :
 }
 ```
 
+Le frontend peut omettre `vehicle_category`; DiddiGo mettra `standard` par
+defaut. Pour la vague actuelle, l'ecran passager doit proposer uniquement :
+
+```text
+Standard
+Confort
+Premium
+```
+
 `payment_method` peut etre `cash`, `wave`, ou `diddipay`. Pour le moment,
 seul `cash` est reellement encaissable. `wave` et `diddipay` sont prepares pour
 l'integration provider.
@@ -261,11 +275,11 @@ Le matching exige maintenant :
 
 ```text
 vehicle.category == ride.vehicle_category
-vehicle.comfort_level == ride.comfort_level
 ```
 
-Donc si l'utilisateur choisit `comfort_level=premium`, il faut s'attendre a ce
-que seuls les chauffeurs avec vehicule premium soient eligibles.
+`comfort_level` n'est plus un filtre dur de matching dans le MVP. Si
+l'utilisateur choisit `premium`, le prix augmente, mais un chauffeur eligible
+avec vehicule `standard` peut quand meme recevoir la course.
 
 La reponse contient maintenant :
 
