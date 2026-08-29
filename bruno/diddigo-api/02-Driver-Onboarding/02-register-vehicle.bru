@@ -14,15 +14,6 @@ auth:bearer {
   token: {{driver_access_token}}
 }
 
-script:pre-request {
-  const existing = bru.getVar("vehicle_plate_number") || bru.getEnvVar("vehicle_plate_number");
-  if (existing) {
-    bru.setVar("vehicle_plate_number", existing);
-  } else {
-    bru.setVar("vehicle_plate_number", "BR-" + Date.now().toString().slice(-6));
-  }
-}
-
 body:json {
   {
     "plate_number": "{{vehicle_plate_number}}",
@@ -31,6 +22,19 @@ body:json {
     "color": "Grey",
     "category": "standard",
     "comfort_level": "standard"
+  }
+}
+
+vars:pre-request {
+  vehicle_plate_number: 12345678
+}
+
+script:pre-request {
+  const existing = bru.getVar("vehicle_plate_number") || bru.getEnvVar("vehicle_plate_number");
+  if (existing) {
+    bru.setVar("vehicle_plate_number", existing);
+  } else {
+    bru.setVar("vehicle_plate_number", "BR-" + Date.now().toString().slice(-6));
   }
 }
 

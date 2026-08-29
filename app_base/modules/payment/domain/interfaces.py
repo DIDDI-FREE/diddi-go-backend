@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from datetime import datetime
+from typing import Any, Protocol
 from uuid import UUID
 
 from app_base.modules.payment.domain.entities import (
+    KEEP,
     DriverLedgerEntry,
     DriverTopup,
     DriverWallet,
@@ -34,7 +36,18 @@ class PaymentRepository(Protocol):
         status: object,
         provider_status: str | None,
         paid_at: object | None,
+        next_action: Any = KEEP,
     ) -> Transaction: ...
+
+    async def list_stale_transactions(
+        self,
+        *,
+        created_before: datetime,
+        created_after: datetime,
+        limit: int,
+    ) -> list[Transaction]:
+        """Provider-backed transactions still awaiting a final DiddiPay callback."""
+        ...
 
     async def record_webhook_event(
         self,
@@ -74,4 +87,15 @@ class PaymentRepository(Protocol):
         status: object,
         provider_status: str | None,
         paid_at: object | None,
+        next_action: Any = KEEP,
     ) -> DriverTopup: ...
+
+    async def list_stale_topups(
+        self,
+        *,
+        created_before: datetime,
+        created_after: datetime,
+        limit: int,
+    ) -> list[DriverTopup]:
+        """Topups still awaiting a final DiddiPay callback."""
+        ...

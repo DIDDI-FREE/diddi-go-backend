@@ -6,7 +6,24 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+from typing import Any
 from uuid import UUID, uuid4
+
+
+class _Keep:
+    """Sentinel for repository writes: leave the stored value untouched.
+
+    `None` is a meaningful value for `provider_next_action` (it clears the
+    checkout URL), so "not supplied" needs to be distinguishable from it.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover — debugging aid
+        return "KEEP"
+
+
+KEEP = _Keep()
 
 
 class PaymentStatus(str, Enum):
@@ -55,6 +72,16 @@ class TopupStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+# Statuses where DiddiPay still owns the outcome: a callback is expected, so a
+# row stuck here past its grace period is exactly what reconciliation re-reads.
+PENDING_PAYMENT_STATUSES = frozenset(
+    {PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION, PaymentStatus.PROCESSING},
+)
+PENDING_TOPUP_STATUSES = frozenset(
+    {TopupStatus.PENDING, TopupStatus.REQUIRES_ACTION, TopupStatus.PROCESSING},
+)
+
+
 @dataclass
 class Transaction:
     id: UUID
@@ -70,6 +97,7 @@ class Transaction:
     business_reference: str | None = None
     idempotency_key: str | None = None
     provider_status: str | None = None
+    provider_next_action: dict[str, Any] | None = None
     paid_at: datetime | None = None
 
     @staticmethod
@@ -122,6 +150,7 @@ class DriverTopup:
     business_reference: str | None = None
     idempotency_key: str | None = None
     provider_status: str | None = None
+    provider_next_action: dict[str, Any] | None = None
     created_at: datetime | None = None
     paid_at: datetime | None = None
 

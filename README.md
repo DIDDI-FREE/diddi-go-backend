@@ -134,6 +134,8 @@ DIDDIPAY_SERVICE_KEY=<diddipay-service-key-for-diddigo>
 DIDDIPAY_CALLBACK_SECRET=<diddipay-callback-hmac-secret>
 DIDDIGO_PAYMENT_CALLBACK_URL=https://go-staging.diddifree.com/payments/return
 DRIVER_MIN_BALANCE=0
+PAYMENT_RECONCILIATION_ENABLED=true
+PAYMENT_RECONCILIATION_INTERVAL_SECONDS=300
 ```
 
 Ne pas renseigner `DATABASE_URL` ni `REDIS_URL` si la stack utilise les services
@@ -146,6 +148,45 @@ envoyee au frontend. DiddiPay doit livrer les callbacks signes vers :
 ```http
 POST https://go-staging.diddifree.com/internal/webhooks/diddipay
 ```
+
+### Reconciliation DiddiPay
+
+Un callback peut se perdre : redeploiement en cours, secret HMAC tourne, POST
+qui n'arrive jamais. Le paiement resterait alors bloque en `requires_action`
+alors que le client a paye. DiddiGo relit donc periodiquement la source de
+verite cote DiddiPay :
+
+```http
+GET {DIDDIPAY_BASE_URL}/payment-intents/{payment_intent_id}
+```
+
+C'est une lecture seule : DiddiGo ne modifie jamais un PaymentIntent, il
+recopie le statut rapporte par DiddiPay dans ses propres lignes
+(`payment.transactions`, `payment.driver_topups`), rafraichit `next_action`, et
+applique les memes effets wallet que le callback. Ces effets sont idempotents
+(contrainte d'unicite sur le ledger), donc un paiement deja traite par son
+callback est un no-op.
+
+Le job tourne dans le conteneur API (verrou Redis pour ne pas doubler entre
+replicas). Pour une reparation immediate :
+
+```bash
+# balayage complet
+docker exec <container> python -m app_base.tools.reconcile_payments
+# une recharge chauffeur precise
+docker exec <container> python -m app_base.tools.reconcile_payments --topup <topup-id>
+```
+
+Ou en admin authentifie :
+
+```http
+POST /v1/admin/payments/reconcile
+POST /v1/admin/payments/topups/{topup_id}/reconcile
+POST /v1/admin/payments/rides/{ride_id}/reconcile
+```
+
+Un montant ou une devise qui ne correspond pas au dossier local n'est jamais
+applique : la ligne est comptee `mismatched` et loguee pour revue humaine.
 
 `DRIVER_MIN_BALANCE` vaut `0` par defaut. Si une valeur positive est configuree,
 un chauffeur dont le solde DiddiGo est inferieur a ce minimum recoit

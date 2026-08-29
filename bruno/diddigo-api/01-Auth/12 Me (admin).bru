@@ -1,0 +1,31 @@
+meta {
+  name: 12 Me (admin)
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{base_url}}/auth/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  if (res.status === 200) {
+    test("phone matches the registered passenger", function () {
+      expect(res.body.phone).to.equal(bru.getVar("passenger_phone"));
+    });
+  }
+}
+
+docs {
+  Always DiddiGo's own `/v1/auth/me` (both locally and on staging) — this route reads
+  `current_user` however `get_current_user` resolved it, local JWT or DiddiFreeID JWT.
+}

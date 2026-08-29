@@ -17,6 +17,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app_base.modules.payment.domain.entities import (
+    KEEP,
+    PENDING_PAYMENT_STATUSES,
+    PENDING_TOPUP_STATUSES,
     DriverLedgerEntry,
     DriverTopup,
     DriverWallet,
@@ -50,6 +53,7 @@ class SqlAlchemyPaymentRepository:
             business_reference=transaction.business_reference,
             idempotency_key=transaction.idempotency_key,
             provider_status=transaction.provider_status,
+            provider_next_action=transaction.provider_next_action,
             paid_at=transaction.paid_at,
         )
         self._session.add(row)
@@ -97,6 +101,7 @@ class SqlAlchemyPaymentRepository:
         status: Any,
         provider_status: str | None,
         paid_at: Any | None,
+        next_action: Any = KEEP,
     ) -> Transaction:
         row = await self._session.get(orm.TransactionModel, transaction_id)
         if row is None:
@@ -106,8 +111,30 @@ class SqlAlchemyPaymentRepository:
         if paid_at is not None:
             row.paid_at = paid_at
             row.collected_at = paid_at
+        if next_action is not KEEP:
+            row.provider_next_action = next_action
         await self._session.flush()
         return self._to_domain(row)
+
+    async def list_stale_transactions(
+        self,
+        *,
+        created_before: datetime,
+        created_after: datetime,
+        limit: int,
+    ) -> list[Transaction]:
+        result = await self._session.execute(
+            select(orm.TransactionModel)
+            .where(
+                orm.TransactionModel.payment_intent_id.is_not(None),
+                orm.TransactionModel.status.in_([s.value for s in PENDING_PAYMENT_STATUSES]),
+                orm.TransactionModel.created_at <= created_before,
+                orm.TransactionModel.created_at >= created_after,
+            )
+            .order_by(orm.TransactionModel.created_at.asc())
+            .limit(limit),
+        )
+        return [self._to_domain(row) for row in result.scalars().all()]
 
     async def record_webhook_event(
         self,
@@ -230,6 +257,7 @@ class SqlAlchemyPaymentRepository:
             business_reference=topup.business_reference,
             idempotency_key=topup.idempotency_key,
             provider_status=topup.provider_status,
+            provider_next_action=topup.provider_next_action,
             created_at=topup.created_at or datetime.utcnow(),
             paid_at=topup.paid_at,
         )
@@ -254,6 +282,7 @@ class SqlAlchemyPaymentRepository:
         status: Any,
         provider_status: str | None,
         paid_at: Any | None,
+        next_action: Any = KEEP,
     ) -> DriverTopup:
         row = await self._session.get(orm.DriverTopupModel, topup_id)
         if row is None:
@@ -262,8 +291,30 @@ class SqlAlchemyPaymentRepository:
         row.provider_status = provider_status
         if paid_at is not None:
             row.paid_at = paid_at
+        if next_action is not KEEP:
+            row.provider_next_action = next_action
         await self._session.flush()
         return self._topup_to_domain(row)
+
+    async def list_stale_topups(
+        self,
+        *,
+        created_before: datetime,
+        created_after: datetime,
+        limit: int,
+    ) -> list[DriverTopup]:
+        result = await self._session.execute(
+            select(orm.DriverTopupModel)
+            .where(
+                orm.DriverTopupModel.payment_intent_id.is_not(None),
+                orm.DriverTopupModel.status.in_([s.value for s in PENDING_TOPUP_STATUSES]),
+                orm.DriverTopupModel.created_at <= created_before,
+                orm.DriverTopupModel.created_at >= created_after,
+            )
+            .order_by(orm.DriverTopupModel.created_at.asc())
+            .limit(limit),
+        )
+        return [self._topup_to_domain(row) for row in result.scalars().all()]
 
     @staticmethod
     def _to_domain(row: orm.TransactionModel) -> Transaction:
@@ -281,6 +332,7 @@ class SqlAlchemyPaymentRepository:
             business_reference=row.business_reference,
             idempotency_key=row.idempotency_key,
             provider_status=row.provider_status,
+            provider_next_action=row.provider_next_action,
             paid_at=row.paid_at,
         )
 
@@ -324,6 +376,7 @@ class SqlAlchemyPaymentRepository:
             business_reference=row.business_reference,
             idempotency_key=row.idempotency_key,
             provider_status=row.provider_status,
+            provider_next_action=row.provider_next_action,
             created_at=row.created_at,
             paid_at=row.paid_at,
         )

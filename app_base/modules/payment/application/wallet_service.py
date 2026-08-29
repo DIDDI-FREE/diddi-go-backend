@@ -122,6 +122,7 @@ class DriverWalletService:
             idempotency_key=idempotency_key,
         )
         status = _topup_status_from_payment_status(_payment_status_from_diddipay(str(intent.get("status") or "")))
+        next_action = _next_action_from_intent(intent)
         topup = DriverTopup(
             id=topup_id,
             driver_id=driver_id,
@@ -133,14 +134,13 @@ class DriverWalletService:
             business_reference=business_reference,
             idempotency_key=idempotency_key,
             provider_status=str(intent.get("status") or status.value),
+            provider_next_action=next_action,
             created_at=datetime.now(UTC),
             paid_at=datetime.now(UTC) if status is TopupStatus.SUCCEEDED else None,
         )
         await self.payment_repo.save_topup(topup)
         if status is TopupStatus.SUCCEEDED:
             await self.credit_topup(topup)
-        attempts = intent.get("attempts") if isinstance(intent.get("attempts"), list) else []
-        next_action = attempts[0].get("next_action") if attempts and isinstance(attempts[0], dict) else None
         return _topup_payload(topup, next_action=next_action)
 
     async def get_topup(self, *, driver_user_id: UUID, topup_id: UUID) -> dict:
@@ -148,7 +148,7 @@ class DriverWalletService:
         topup = await self.payment_repo.find_topup_by_id(topup_id)
         if topup is None or topup.driver_id != driver_id:
             raise ApiError(404, ErrorCode.TOPUP_NOT_FOUND, "Recharge chauffeur introuvable.")
-        return _topup_payload(topup, next_action=None)
+        return _topup_payload(topup, next_action=topup.provider_next_action)
 
     async def credit_topup(self, topup: DriverTopup) -> None:
         if topup.status is not TopupStatus.SUCCEEDED:
@@ -289,3 +289,11 @@ def _topup_payload(topup: DriverTopup, *, next_action: dict | None) -> dict:
         "paid_at": topup.paid_at.isoformat() if topup.paid_at else None,
         "next_action": next_action,
     }
+
+
+def _next_action_from_intent(intent: dict) -> dict | None:
+    attempts = intent.get("attempts") if isinstance(intent.get("attempts"), list) else []
+    if not attempts or not isinstance(attempts[0], dict):
+        return None
+    next_action = attempts[0].get("next_action")
+    return next_action if isinstance(next_action, dict) else None
