@@ -267,9 +267,17 @@ Confort
 Premium
 ```
 
-`payment_method` peut etre `cash`, `wave`, ou `diddipay`. Pour le moment,
-seul `cash` est reellement encaissable. `wave` et `diddipay` sont prepares pour
-l'integration provider.
+`payment_method` peut etre `cash`, `wave`, ou `diddipay`.
+
+Regle importante :
+
+```text
+cash      = encaissement physique, confirme par le chauffeur dans DiddiGo
+wave      = paiement numerique initialise par DiddiGo via DiddiPay
+diddipay  = paiement numerique initialise par DiddiGo via DiddiPay
+```
+
+Le frontend n'appelle jamais DiddiPay directement.
 
 Le matching exige maintenant :
 
@@ -418,7 +426,19 @@ token APNs brut. Firebase relaie ensuite vers APNs en interne.
 
 ## 5.1 Paiement DiddiPay / Wave
 
-Nouveau endpoint :
+Flux frontend officiel :
+
+```text
+1. Le passager termine ou confirme une course payable.
+2. L'app appelle DiddiGo: POST /v1/payments/{ride_id}/prepare.
+3. DiddiGo calcule/relit le montant depuis sa base.
+4. DiddiGo appelle DiddiPay cote serveur.
+5. L'app execute uniquement le `next_action` retourne.
+6. Au retour checkout ou apres attente mobile money, l'app relit DiddiGo.
+7. Le paiement est confirme seulement quand DiddiGo retourne status=succeeded.
+```
+
+Endpoint :
 
 ```http
 POST /v1/payments/{ride_id}/prepare
@@ -437,6 +457,8 @@ Payload :
 
 Pour `wave` et `diddipay`, `customer_email` est obligatoire. DiddiGo appelle
 DiddiPay cote backend; le frontend ne doit jamais connaitre `X-Service-Key`.
+Le frontend ne transmet jamais le montant, `payer_user_id`, `payee_user_id`,
+ni une cle service.
 
 Reponse :
 
@@ -462,6 +484,7 @@ Le frontend doit executer `next_action` :
 
 - `redirect` : ouvrir l'URL de checkout.
 - `mobile_money_prompt` : afficher l'attente de validation mobile money.
+- `display_instructions` : afficher les instructions retournees.
 - `await_confirmation` : afficher un etat d'attente.
 - `none` : aucune action.
 
@@ -474,6 +497,8 @@ GET /v1/rides/{ride_id}
 ```
 
 Seul `status=succeeded` cote paiement DiddiGo confirme le paiement digital.
+Ne jamais faire passer une course en payee parce que le navigateur revient sur
+une page `success`.
 
 Le cash reste disponible via :
 
