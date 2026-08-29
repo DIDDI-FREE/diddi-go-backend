@@ -79,7 +79,7 @@ async def test_lost_callback_on_topup_is_repaired_and_credits_the_wallet_once() 
     assert topup.status is TopupStatus.SUCCEEDED
     assert topup.paid_at is not None
     assert report.updated == 1
-    assert report.updated_references == [f"driver_topup:{topup.id}"]
+    assert report.updated_references == [f"diddigo:driver_topup:{topup.id}"]
     assert len(repo.ledger) == 1
     assert repo.ledger[0].entry_type is WalletEntryType.TOPUP
     assert repo.ledger[0].direction is WalletEntryDirection.CREDIT

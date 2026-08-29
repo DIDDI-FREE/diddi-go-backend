@@ -429,12 +429,12 @@ token APNs brut. Firebase relaie ensuite vers APNs en interne.
 Flux frontend officiel :
 
 ```text
-1. Le passager termine ou confirme une course payable.
+1. Le passager choisit cash, wave ou diddipay.
 2. L'app appelle DiddiGo: POST /v1/payments/{ride_id}/prepare.
-3. DiddiGo calcule/relit le montant depuis sa base.
+3. DiddiGo relit le montant depuis sa base.
 4. DiddiGo appelle DiddiPay cote serveur.
 5. L'app execute uniquement le `next_action` retourne.
-6. Au retour checkout ou apres attente mobile money, l'app relit DiddiGo.
+6. Au retour checkout ou apres attente mobile money, l'app relit GET /v1/payments/{ride_id}.
 7. Le paiement est confirme seulement quand DiddiGo retourne status=succeeded.
 ```
 
@@ -455,6 +455,14 @@ Payload :
 }
 ```
 
+`callback_url` est une page de retour navigateur. Elle ne confirme pas le
+paiement. DiddiGo expose maintenant cette page pour eviter un 404 si l'app
+utilise l'URL backend :
+
+```http
+GET https://go-staging.diddifree.com/payments/return
+```
+
 Pour `wave` et `diddipay`, `customer_email` est obligatoire. DiddiGo appelle
 DiddiPay cote backend; le frontend ne doit jamais connaitre `X-Service-Key`.
 Le frontend ne transmet jamais le montant, `payer_user_id`, `payee_user_id`,
@@ -472,7 +480,7 @@ Reponse :
   "provider": "diddipay",
   "provider_status": "requires_action",
   "payment_intent_id": "payment-intent-id",
-  "business_reference": "ride:ride-id",
+  "business_reference": "diddigo:ride:ride-id",
   "next_action": {
     "type": "redirect",
     "url": "https://checkout.paystack.com/example"
@@ -499,6 +507,9 @@ GET /v1/rides/{ride_id}
 Seul `status=succeeded` cote paiement DiddiGo confirme le paiement digital.
 Ne jamais faire passer une course en payee parce que le navigateur revient sur
 une page `success`.
+
+Si `POST /v1/payments/{ride_id}/prepare` est rejoue pour une transaction deja
+creee, DiddiGo renvoie le meme paiement et conserve le `next_action` connu.
 
 Le cash reste disponible via :
 
@@ -555,8 +566,27 @@ Recharge chauffeur :
 }
 ```
 
-Le frontend execute `next_action` comme pour un paiement course. Le solde ne
-change que quand le backend recoit le callback `succeeded`.
+Le frontend execute `next_action` comme pour un paiement course.
+
+Apres retour navigateur, relire :
+
+```http
+GET /v1/drivers/me/wallet/topups/{topup_id}
+GET /v1/drivers/me/wallet
+```
+
+DiddiGo conserve maintenant `next_action`; donc `GET /v1/drivers/me/wallet/topups/{topup_id}`
+peut encore retourner l'URL checkout tant que la recharge est en
+`requires_action`.
+
+Le solde ne change que quand le backend recoit ou reconcilie un statut
+`succeeded` depuis DiddiPay.
+
+DiddiGo expose aussi une page de retour navigateur pour les recharges :
+
+```http
+GET https://go-staging.diddifree.com/wallet/return
+```
 
 Si `POST /v1/drivers/online` retourne :
 
@@ -571,7 +601,13 @@ Endpoints admin/support :
 ```http
 GET /v1/admin/drivers/{driver_id}/wallet
 GET /v1/admin/drivers/{driver_id}/wallet/ledger
+POST /v1/admin/payments/reconcile
+POST /v1/admin/payments/rides/{ride_id}/reconcile
+POST /v1/admin/payments/topups/{topup_id}/reconcile
 ```
+
+Ces routes de reconciliation sont des outils admin/support. L'app passager ou
+chauffeur ne les appelle pas.
 
 ## 6. WebSocket chauffeur
 
@@ -624,6 +660,15 @@ DIDDIMAP_BASE_URL=http://abidjanmaps-backend-staging.diddifree.com
 PUSH_ENABLED=true
 FCM_PROJECT_ID=<firebase-project-id>
 FCM_SERVICE_ACCOUNT_JSON=<firebase-service-account-json-one-line>
+DIDDIPAY_BASE_URL=https://pay-api-staging.diddifree.com/payfund/v1
+DIDDIPAY_CLIENT_ID=diddigo
+DIDDIPAY_SERVICE_KEY=<secret-backend-diddigo>
+DIDDIPAY_CALLBACK_SECRET=<secret-callback-diddipay-vers-diddigo>
+DIDDIPAY_HTTP_TIMEOUT_SECONDS=15
+DIDDIGO_PAYMENT_CALLBACK_URL=https://go-staging.diddifree.com/payments/return
+PAYMENT_RECONCILIATION_ENABLED=true
+PAYMENT_RECONCILIATION_INTERVAL_SECONDS=300
+PAYMENT_RECONCILIATION_BATCH_SIZE=50
 ```
 
 `POSTGRES_PASSWORD` est obligatoire dans Portainer. Sans cette variable,

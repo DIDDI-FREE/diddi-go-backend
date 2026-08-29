@@ -132,6 +132,7 @@ DIDDIPAY_BASE_URL=https://pay-api-staging.diddifree.com/payfund/v1
 DIDDIPAY_CLIENT_ID=diddigo
 DIDDIPAY_SERVICE_KEY=<diddipay-service-key-for-diddigo>
 DIDDIPAY_CALLBACK_SECRET=<diddipay-callback-hmac-secret>
+DIDDIPAY_HTTP_TIMEOUT_SECONDS=15
 DIDDIGO_PAYMENT_CALLBACK_URL=https://go-staging.diddifree.com/payments/return
 DRIVER_MIN_BALANCE=0
 PAYMENT_RECONCILIATION_ENABLED=true

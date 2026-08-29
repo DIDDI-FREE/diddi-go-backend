@@ -10,6 +10,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
+from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app_base.core.auth_deps import get_current_user, require_business_driver, require_role
@@ -30,6 +31,7 @@ wallet_router = APIRouter(prefix="/drivers/me/wallet", tags=["driver-wallet"])
 admin_wallet_router = APIRouter(prefix="/admin/drivers", tags=["admin-driver-wallet"])
 admin_payment_router = APIRouter(prefix="/admin/payments", tags=["admin-payment"])
 internal_router = APIRouter(prefix="/internal/webhooks", tags=["internal-webhooks"])
+return_router = APIRouter(tags=["payment-return"])
 
 
 @router.post("/{ride_id}/prepare")
@@ -195,3 +197,41 @@ async def diddipay_webhook(
     if result["status"] == "duplicate":
         response.status_code = 200
     return response
+
+
+@return_router.get("/payments/return", response_class=HTMLResponse)
+@return_router.get("/wallet/return", response_class=HTMLResponse)
+async def payment_browser_return(
+    trxref: str | None = None,
+    reference: str | None = None,
+) -> str:
+    """Browser landing page after provider checkout.
+
+    This is deliberately not a payment confirmation endpoint. Paystack/DiddiPay
+    may redirect a browser here before the signed server callback is processed,
+    so the application must still poll DiddiGo for the authoritative status.
+    """
+    escaped_reference = (reference or trxref or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return f"""<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DiddiGo - Paiement</title>
+    <style>
+      body {{ font-family: sans-serif; margin: 0; padding: 32px; background: #f8fafc; color: #0f172a; }}
+      main {{ max-width: 520px; margin: 10vh auto; background: white; border-radius: 20px; padding: 28px; box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12); }}
+      h1 {{ margin-top: 0; font-size: 24px; }}
+      p {{ line-height: 1.5; }}
+      code {{ background: #e2e8f0; padding: 3px 6px; border-radius: 6px; }}
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Retour paiement DiddiGo</h1>
+      <p>Le paiement est en cours de verification.</p>
+      <p>Vous pouvez revenir dans l'application. Elle va relire DiddiGo pour confirmer le statut final.</p>
+      <p>Reference: <code>{escaped_reference or "non fournie"}</code></p>
+    </main>
+  </body>
+</html>"""

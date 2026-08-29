@@ -667,7 +667,7 @@ Reponse :
   "provider": "diddipay",
   "provider_status": "requires_action",
   "payment_intent_id": "payment-intent-id",
-  "business_reference": "ride:ride-id",
+  "business_reference": "diddigo:ride:ride-id",
   "next_action": {
     "type": "redirect",
     "url": "https://checkout.paystack.com/example",
@@ -682,6 +682,15 @@ Pour `cash`, `provider_status` vaut `local`.
 Important : une redirection frontend ne prouve jamais le paiement. Le paiement
 est considere confirme seulement quand DiddiGo recoit le callback signe DiddiPay
 ou reconcilie le statut `succeeded` depuis DiddiPay.
+
+### `GET /payments/return`
+
+Route publique de retour navigateur apres checkout. Elle existe pour eviter un
+404 lorsque `DIDDIGO_PAYMENT_CALLBACK_URL` pointe vers DiddiGo.
+
+Important : cette route ne confirme jamais le paiement. Elle affiche seulement
+une page demandant a l'utilisateur de revenir dans l'application. L'application
+doit relire `GET /v1/payments/{ride_id}`.
 
 ### `POST /internal/webhooks/diddipay`
 
@@ -805,7 +814,7 @@ Reponse :
   "provider": "diddipay",
   "provider_status": "requires_action",
   "payment_intent_id": "payment-intent-id",
-  "business_reference": "driver_topup:topup-id",
+  "business_reference": "diddigo:driver_topup:topup-id",
   "paid_at": null,
   "next_action": {
     "type": "redirect",
@@ -823,7 +832,16 @@ Un callback rejoue ne double pas le solde.
 
 ### `GET /drivers/me/wallet/topups/{topup_id}`
 
-Route chauffeur authentifie. Retourne le statut d'une recharge.
+Route chauffeur authentifie. Retourne le statut d'une recharge. Tant que la
+recharge reste en `requires_action`, DiddiGo renvoie le dernier `next_action`
+connu pour permettre a l'application de reprendre le checkout.
+
+### `GET /wallet/return`
+
+Route publique de retour navigateur apres checkout de recharge chauffeur.
+Comme `/payments/return`, elle ne confirme jamais la recharge; l'application
+doit relire `GET /v1/drivers/me/wallet/topups/{topup_id}` puis
+`GET /v1/drivers/me/wallet`.
 
 ---
 
@@ -836,6 +854,19 @@ Route admin. Retourne le wallet d'un chauffeur.
 ### `GET /admin/drivers/{driver_id}/wallet/ledger`
 
 Route admin. Retourne le ledger financier d'un chauffeur.
+
+### `POST /admin/payments/reconcile`
+
+Route admin. Force une reconciliation des paiements et recharges DiddiPay non
+finaux (`pending`, `requires_action`, `processing`).
+
+### `POST /admin/payments/rides/{ride_id}/reconcile`
+
+Route admin. Force la reconciliation d'un paiement course precis.
+
+### `POST /admin/payments/topups/{topup_id}/reconcile`
+
+Route admin. Force la reconciliation d'une recharge chauffeur precise.
 
 Objectif support :
 
@@ -871,7 +902,6 @@ POST /v1/devices/unregister
 ```text
 DiddiSend
 DiddiScore
-reconciliation periodique DiddiPay
 dispatch urgence complet
 map-matching DiddiMap Core officiel
 contrat physique /v2 ou /v3 dans l'URL

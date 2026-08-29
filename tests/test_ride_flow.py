@@ -383,6 +383,21 @@ async def test_wave_payment_requires_customer_email(client, passenger, driver) -
     assert r.json()["error"]["code"] == "PAYMENT_EMAIL_REQUIRED"
 
 
+async def test_payment_browser_return_is_a_safe_landing_page(client) -> None:
+    r = await client.get("/payments/return?trxref=dpi_test&reference=dpi_test")
+
+    assert r.status_code == 200
+    assert "Retour paiement DiddiGo" in r.text
+    assert "verification" in r.text
+
+
+async def test_wallet_browser_return_is_a_safe_landing_page(client) -> None:
+    r = await client.get("/wallet/return?trxref=dpi_test&reference=dpi_test")
+
+    assert r.status_code == 200
+    assert "Retour paiement DiddiGo" in r.text
+
+
 async def test_driver_confirms_cash_collection(client, passenger, driver) -> None:
     ride_id, fare = await complete_ride(client, passenger, driver)
 

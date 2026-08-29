@@ -10,6 +10,7 @@ from app_base.modules.notification.presentation import router as notification_ro
 from app_base.modules.payment.presentation.router import internal_router as payment_internal_router
 from app_base.modules.payment.presentation.router import admin_payment_router, admin_wallet_router
 from app_base.modules.payment.presentation.router import router as payment_router
+from app_base.modules.payment.presentation.router import return_router as payment_return_router
 from app_base.modules.payment.presentation.router import wallet_router
 from app_base.modules.ride.presentation.driver_router import router as driver_router
 from app_base.modules.ride.presentation.router import places_router
@@ -39,6 +40,7 @@ app.include_router(admin_wallet_router, prefix="/v1")
 app.include_router(admin_payment_router, prefix="/v1")
 app.include_router(ride_ws_router, prefix="/v1")
 app.include_router(payment_internal_router)
+app.include_router(payment_return_router)
 
 
 @app.get("/health")

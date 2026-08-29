@@ -209,6 +209,7 @@ class FakeDiddiPay:
             "amount": self.read_amount,
             "currency": self.read_currency,
             "status": self.read_status,
+            "business_reference": self.last_payload["business_reference"] if self.last_payload else None,
             "attempts": attempts,
         }
 
@@ -250,8 +251,8 @@ async def test_prepare_wave_creates_diddipay_intent() -> None:
     assert payload["provider"] == "diddipay"
     assert payload["payment_intent_id"] == str(intent_id)
     assert payload["next_action"]["type"] == "redirect"
-    assert gateway.last_idempotency_key == f"ride:{ride.id}:collection:v1"
-    assert gateway.last_payload["business_reference"] == f"ride:{ride.id}"
+    assert gateway.last_idempotency_key == f"diddigo:ride:{ride.id}:collection:v1"
+    assert gateway.last_payload["business_reference"] == f"diddigo:ride:{ride.id}"
     assert gateway.last_payload["network"] == "wave"
 
 
@@ -291,7 +292,7 @@ async def test_diddipay_webhook_marks_payment_succeeded(monkeypatch) -> None:
         "occurred_at": datetime.now(UTC).isoformat(),
         "data": {
             "payment_intent_id": str(intent_id),
-            "business_reference": f"ride:{ride.id}",
+            "business_reference": f"diddigo:ride:{ride.id}",
             "amount": 3100,
             "currency": "XOF",
             "status": "succeeded",
@@ -353,7 +354,7 @@ async def test_digital_payment_webhook_credits_driver_payout_once(monkeypatch) -
         "occurred_at": datetime.now(UTC).isoformat(),
         "data": {
             "payment_intent_id": str(intent_id),
-            "business_reference": f"ride:{ride.id}",
+            "business_reference": f"diddigo:ride:{ride.id}",
             "amount": 3100,
             "currency": "XOF",
             "status": "succeeded",
@@ -412,3 +413,25 @@ async def test_driver_topup_callback_credits_wallet_once(monkeypatch) -> None:
     assert len(repo.ledger) == 1
     assert repo.ledger[0].entry_type is WalletEntryType.TOPUP
     assert repo.wallets[driver_id].balance == Decimal("5000")
+
+
+@pytest.mark.asyncio
+async def test_driver_topup_get_keeps_checkout_next_action() -> None:
+    user_id = uuid4()
+    driver_id = uuid4()
+    wallet_service = DriverWalletService(
+        payment_repo=FakePaymentRepo(),
+        driver_repo=FakeDriverRepo(driver_id=driver_id, user_id=user_id),
+        diddipay=FakeDiddiPay(uuid4()),
+    )
+
+    created = await wallet_service.create_topup(
+        driver_user_id=user_id,
+        amount=Decimal("4500"),
+        method="diddipay",
+        customer_email="driver@example.com",
+    )
+    fetched = await wallet_service.get_topup(driver_user_id=user_id, topup_id=UUID(created["id"]))
+
+    assert created["next_action"] == CHECKOUT_ACTION
+    assert fetched["next_action"] == CHECKOUT_ACTION

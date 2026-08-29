@@ -102,8 +102,8 @@ class DriverWalletService:
             )
 
         topup_id = DriverTopup.new_id()
-        idempotency_key = f"driver_topup:{topup_id}:v1"
-        business_reference = f"driver_topup:{topup_id}"
+        idempotency_key = f"diddigo:driver_topup:{topup_id}:v1"
+        business_reference = f"diddigo:driver_topup:{topup_id}"
         intent = await (self.diddipay or DiddiPayClient()).create_payment_intent(
             {
                 "business_reference": business_reference,

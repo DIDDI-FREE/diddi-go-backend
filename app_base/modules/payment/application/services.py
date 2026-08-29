@@ -235,6 +235,8 @@ class PaymentService:
         if payment is not None:
             if int(data.get("amount") or -1) != int(payment.amount) or data.get("currency") != payment.currency:
                 raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Montant ou devise DiddiPay incoherent.")
+            if data.get("business_reference") != payment.business_reference:
+                raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Reference metier DiddiPay incoherente.")
 
             await self._apply_transaction_status(
                 payment,
@@ -249,6 +251,8 @@ class PaymentService:
             raise ApiError(404, ErrorCode.PAYMENT_INTENT_NOT_FOUND, "Paiement DiddiGo introuvable.")
         if int(data.get("amount") or -1) != int(topup.amount) or data.get("currency") != topup.currency:
             raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Montant ou devise DiddiPay incoherent.")
+        if data.get("business_reference") != topup.business_reference:
+            raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Reference metier DiddiPay incoherente.")
 
         await self._apply_topup_status(
             topup,
@@ -328,13 +332,18 @@ class PaymentService:
         return report
 
     async def _reconcile_transaction(self, payment: Transaction, report: ReconciliationReport) -> None:
-        reference = f"ride:{payment.ride_id}"
+        reference = payment.business_reference or f"diddigo:ride:{payment.ride_id}"
         report.checked += 1
         intent = await self._read_intent(payment.payment_intent_id, reference, report)
         if intent is None:
             return
 
-        mismatch = _amount_mismatch_reason(intent, amount=payment.amount, currency=payment.currency)
+        mismatch = _intent_mismatch_reason(
+            intent,
+            amount=payment.amount,
+            currency=payment.currency,
+            business_reference=payment.business_reference,
+        )
         if mismatch is not None:
             report.mismatched += 1
             logger.error(
@@ -380,13 +389,18 @@ class PaymentService:
         )
 
     async def _reconcile_topup(self, topup: DriverTopup, report: ReconciliationReport) -> None:
-        reference = f"driver_topup:{topup.id}"
+        reference = topup.business_reference or f"diddigo:driver_topup:{topup.id}"
         report.checked += 1
         intent = await self._read_intent(topup.payment_intent_id, reference, report)
         if intent is None:
             return
 
-        mismatch = _amount_mismatch_reason(intent, amount=topup.amount, currency=topup.currency)
+        mismatch = _intent_mismatch_reason(
+            intent,
+            amount=topup.amount,
+            currency=topup.currency,
+            business_reference=topup.business_reference,
+        )
         if mismatch is not None:
             report.mismatched += 1
             logger.error(
@@ -558,8 +572,8 @@ class PaymentService:
                 "Une transaction locale existe deja pour cette course.",
             )
 
-        idempotency_key = f"ride:{ride_id}:collection:v1"
-        business_reference = f"ride:{ride_id}"
+        idempotency_key = f"diddigo:ride:{ride_id}:collection:v1"
+        business_reference = f"diddigo:ride:{ride_id}"
         intent = await (self.diddipay or DiddiPayClient()).create_payment_intent(
             {
                 "business_reference": business_reference,
@@ -693,7 +707,13 @@ def _external_payment_payload(payment: Transaction, *, next_action: dict | None)
     }
 
 
-def _amount_mismatch_reason(intent: dict, *, amount: Decimal, currency: str) -> str | None:
+def _intent_mismatch_reason(
+    intent: dict,
+    *,
+    amount: Decimal,
+    currency: str,
+    business_reference: str | None,
+) -> str | None:
     """Refuse to move a local row unless the intent is unambiguously the same money.
 
     An absent field is reported separately from a differing one: the first
@@ -708,6 +728,8 @@ def _amount_mismatch_reason(intent: dict, *, amount: Decimal, currency: str) -> 
         return "provider amount is not a number"
     if provider_amount != int(amount) or str(intent["currency"]) != currency:
         return "provider amount/currency differs from the local record"
+    if business_reference and intent.get("business_reference") not in {None, business_reference}:
+        return "provider business_reference differs from the local record"
     return None
 
 

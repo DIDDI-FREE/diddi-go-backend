@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     diddipay_client_id: str = "diddigo"
     diddipay_service_key: str | None = None
     diddipay_callback_secret: str | None = None
+    diddipay_http_timeout_seconds: float = 15.0
     diddigo_payment_callback_url: str | None = None
     driver_min_balance: int = 0
 
