@@ -18,7 +18,7 @@ class DiddiPayClient:
     base_url: str | None = settings.diddipay_base_url
     client_id: str = settings.diddipay_client_id
     service_key: str | None = settings.diddipay_service_key
-    timeout_seconds: float = 10.0
+    timeout_seconds: float = settings.diddipay_http_timeout_seconds
 
     @property
     def configured(self) -> bool:
