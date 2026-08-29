@@ -291,28 +291,52 @@ Objectif V2 :
 
 Duree estimee : 1 a 2 semaines selon bugs observes en V1.
 
-## Timeline recommandee
+## Timeline acceleree recommandee
+
+Objectif business : arriver a une production limitee prudente en 3 semaines,
+puis viser une beta ouverte plus large au bout d'environ 1 mois.
+
+Principe : on ne developpe pas tout puis on teste a la fin. Chaque semaine
+contient du dev, une mise en staging, des tests terrain et une decision de
+promotion vers production limitee si les criteres sont bons.
 
 ```text
 Semaine 1
-V1.0 stabilisation terrain DiddiGo
-Tests reels 10 chauffeurs + passagers
-Correction bugs bloquants
-Demo direction
+V1.0 stabilisation terrain
+Dev     : corrections bugs bloquants, logs, Portainer, DiddiPay/FCM/DiddiMap
+Staging : deploiement continu des correctifs
+Tests   : Bruno + 10 chauffeurs + passagers + KYC + cash + partage + urgence
+Prod    : pas encore ouverte, seulement preparation env prod
+Sortie  : demo direction + go/no-go pour production limitee interne
 
-Semaines 2-3
-V2.0 lot A : matching confort garanti + notifications production + partage
-public finalise
+Semaine 2
+V2.0 fonctions critiques
+Dev     : confort garanti, notifications production, partage public finalise,
+          debut prix final reel avec traces DiddiMap
+Staging : tests quotidiens des nouveaux flux
+Tests   : matching Standard/Comfort/Premium, FCM reel, lien public, urgence,
+          paiements/recharges, traces GPS
+Prod    : production limitee tres controlee si semaine 1 est validee
+Sortie  : parcours critique utilisable par vrais testeurs
 
-Semaines 4-5
-V2.0 lot B : prix final reel + traces DiddiMap + commission finale
+Semaine 3
+Production limitee prudente
+Dev     : admin/support complet minimum, reconciliation paiement surveillee,
+          prix final reel stabilise, corrections terrain
+Staging : regression complete avant chaque promotion
+Tests   : tests humains quotidiens, incidents support, paiement, wallet,
+          matching charge legere, DiddiMap indisponible
+Prod    : ouverture limitee zone pilote / chauffeurs selectionnes
+Sortie  : version production limitee stable
 
-Semaines 6-7
-V2.0 lot C : admin/support complet + urgence operationnelle + paiement
-production
-
-Semaines 8-10
-V2.1 : messagerie/appels + qualite dispatch avancee + durcissement production
+Semaine 4
+Beta publique controlee
+Dev     : messagerie/appels si arbitrage valide, dispatch avance, polish admin,
+          durcissement monitoring/securite
+Staging : validation finale beta
+Tests   : volume plus large, scenarios edge cases, support, rollback
+Prod    : beta ouverte progressivement
+Sortie  : version full production beta
 ```
 
 ## Projection administrative
@@ -327,7 +351,7 @@ Version `1.0` :
 Version `2.0` :
 
 - objectif : produit commercial plus solide;
-- delai : 4 a 7 semaines apres V1 selon dependances;
+- delai : 2 semaines apres V1 dans le plan accelere;
 - risque principal : DiddiMap traces, DiddiPay production, frontend temps reel,
   workflow support;
 - resultat attendu : production limitee serieuse.
@@ -335,8 +359,23 @@ Version `2.0` :
 Version `2.1` :
 
 - objectif : experience avancee;
-- delai : 8 a 10 semaines apres V1 si messagerie/appels inclus;
-- resultat attendu : meilleure qualite operationnelle et confort utilisateur.
+- delai : semaine 4 dans le plan accelere si les arbitrages techniques sont
+  rapides;
+- resultat attendu : beta plus large avec meilleure qualite operationnelle.
+
+## Conditions pour tenir le delai de 3 semaines
+
+- DiddiMap livre ou confirme le contrat traces/prix reel rapidement.
+- DiddiPay staging/prod reste stable pour paiements et recharges.
+- FCM fonctionne sur vrais telephones test.
+- Les testeurs chauffeur/passager sont disponibles chaque jour.
+- Les decisions produit restantes sont tranchees vite : solde minimum, confort
+  garanti, regle prix final, procedure urgence.
+- Les bugs bloquants sont corriges immediatement, sans attendre une fin de
+  sprint.
+
+Si une dependance externe bloque, on garde la production limitee sur les flux
+valides et on marque explicitement le flux bloque comme non actif.
 
 ## Message simple pour la direction
 
