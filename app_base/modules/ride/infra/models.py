@@ -174,6 +174,7 @@ class RideModel(Base):
     platform_commission: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     actual_distance_km: Mapped[Decimal | None] = mapped_column(Numeric(8, 3), nullable=True)
     actual_duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    map_trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     payment_method: Mapped[str] = mapped_column(String(20), nullable=False, default="cash")
     # -- Cross-module reference (resolved via payment_module, never via direct SQL)
     payment_transaction_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)

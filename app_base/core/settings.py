@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     otp_code_lifetime_seconds: int = 300
 
     diddimap_base_url: str = "http://localhost:4000"
+    diddimap_access_token: str | None = None
 
     identity_base_url: str | None = None
     identity_jwks_url: str | None = None

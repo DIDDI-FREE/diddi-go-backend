@@ -8,6 +8,9 @@ visible instead of silently inventing distance, duration, or search results.
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
+from decimal import Decimal
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -23,6 +26,15 @@ DESTINATION = GeoPoint(lat=5.3167, lng=-4.0333)
 def client_with(handler) -> DiddiMapRoutingClient:
     """Build a client whose connection pool is a stubbed transport."""
     client = DiddiMapRoutingClient(base_url="http://diddimap.test")
+    client._client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="http://diddimap.test",
+    )
+    return client
+
+
+def authed_client_with(handler) -> DiddiMapRoutingClient:
+    client = DiddiMapRoutingClient(base_url="http://diddimap.test", access_token="trace-token")
     client._client = httpx.AsyncClient(
         transport=httpx.MockTransport(handler),
         base_url="http://diddimap.test",
@@ -185,6 +197,90 @@ async def test_geocode_fails_loudly_when_unavailable() -> None:
         await client_with(handler).geocode("anything")
     assert exc_info.value.status_code == 503
     assert exc_info.value.code == "DIDDIMAP_UNAVAILABLE"
+
+
+# --- /map-traces -----------------------------------------------------------
+
+@pytest.mark.unit
+async def test_trace_start_uses_diddimap_contract_shape_and_auth() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/map-traces/start"
+        assert request.headers["authorization"] == "Bearer trace-token"
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"id": 42, "status": "recording"})
+
+    trace_id = await authed_client_with(handler).start_trace(
+        start=ORIGIN,
+        end=DESTINATION,
+        planned_distance_km=Decimal("8.4"),
+        planned_duration_seconds=1140,
+        profile="palh_vtc",
+    )
+
+    assert trace_id == "42"
+    assert seen == {
+        "start": {"lng": -4.0083, "lat": 5.3599},
+        "end": {"lng": -4.0333, "lat": 5.3167},
+        "profile": "car",
+        "planned_distance_m": 8400,
+        "planned_duration_s": 1140,
+        "planned_route_geometry": {"type": "LineString", "coordinates": []},
+    }
+
+
+@pytest.mark.unit
+async def test_trace_positions_convert_speed_to_meters_per_second() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/map-traces/42/positions"
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json=[])
+
+    point = SimpleNamespace(
+        location=ORIGIN,
+        recorded_at=datetime(2026, 9, 3, 10, 5, tzinfo=UTC),
+        speed_kmh=Decimal("36"),
+        accuracy_m=Decimal("8"),
+    )
+
+    await authed_client_with(handler).append_trace_positions("42", [point])
+
+    assert seen["positions"] == [
+        {
+            "lat": 5.3599,
+            "lng": -4.0083,
+            "accuracy_m": 8.0,
+            "speed_mps": 10.0,
+            "recorded_at": "2026-09-03T10:05:00Z",
+        }
+    ]
+
+
+@pytest.mark.unit
+async def test_trace_analyze_parses_actual_metrics() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/map-traces/42/analyze"
+        return httpx.Response(200, json={"actual_distance_m": 12500, "actual_duration_s": 900})
+
+    result = await authed_client_with(handler).analyze_trace("42")
+
+    assert result.actual_distance_km == Decimal("12.5")
+    assert result.actual_duration_seconds == 900
+
+
+@pytest.mark.unit
+async def test_trace_analyze_fails_loudly_on_unusable_metrics() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"actual_distance_m": 0, "actual_duration_s": 0})
+
+    with pytest.raises(ApiError) as exc_info:
+        await authed_client_with(handler).analyze_trace("42")
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.code == "DIDDIMAP_INVALID_RESPONSE"
 
 
 # --- pricing integration ---------------------------------------------------
