@@ -89,16 +89,22 @@ Payload :
   "birth_date": "1992-04-20",
   "residence_address": "Cocody, Abidjan",
   "license_document_file_id": "8a1a0f2e-30e7-4436-a8ea-c12a1f76f3c1",
+  "license_back_document_file_id": "c43b7a07-b28b-48ca-a380-4565e0d9fb11",
   "national_id_document_file_id": "45a14448-7bc7-4a21-972b-ff61585a571f",
+  "national_id_back_document_file_id": "7504fa3f-4d1e-4f93-8e94-9a491d3b5acf",
   "selfie_document_file_id": "f9ac4c34-9c51-4772-a2d0-38bfb55bf3d9",
   "license_document_url": "https://cdn.example/license.jpg",
+  "license_back_document_url": "https://cdn.example/license-back.jpg",
   "national_id_document_url": "https://cdn.example/id.jpg",
+  "national_id_back_document_url": "https://cdn.example/id-back.jpg",
   "selfie_document_url": "https://cdn.example/selfie.jpg"
 }
 ```
 
-`license_number` reste obligatoire. Les autres champs sont optionnels mais
-recommandes pour le dossier KYC.
+`license_number` reste obligatoire a la creation. Pour que l'admin puisse
+valider le chauffeur, le dossier doit contenir permis recto/verso, CNI
+recto/verso et selfie. Si un document manque, l'approbation retourne
+`422 INVALID_KYC_DOCUMENTS`.
 
 Important KYC :
 
@@ -108,13 +114,19 @@ Important KYC :
   n'a pas valide le dossier.
 - L'ecran "Dossier KYC en cours de verification" doit etre affiche sur ce cas.
 - Il n'y a plus d'auto-approbation en staging.
+- `422 INVALID_KYC_DOCUMENTS` cote admin signifie que le dossier est incomplet;
+  afficher au support/admin les documents manquants si `details.missing_documents`
+  est present.
 
 Nouveau flux fichiers :
 - utiliser DiddiFiles sur son URL dediee, pas sur `go-staging`
 - URL DiddiFiles : `https://diddifiles.diddifree.com/v1`
 - uploader les documents dans DiddiFiles avec `module_owner=diddigo`
 - utiliser les purposes `diddigo_driver_kyc_license`,
-  `diddigo_driver_kyc_national_id`, `diddigo_driver_kyc_selfie`
+  `diddigo_driver_kyc_license_back`,
+  `diddigo_driver_kyc_national_id`,
+  `diddigo_driver_kyc_national_id_back`,
+  `diddigo_driver_kyc_selfie`
 - appeler `POST /v1/files/{file_id}/confirm`
 - envoyer ensuite les `*_document_file_id` a DiddiGo
 
@@ -167,6 +179,7 @@ Le frontend doit utiliser `error.code` pour piloter les etats UI. Exemples :
 - `DRIVER_PROFILE_NOT_FOUND` : proposer de creer le dossier chauffeur.
 - `NO_ACTIVE_VEHICLE` : demander au chauffeur d'ajouter un vehicule.
 - `DRIVER_KYC_STATUS_INVALID` : erreur de filtre back-office.
+- `INVALID_KYC_DOCUMENTS` : dossier incomplet au moment de l'approbation admin.
 
 Pour le vehicule, `POST /v1/drivers/vehicle` accepte aussi :
 

@@ -247,10 +247,14 @@ class DriverProfile:
     birth_date: date | None = None
     residence_address: str | None = None
     license_document_file_id: UUID | None = None
+    license_back_document_file_id: UUID | None = None
     national_id_document_file_id: UUID | None = None
+    national_id_back_document_file_id: UUID | None = None
     selfie_document_file_id: UUID | None = None
     license_document_url: str | None = None
+    license_back_document_url: str | None = None
     national_id_document_url: str | None = None
+    national_id_back_document_url: str | None = None
     selfie_document_url: str | None = None
     kyc_submitted_at: datetime | None = None
     kyc_reviewed_at: datetime | None = None

@@ -43,10 +43,14 @@ class DriverService:
         birth_date: date | None = None,
         residence_address: str | None = None,
         license_document_file_id: UUID | None = None,
+        license_back_document_file_id: UUID | None = None,
         national_id_document_file_id: UUID | None = None,
+        national_id_back_document_file_id: UUID | None = None,
         selfie_document_file_id: UUID | None = None,
         license_document_url: str | None = None,
+        license_back_document_url: str | None = None,
         national_id_document_url: str | None = None,
+        national_id_back_document_url: str | None = None,
         selfie_document_url: str | None = None,
     ) -> dict:
         if not license_number or not license_number.strip():
@@ -72,10 +76,14 @@ class DriverService:
             birth_date=birth_date,
             residence_address=_blank_to_none(residence_address),
             license_document_file_id=license_document_file_id,
+            license_back_document_file_id=license_back_document_file_id,
             national_id_document_file_id=national_id_document_file_id,
+            national_id_back_document_file_id=national_id_back_document_file_id,
             selfie_document_file_id=selfie_document_file_id,
             license_document_url=_blank_to_none(license_document_url),
+            license_back_document_url=_blank_to_none(license_back_document_url),
             national_id_document_url=_blank_to_none(national_id_document_url),
+            national_id_back_document_url=_blank_to_none(national_id_back_document_url),
             selfie_document_url=_blank_to_none(selfie_document_url),
             kyc_submitted_at=now,
             created_at=now,
@@ -93,10 +101,14 @@ class DriverService:
         birth_date: date | None = None,
         residence_address: str | None = None,
         license_document_file_id: UUID | None = None,
+        license_back_document_file_id: UUID | None = None,
         national_id_document_file_id: UUID | None = None,
+        national_id_back_document_file_id: UUID | None = None,
         selfie_document_file_id: UUID | None = None,
         license_document_url: str | None = None,
+        license_back_document_url: str | None = None,
         national_id_document_url: str | None = None,
+        national_id_back_document_url: str | None = None,
         selfie_document_url: str | None = None,
     ) -> dict:
         profile = await self._require_profile(user_id)
@@ -116,10 +128,14 @@ class DriverService:
             birth_date=birth_date,
             residence_address=residence_address,
             license_document_file_id=license_document_file_id,
+            license_back_document_file_id=license_back_document_file_id,
             national_id_document_file_id=national_id_document_file_id,
+            national_id_back_document_file_id=national_id_back_document_file_id,
             selfie_document_file_id=selfie_document_file_id,
             license_document_url=license_document_url,
+            license_back_document_url=license_back_document_url,
             national_id_document_url=national_id_document_url,
+            national_id_back_document_url=national_id_back_document_url,
             selfie_document_url=selfie_document_url,
         )
         now = datetime.now(UTC)
@@ -136,6 +152,7 @@ class DriverService:
         profile = await self.driver_repo.find_by_id(driver_id)
         if profile is None:
             raise ApiError(404, "DRIVER_PROFILE_NOT_FOUND", "Aucun profil chauffeur pour cet identifiant.")
+        _ensure_kyc_documents_complete(profile)
         now = datetime.now(UTC)
         profile.status = DriverStatus.ACTIVE
         profile.license_verified_at = now
@@ -293,14 +310,22 @@ def _profile_payload(profile: DriverProfile) -> dict:
             "license_document_file_id": str(profile.license_document_file_id)
             if profile.license_document_file_id
             else None,
+            "license_back_document_file_id": str(profile.license_back_document_file_id)
+            if profile.license_back_document_file_id
+            else None,
             "national_id_document_file_id": str(profile.national_id_document_file_id)
             if profile.national_id_document_file_id
+            else None,
+            "national_id_back_document_file_id": str(profile.national_id_back_document_file_id)
+            if profile.national_id_back_document_file_id
             else None,
             "selfie_document_file_id": str(profile.selfie_document_file_id)
             if profile.selfie_document_file_id
             else None,
             "license_document_url": profile.license_document_url,
+            "license_back_document_url": profile.license_back_document_url,
             "national_id_document_url": profile.national_id_document_url,
+            "national_id_back_document_url": profile.national_id_back_document_url,
             "selfie_document_url": profile.selfie_document_url,
             "submitted_at": profile.kyc_submitted_at.isoformat() if profile.kyc_submitted_at else None,
             "reviewed_at": profile.kyc_reviewed_at.isoformat() if profile.kyc_reviewed_at else None,
@@ -316,10 +341,14 @@ def _update_optional_kyc_fields(
     birth_date: date | None,
     residence_address: str | None,
     license_document_file_id: UUID | None,
+    license_back_document_file_id: UUID | None,
     national_id_document_file_id: UUID | None,
+    national_id_back_document_file_id: UUID | None,
     selfie_document_file_id: UUID | None,
     license_document_url: str | None,
+    license_back_document_url: str | None,
     national_id_document_url: str | None,
+    national_id_back_document_url: str | None,
     selfie_document_url: str | None,
 ) -> None:
     if legal_name is not None:
@@ -330,16 +359,47 @@ def _update_optional_kyc_fields(
         profile.residence_address = _blank_to_none(residence_address)
     if license_document_file_id is not None:
         profile.license_document_file_id = license_document_file_id
+    if license_back_document_file_id is not None:
+        profile.license_back_document_file_id = license_back_document_file_id
     if national_id_document_file_id is not None:
         profile.national_id_document_file_id = national_id_document_file_id
+    if national_id_back_document_file_id is not None:
+        profile.national_id_back_document_file_id = national_id_back_document_file_id
     if selfie_document_file_id is not None:
         profile.selfie_document_file_id = selfie_document_file_id
     if license_document_url is not None:
         profile.license_document_url = _blank_to_none(license_document_url)
+    if license_back_document_url is not None:
+        profile.license_back_document_url = _blank_to_none(license_back_document_url)
     if national_id_document_url is not None:
         profile.national_id_document_url = _blank_to_none(national_id_document_url)
+    if national_id_back_document_url is not None:
+        profile.national_id_back_document_url = _blank_to_none(national_id_back_document_url)
     if selfie_document_url is not None:
         profile.selfie_document_url = _blank_to_none(selfie_document_url)
+
+
+def _ensure_kyc_documents_complete(profile: DriverProfile) -> None:
+    missing = [
+        key
+        for key, present in {
+            "license_document": bool(profile.license_document_file_id or profile.license_document_url),
+            "license_back_document": bool(profile.license_back_document_file_id or profile.license_back_document_url),
+            "national_id_document": bool(profile.national_id_document_file_id or profile.national_id_document_url),
+            "national_id_back_document": bool(
+                profile.national_id_back_document_file_id or profile.national_id_back_document_url
+            ),
+            "selfie_document": bool(profile.selfie_document_file_id or profile.selfie_document_url),
+        }.items()
+        if not present
+    ]
+    if missing:
+        raise ApiError(
+            422,
+            ErrorCode.INVALID_KYC_DOCUMENTS,
+            "Le dossier KYC chauffeur est incomplet.",
+            {"missing_documents": missing},
+        )
 
 
 def _vehicle_payload(vehicle: Vehicle) -> dict:

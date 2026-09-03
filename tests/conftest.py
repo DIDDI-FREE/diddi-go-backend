@@ -301,7 +301,10 @@ async def driver_factory(client, otp_code, phone_factory, admin_headers):
 
         r = await client.post(
             "/v1/drivers/profile",
-            json={"license_number": f"CI-{uuid.uuid4().hex[:8].upper()}"},
+            json={
+                "license_number": f"CI-{uuid.uuid4().hex[:8].upper()}",
+                **full_driver_kyc_documents(),
+            },
             headers=headers,
         )
         assert r.status_code == 201, r.text
@@ -332,6 +335,17 @@ async def driver_factory(client, otp_code, phone_factory, admin_headers):
         return headers
 
     return _make
+
+
+def full_driver_kyc_documents() -> dict[str, str]:
+    """Complete KYC payload required before an admin can approve a driver."""
+    return {
+        "license_document_file_id": str(uuid.uuid4()),
+        "license_back_document_file_id": str(uuid.uuid4()),
+        "national_id_document_file_id": str(uuid.uuid4()),
+        "national_id_back_document_file_id": str(uuid.uuid4()),
+        "selfie_document_file_id": str(uuid.uuid4()),
+    }
 
 
 @pytest.fixture
