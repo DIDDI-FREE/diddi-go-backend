@@ -145,6 +145,8 @@ class Ride:
     platform_commission: Decimal | None = None
     actual_distance_km: Decimal | None = None
     actual_duration_seconds: int | None = None
+    actual_pricing_fare: Decimal | None = None
+    pricing_delta: Decimal | None = None
     map_trace_id: str | None = None
     payment_method: PaymentMethod = PaymentMethod.CASH
 

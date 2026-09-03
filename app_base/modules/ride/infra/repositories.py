@@ -252,6 +252,8 @@ class SqlAlchemyRideRepository:
         row.platform_commission = ride.platform_commission
         row.actual_distance_km = ride.actual_distance_km
         row.actual_duration_seconds = ride.actual_duration_seconds
+        row.actual_pricing_fare = ride.actual_pricing_fare
+        row.pricing_delta = ride.pricing_delta
         row.map_trace_id = ride.map_trace_id
         row.payment_method = ride.payment_method.value
         row.driver_id = ride.driver_id
@@ -302,6 +304,8 @@ class SqlAlchemyRideRepository:
             platform_commission=Decimal(str(row.platform_commission)) if row.platform_commission is not None else None,
             actual_distance_km=Decimal(str(row.actual_distance_km)) if row.actual_distance_km is not None else None,
             actual_duration_seconds=row.actual_duration_seconds,
+            actual_pricing_fare=Decimal(str(row.actual_pricing_fare)) if row.actual_pricing_fare is not None else None,
+            pricing_delta=Decimal(str(row.pricing_delta)) if row.pricing_delta is not None else None,
             map_trace_id=row.map_trace_id,
             payment_method=PaymentMethod(row.payment_method),
             driver_id=row.driver_id,

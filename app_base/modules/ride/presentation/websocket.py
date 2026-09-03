@@ -11,8 +11,8 @@ Events, server → passenger:
     ride.no_driver_found   {ride_id}
 
 Events, server → driver:
-    ride.new_request       {ride_id, pickup, dropoff_address, estimated_fare,
-                            expires_in_seconds}
+    ride.new_request       {ride_id, pickup, dropoff_address, vehicle_category,
+                            comfort_level, payment_method, expires_in_seconds}
 
 Events, client → server:
     driver.location_push   {location: {lat, lng}, heading}

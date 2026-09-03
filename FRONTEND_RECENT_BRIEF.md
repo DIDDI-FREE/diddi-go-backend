@@ -243,9 +243,12 @@ Important :
 - DiddiGo calcule le prix, la commission et le payout.
 - Le prix varie avec `comfort_level` : `standard=1.00`, `comfort=1.15`,
   `premium=1.30`.
+- Le dynamic pricing MVP vient de `surge_multiplier` calcule par DiddiGo avant
+  validation passager, avec `surge_cap=1.6`.
 - Pas de fallback silencieux si DiddiMap echoue.
-- Le prix final utilise la distance/duree reellement parcourues si le frontend
-  a envoye des points GPS chauffeur pendant la course.
+- Le prix facture au client reste le prix accepte au depart.
+- La distance/duree reellement parcourues alimentent seulement les champs
+  analytics backend/admin.
 
 ## 4.2 Creation de course
 
@@ -285,9 +288,16 @@ Le matching exige maintenant :
 vehicle.category == ride.vehicle_category
 ```
 
-`comfort_level` n'est plus un filtre dur de matching dans le MVP. Si
-l'utilisateur choisit `premium`, le prix augmente, mais un chauffeur eligible
-avec vehicule `standard` peut quand meme recevoir la course.
+`comfort_level` est un filtre de matching hierarchique :
+
+```text
+standard -> standard, comfort ou premium
+comfort  -> comfort ou premium
+premium  -> premium uniquement
+```
+
+Donc si le passager choisit `premium`, DiddiGo ne doit pas envoyer une voiture
+`standard`.
 
 La reponse contient maintenant :
 
@@ -329,11 +339,12 @@ Le frontend peut continuer a utiliser le WebSocket `driver.location_push` pour
 le temps reel. Cette route REST sert de canal controle/documente pour stocker
 les traces et alimenter le partage public.
 
-DiddiGo recalcule maintenant le prix final depuis ces traces. Le frontend doit
-envoyer les samples chauffeur pendant la course; DiddiGo demarre la trace
-DiddiMap, envoie les samples au moment de terminer, analyse la trace, puis
-remplit `actual_distance_km`, `actual_duration_seconds`, `final_fare`,
-`platform_commission` et le montant net chauffeur.
+DiddiGo analyse maintenant ces traces sans changer le montant facture au
+client. Le frontend doit envoyer les samples chauffeur pendant la course;
+DiddiGo demarre la trace DiddiMap, envoie les samples au moment de terminer,
+analyse la trace, puis remplit `actual_distance_km`,
+`actual_duration_seconds`, `actual_pricing_fare` et `pricing_delta` pour
+analytics/admin.
 
 Pipeline retenu avec DiddiMap Core :
 
@@ -353,11 +364,34 @@ Impact frontend actuel :
 - Continuer le WebSocket pour le temps reel/share ride.
 - Lire les champs `pricing.actual_distance_km` et
   `pricing.actual_duration_seconds` dans le detail de course terminee.
+- Ne jamais recalculer/facturer cote app avec `actual_pricing_fare`.
+- Chauffeur : ne pas afficher le prix avant le statut `in_progress`.
 - Si la finalisation retourne `DIDDIMAP_UNAVAILABLE` ou
   `DIDDIMAP_INVALID_RESPONSE`, afficher une erreur claire au chauffeur/support:
   la course n'a pas pu etre cloturee car l'analyse geographique a echoue.
 
-## 4.4 Partage de course
+## 4.4 Offre chauffeur sans prix
+
+`ride.new_request` via WebSocket/FCM ne contient plus de montant :
+
+```json
+{
+  "event": "ride.new_request",
+  "ride_id": "ride-id",
+  "pickup": {"lat": 5.3599, "lng": -4.0083, "address": "Carrefour Anador"},
+  "dropoff_address": "Plateau",
+  "vehicle_category": "standard",
+  "comfort_level": "comfort",
+  "payment_method": "cash",
+  "expires_in_seconds": 15
+}
+```
+
+Ne pas afficher de prix chauffeur avant `in_progress`. Quand le chauffeur
+demarre la course, relire `GET /v1/rides/{ride_id}` : le backend affichera alors
+le montant de la course au chauffeur.
+
+## 4.5 Partage de course
 
 Creer un lien :
 
@@ -384,7 +418,7 @@ GET /v1/rides/shared/{token}
 
 Cette vue doit afficher la position du chauffeur, pas celle du passager.
 
-## 4.5 Urgence
+## 4.6 Urgence
 
 Nouveau endpoint :
 

@@ -32,7 +32,7 @@ class FakeVehicleRepo:
 
 
 @pytest.mark.asyncio
-async def test_matching_accepts_vehicle_when_only_comfort_level_differs() -> None:
+async def test_matching_rejects_vehicle_below_requested_comfort_level() -> None:
     driver_user_id = uuid4()
     driver_id = uuid4()
     service = MatchingService(
@@ -57,6 +57,40 @@ async def test_matching_accepts_vehicle_when_only_comfort_level_differs() -> Non
         passenger_user_id=uuid4(),
         vehicle_category=VehicleCategory.STANDARD,
         comfort_level=ComfortLevel.PREMIUM,
+    )
+
+    can_take, reason = await service._can_take_ride(driver_user_id, ride)
+
+    assert can_take is False
+    assert reason == "comfort_level_mismatch:standard<premium"
+
+
+@pytest.mark.asyncio
+async def test_matching_accepts_vehicle_above_requested_comfort_level() -> None:
+    driver_user_id = uuid4()
+    driver_id = uuid4()
+    service = MatchingService(
+        ride_repo=None,
+        driver_repo=FakeDriverRepo(
+            DriverProfile(id=driver_id, user_id=driver_user_id, license_number="CI-123", status=DriverStatus.ACTIVE)
+        ),
+        vehicle_repo=FakeVehicleRepo(
+            Vehicle(
+                id=uuid4(),
+                driver_id=driver_id,
+                plate_number="CI-123-AA",
+                category=VehicleCategory.STANDARD,
+                comfort_level=ComfortLevel.PREMIUM,
+            )
+        ),
+        locations=None,
+        offers=None,
+    )
+    ride = Ride(
+        id=uuid4(),
+        passenger_user_id=uuid4(),
+        vehicle_category=VehicleCategory.STANDARD,
+        comfort_level=ComfortLevel.COMFORT,
     )
 
     can_take, reason = await service._can_take_ride(driver_user_id, ride)

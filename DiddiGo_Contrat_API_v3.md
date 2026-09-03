@@ -375,16 +375,36 @@ comfort_multiplier = standard:1.00, comfort:1.15, premium:1.30
 commission_rate = 0.08
 ```
 
-Le prix final est attache a la course terminee. En v3, si DiddiGo a recu des
-points GPS chauffeur, il envoie la trace a DiddiMap Core au moment de terminer
-la course, recupere `actual_distance_km` et `actual_duration_seconds`, puis
-recalcule `final_fare`, `platform_commission` et le montant net chauffeur avec
-ces valeurs reelles.
+Dynamic pricing MVP :
+
+```text
+La variation dynamique livree en v3 passe par ride.pricing_rules.surge_multiplier.
+Elle est appliquee avant acceptation passager et reste plafonnee par
+surge_cap=1.6. Une fois le passager confirme la course, le prix est verrouille.
+Les champs actual_* et actual_pricing_fare servent ensuite a ameliorer les
+futures regles dynamiques, pas a refacturer le client.
+```
+
+Le prix accepte au depart est le prix facture au client. En v3, si DiddiGo a
+recu des points GPS chauffeur, il envoie la trace a DiddiMap Core au moment de
+terminer la course, recupere `actual_distance_km` et
+`actual_duration_seconds`, puis calcule `actual_pricing_fare` et
+`pricing_delta` pour analytics. DiddiGo ne remplace pas le prix facture par ce
+prix theorique reel.
 
 Si aucun point GPS n'a ete recu, DiddiGo garde le prix estime et logge
 explicitement `ride_actual_pricing_skipped reason=no_route_samples`. Si des
 points GPS existent mais que DiddiMap trace/analyze echoue, DiddiGo retourne
 une erreur explicite et ne fait pas de fallback silencieux.
+
+Regle commerciale :
+
+```text
+estimated_fare = prix affiche/accepte au depart
+final_fare = prix facture, verrouille sur estimated_fare
+actual_pricing_fare = prix theorique calcule depuis la trace reelle
+pricing_delta = actual_pricing_fare - final_fare
+```
 
 ---
 
@@ -441,10 +461,17 @@ vehicle.category == ride.vehicle_category
 position dans le rayon de matching
 ```
 
-`comfort_level` n'est pas un filtre dur de matching dans le MVP. Il influence
-le prix et l'experience commerciale vendue au passager, sans empecher un
-chauffeur eligible de recevoir la course uniquement parce que son vehicule est
-enregistre en confort `standard`.
+`comfort_level` est maintenant un filtre de matching hierarchique :
+
+```text
+course standard -> vehicule standard, comfort ou premium
+course comfort  -> vehicule comfort ou premium
+course premium  -> vehicule premium uniquement
+```
+
+Un vehicule d'un niveau superieur peut servir une demande inferieure, mais pas
+l'inverse. Cela evite de faire payer `premium` au passager pour envoyer une
+voiture `standard`.
 
 ### `GET /rides/{ride_id}`
 
@@ -472,7 +499,9 @@ Reponse partielle :
     "platform_commission": 248,
     "driver_payout_estimate": 2852,
     "actual_distance_km": null,
-    "actual_duration_seconds": null
+    "actual_duration_seconds": null,
+    "actual_pricing_fare": null,
+    "pricing_delta": null
   },
   "payment": {
     "method": "cash",
@@ -768,6 +797,16 @@ Reponse :
 }
 ```
 
+Visibilite prix :
+
+```text
+passager -> voit le prix estime puis le prix facture verrouille
+chauffeur avant in_progress -> ne voit pas estimated_fare, final_fare,
+commission ni payout
+chauffeur a partir de in_progress -> voit le montant de la course
+admin/support -> voit aussi actual_pricing_fare et pricing_delta
+```
+
 `min_balance` vient de la configuration backend `DRIVER_MIN_BALANCE`. Si
 `min_balance > 0` et que `balance < min_balance`, `POST /drivers/online`
 retourne `403 DRIVER_BALANCE_TOO_LOW`.
@@ -920,6 +959,29 @@ DiddiGo envoie aussi les offres chauffeur via FCM si un device est enregistre :
 POST /v1/devices/register
 POST /v1/devices/unregister
 ```
+
+Payload offre chauffeur `ride.new_request` :
+
+```json
+{
+  "event": "ride.new_request",
+  "ride_id": "ride-id",
+  "pickup": {
+    "lat": 5.3599,
+    "lng": -4.0083,
+    "address": "Carrefour Anador, Yopougon"
+  },
+  "dropoff_address": "Plateau, Rue du Commerce",
+  "vehicle_category": "standard",
+  "comfort_level": "comfort",
+  "payment_method": "cash",
+  "expires_in_seconds": 15
+}
+```
+
+Ce payload ne contient pas `estimated_fare`, `final_fare`, `platform_commission`
+ni `driver_payout_estimate`. Le chauffeur recupere ces champs via
+`GET /v1/rides/{ride_id}` seulement a partir du statut `in_progress`.
 
 ---
 

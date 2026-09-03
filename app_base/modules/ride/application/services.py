@@ -168,7 +168,8 @@ class RideService:
                 ride.driver_id,
             )
             raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Cette course ne vous appartient pas.")
-        return _ride_detail_payload(ride, driver=await self._driver_payload(ride))
+        viewer_role = "admin" if is_admin else "driver" if is_assigned_driver else "passenger"
+        return _ride_detail_payload(ride, driver=await self._driver_payload(ride), viewer_role=viewer_role)
 
     async def _driver_payload(self, ride: Ride) -> dict | None:
         if ride.driver_id is None or self.driver_repo is None:
@@ -231,7 +232,14 @@ class RideService:
         )
         return _paginated_rides(rides, total, page=page, page_size=page_size)
 
-    async def update_status(self, ride_id: UUID, new_status: RideStatus, *, actor_user_id: UUID) -> dict:
+    async def update_status(
+        self,
+        ride_id: UUID,
+        new_status: RideStatus,
+        *,
+        actor_user_id: UUID,
+        actor_role: str = "driver",
+    ) -> dict:
         ride = await self.load_ride(ride_id)
         if new_status is RideStatus.IN_PROGRESS:
             await self._ensure_map_trace_started(ride)
@@ -249,7 +257,8 @@ class RideService:
         await self.ride_repo.save(ride)
         for transition in ride.status_history:
             await self.ride_repo.record_status_transition(transition)
-        return _ride_detail_payload(ride, driver=None)
+        viewer_role = "admin" if actor_role == "admin" else "driver"
+        return _ride_detail_payload(ride, driver=None, viewer_role=viewer_role)
 
     async def cancel(self, ride_id: UUID, reason: str, *, actor_user_id: UUID, actor_role: str) -> dict:
         if reason not in VALID_CANCEL_REASONS:
@@ -415,23 +424,23 @@ class RideService:
             surge_multiplier=min(ride.surge_multiplier, _SURGE_CAP),
             comfort_multiplier=_comfort_multiplier(ride.comfort_level),
         )
+        locked_fare = ride.final_fare or ride.estimated_fare
         ride.actual_distance_km = actual_distance_km
         ride.actual_duration_seconds = actual_duration_seconds
-        ride.final_fare = pricing["total_fare"]
-        ride.distance_fare = pricing["distance_fare"]
-        ride.duration_fare = pricing["duration_fare"]
-        ride.platform_commission = pricing["platform_commission"]
-        ride.driver_payout_estimate = pricing["driver_payout_estimate"]
+        ride.actual_pricing_fare = pricing["total_fare"]
+        ride.pricing_delta = pricing["total_fare"] - locked_fare if locked_fare is not None else None
+        if locked_fare is not None:
+            ride.final_fare = locked_fare
         logger.info(
             "ride_actual_pricing_applied ride_id=%s map_trace_id=%s actual_distance_km=%s "
-            "actual_duration_seconds=%s final_fare=%s platform_commission=%s driver_payout=%s",
+            "actual_duration_seconds=%s final_fare=%s actual_pricing_fare=%s pricing_delta=%s",
             ride.id,
             ride.map_trace_id,
             ride.actual_distance_km,
             ride.actual_duration_seconds,
             ride.final_fare,
-            ride.platform_commission,
-            ride.driver_payout_estimate,
+            ride.actual_pricing_fare,
+            ride.pricing_delta,
         )
 
     async def _ensure_map_trace_started(self, ride: Ride) -> None:
@@ -484,7 +493,9 @@ def _normalise_actor_role(role: str) -> str:
     return "passenger" if role in {"user", "passenger"} else role
 
 
-def _ride_detail_payload(ride: Ride, driver: dict | None) -> dict:
+def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -> dict:
+    money_visible = _money_visible(ride, viewer_role)
+    analytics_visible = viewer_role == "admin"
     return {
         "id": str(ride.id),
         "status": ride.status.value,
@@ -494,25 +505,31 @@ def _ride_detail_payload(ride: Ride, driver: dict | None) -> dict:
         "dropoff": _point_payload(ride.dropoff_location, ride.dropoff_address),
         "vehicle_category": ride.vehicle_category.value,
         "comfort_level": ride.comfort_level.value,
-        "estimated_fare": int(ride.estimated_fare) if ride.estimated_fare is not None else None,
-        "final_fare": int(ride.final_fare) if ride.final_fare is not None else None,
+        "estimated_fare": int(ride.estimated_fare) if money_visible and ride.estimated_fare is not None else None,
+        "final_fare": int(ride.final_fare) if money_visible and ride.final_fare is not None else None,
         "currency": ride.currency,
         "distance_km": float(ride.distance_km) if ride.distance_km is not None else None,
         "duration_seconds": ride.duration_seconds,
         "pricing": {
-            "base_fare": int(ride.base_fare) if ride.base_fare is not None else None,
-            "distance_fare": int(ride.distance_fare) if ride.distance_fare is not None else None,
-            "duration_fare": int(ride.duration_fare) if ride.duration_fare is not None else None,
+            "base_fare": int(ride.base_fare) if money_visible and ride.base_fare is not None else None,
+            "distance_fare": int(ride.distance_fare) if money_visible and ride.distance_fare is not None else None,
+            "duration_fare": int(ride.duration_fare) if money_visible and ride.duration_fare is not None else None,
             "surge_multiplier": float(ride.surge_multiplier),
             "surge_cap": float(ride.surge_cap),
             "commission_rate": float(ride.commission_rate),
             "comfort_multiplier": float(_comfort_multiplier(ride.comfort_level)),
-            "platform_commission": int(ride.platform_commission) if ride.platform_commission is not None else None,
+            "platform_commission": int(ride.platform_commission)
+            if money_visible and ride.platform_commission is not None
+            else None,
             "driver_payout_estimate": int(ride.driver_payout_estimate)
-            if ride.driver_payout_estimate is not None
+            if money_visible and ride.driver_payout_estimate is not None
             else None,
             "actual_distance_km": float(ride.actual_distance_km) if ride.actual_distance_km is not None else None,
             "actual_duration_seconds": ride.actual_duration_seconds,
+            "actual_pricing_fare": int(ride.actual_pricing_fare)
+            if analytics_visible and ride.actual_pricing_fare is not None
+            else None,
+            "pricing_delta": int(ride.pricing_delta) if analytics_visible and ride.pricing_delta is not None else None,
         },
         "payment": {
             "method": ride.payment_method.value,
@@ -614,6 +631,14 @@ def _payment_method(value: str) -> PaymentMethod:
         return PaymentMethod(value)
     except ValueError as exc:
         raise ApiError(422, "INVALID_PAYMENT_METHOD", "Methode de paiement invalide.") from exc
+
+
+def _money_visible(ride: Ride, viewer_role: str) -> bool:
+    if viewer_role in {"admin", "passenger"}:
+        return True
+    if viewer_role == "driver":
+        return ride.status in {RideStatus.IN_PROGRESS, RideStatus.COMPLETED}
+    return False
 
 
 def _infer_price_per_km(ride: Ride) -> Decimal:
