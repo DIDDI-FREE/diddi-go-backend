@@ -165,7 +165,9 @@ Objectif V2 :
 - figer commission finale;
 - documenter les regles d'ajustement.
 
-Duree estimee : 1 a 2 semaines, depend du contrat DiddiMap traces.
+Duree estimee : 1 a 2 semaines. Le contrat REST DiddiMap traces existe; le
+travail restant est l'adapter DiddiGo, le stockage des references trace et la
+regle produit de recalcul.
 
 ### 3. Admin/support complet
 
@@ -312,7 +314,7 @@ Sortie  : demo direction + go/no-go pour production limitee interne
 Semaine 2
 V2.0 fonctions critiques
 Dev     : confort garanti, notifications production, partage public finalise,
-          debut prix final reel avec traces DiddiMap
+          debut prix final reel avec traces DiddiMap REST
 Staging : tests quotidiens des nouveaux flux
 Tests   : matching Standard/Comfort/Premium, FCM reel, lien public, urgence,
           paiements/recharges, traces GPS
@@ -365,7 +367,8 @@ Version `2.1` :
 
 ## Conditions pour tenir le delai de 3 semaines
 
-- DiddiMap livre ou confirme le contrat traces/prix reel rapidement.
+- DiddiGo implemente l'adapter REST DiddiMap traces rapidement.
+- DiddiMap staging reste stable sur `/api/v1/map-traces/*`.
 - DiddiPay staging/prod reste stable pour paiements et recharges.
 - FCM fonctionne sur vrais telephones test.
 - Les testeurs chauffeur/passager sont disponibles chaque jour.

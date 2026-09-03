@@ -330,23 +330,26 @@ le temps reel. Cette route REST sert de canal controle/documente pour stocker
 les traces et alimenter le partage public.
 
 Pour le moment, DiddiGo ne recalcule pas encore le prix final depuis ces traces.
-Il n'y a pas de fallback silencieux : si le fournisseur DiddiMap Core n'expose
-pas encore le calcul officiel, les champs `actual_distance_km` et
-`actual_duration_seconds` restent `null`.
+DiddiMap Core expose maintenant un contrat REST pour les traces
+`/api/v1/map-traces/*`, mais l'adapter DiddiGo -> DiddiMap traces n'est pas
+encore branche. Les champs `actual_distance_km` et `actual_duration_seconds`
+restent donc `null` tant que cette integration n'est pas livree.
 
-Pipeline cible avec DiddiMap Core :
+Pipeline retenu avec DiddiMap Core :
 
 ```text
 DiddiGo collecte les traces chauffeur
-DiddiGo enverra la trace complete a DiddiMap a la fin du ride
-DiddiMap produira des insights
+DiddiGo demarrera une trace DiddiMap au debut de course
+DiddiGo enverra les positions via REST batch
+DiddiGo terminera puis analysera la trace a la fin du ride
+DiddiMap produira distance/duree reelles et insights
 un admin validera/rejettera ces insights
 les routes/scoring s'amelioreront ensuite
 ```
 
 Impact frontend actuel : envoyer les positions. Ne pas encore afficher
-d'insights DiddiMap dans l'UI DiddiGo tant que le contrat DiddiMap correspondant
-n'existe pas.
+d'insights DiddiMap dans l'UI DiddiGo tant que DiddiGo ne renvoie pas ces
+champs dans son propre contrat API.
 
 ## 4.4 Partage de course
 

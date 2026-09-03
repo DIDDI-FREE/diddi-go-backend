@@ -376,9 +376,9 @@ commission_rate = 0.08
 ```
 
 Le prix final sera attache a la course terminee. En v3, DiddiGo stocke deja les
-champs necessaires pour basculer sur la distance/duree reellement parcourues,
-mais `actual_distance_km` et `actual_duration_seconds` restent `null` tant que
-DiddiMap Core ne fournit pas le calcul officiel.
+champs necessaires pour basculer sur la distance/duree reellement parcourues.
+Actuellement, `actual_distance_km` et `actual_duration_seconds` restent `null`
+tant que DiddiGo n'a pas encore envoye/analyse la trace via DiddiMap Core.
 
 ---
 
@@ -515,24 +515,33 @@ Reponse :
 }
 ```
 
-Decision v3 : tant que DiddiMap Core ne fournit pas un contrat REST officiel de
-map-matching / distance reelle, DiddiGo stocke les samples localement et garde
-le prix final base sur l'estimation initiale. Aucun fallback cache n'est fait.
-Le backend logge `ride_actual_pricing_pending` a la completion si des samples
-existent mais que le recalcul fournisseur n'est pas encore disponible.
+Decision v3 : DiddiMap Core expose maintenant un contrat REST de traces via
+`/api/v1/map-traces/*`. DiddiGo stocke deja les samples localement, mais
+l'adapter DiddiGo -> DiddiMap traces n'est pas encore branche. Tant que cet
+adapter n'est pas implemente, DiddiGo garde le prix final base sur l'estimation
+initiale. Aucun fallback cache n'est fait.
 
-### Pipeline DiddiMap Core cible
+Le backend logge `ride_actual_pricing_pending` a la completion si des samples
+existent mais que le recalcul fournisseur n'est pas encore applique.
+
+### Pipeline DiddiMap Core retenu
 
 Decision produit/architecture :
 
 ```text
 1. DiddiGo recoit les positions temps reel chauffeur
 2. DiddiGo stocke ou bufferise les positions liees au ride
-3. A la fin du ride, DiddiGo envoie la trace complete a DiddiMap Core
-4. DiddiMap Core analyse la trace
-5. DiddiMap Core produit des insights route/distance/qualite/scoring
-6. Un admin valide ou rejette ces insights
-7. Les routes, le scoring et les futures optimisations s'ameliorent
+3. Quand la course commence, DiddiGo demarre une trace DiddiMap:
+   POST /api/v1/map-traces/start
+4. Pendant ou apres la course, DiddiGo envoie les positions:
+   POST /api/v1/map-traces/{trace_id}/positions
+5. A la fin du ride, DiddiGo termine la trace:
+   POST /api/v1/map-traces/{trace_id}/finish
+6. DiddiGo demande l'analyse:
+   POST /api/v1/map-traces/{trace_id}/analyze
+7. DiddiMap Core produit distance/duree reelles, qualite GPS et insights
+8. Un admin valide ou rejette ces insights
+9. Les routes, le scoring et les futures optimisations s'ameliorent
 ```
 
 Responsabilites :
@@ -543,9 +552,19 @@ DiddiMap = map-matching, analyse geographique, insights, amelioration reseau
 Admin = validation/rejet des insights avant impact durable
 ```
 
-Tant que DiddiMap Core ne publie pas son contrat REST d'analyse de trace,
+Important : le WebSocket DiddiMap pour positions n'est pas encore implemente
+cote DiddiMap. DiddiGo doit donc commencer par REST batch :
+
+```text
+POST /api/v1/map-traces/start
+POST /api/v1/map-traces/{trace_id}/positions
+POST /api/v1/map-traces/{trace_id}/finish
+POST /api/v1/map-traces/{trace_id}/analyze
+```
+
 DiddiGo ne doit pas recalculer silencieusement la distance reelle ni le prix
-final. Les traces restent stockees cote DiddiGo et pretes a etre envoyees.
+final. Si DiddiMap trace/analyze echoue, DiddiGo garde les donnees locales et
+retourne/logge une erreur explicite selon le contexte.
 
 ---
 
