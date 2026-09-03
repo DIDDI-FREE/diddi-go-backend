@@ -58,6 +58,28 @@ class FakeDiddiMap:
             SimpleNamespace(label=f"{query}, Abidjan", point=GeoPoint(lat=5.3204, lng=-4.0161)),
         ][: limit or 1]
 
+    async def start_trace(
+        self,
+        *,
+        start,
+        end,
+        planned_distance_km=None,
+        planned_duration_seconds=None,
+        profile="palh_vtc",
+    ):
+        return "test-map-trace-1"
+
+    async def append_trace_positions(self, trace_id, points):
+        return None
+
+    async def finish_trace(self, trace_id, *, finished_at):
+        return None
+
+    async def analyze_trace(self, trace_id):
+        from decimal import Decimal
+
+        return SimpleNamespace(actual_distance_km=Decimal("12.345"), actual_duration_seconds=1200)
+
 
 def _is_unit_only_session(request: pytest.FixtureRequest) -> bool:
     return bool(request.session.items) and all(item.get_closest_marker("unit") for item in request.session.items)

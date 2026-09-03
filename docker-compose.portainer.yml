@@ -17,6 +17,7 @@ services:
       OTP_RATE_LIMIT_SECONDS: ${OTP_RATE_LIMIT_SECONDS:-60}
       OTP_CODE_LIFETIME_SECONDS: ${OTP_CODE_LIFETIME_SECONDS:-300}
       DIDDIMAP_BASE_URL: ${DIDDIMAP_BASE_URL:-http://abidjanmaps-backend-staging.diddifree.com}
+      DIDDIMAP_ACCESS_TOKEN: ${DIDDIMAP_ACCESS_TOKEN:-}
       IDENTITY_BASE_URL: ${IDENTITY_BASE_URL:-https://auth-staging.diddifree.com}
       IDENTITY_JWKS_URL: ${IDENTITY_JWKS_URL:-}
       IDENTITY_ISSUER: ${IDENTITY_ISSUER:-diddifree-id}

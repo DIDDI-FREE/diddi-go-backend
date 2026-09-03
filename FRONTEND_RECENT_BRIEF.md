@@ -244,8 +244,8 @@ Important :
 - Le prix varie avec `comfort_level` : `standard=1.00`, `comfort=1.15`,
   `premium=1.30`.
 - Pas de fallback silencieux si DiddiMap echoue.
-- Le prix final utilisera plus tard la distance/duree reellement parcourues,
-  quand DiddiMap Core exposera le calcul officiel.
+- Le prix final utilise la distance/duree reellement parcourues si le frontend
+  a envoye des points GPS chauffeur pendant la course.
 
 ## 4.2 Creation de course
 
@@ -329,27 +329,33 @@ Le frontend peut continuer a utiliser le WebSocket `driver.location_push` pour
 le temps reel. Cette route REST sert de canal controle/documente pour stocker
 les traces et alimenter le partage public.
 
-Pour le moment, DiddiGo ne recalcule pas encore le prix final depuis ces traces.
-DiddiMap Core expose maintenant un contrat REST pour les traces
-`/api/v1/map-traces/*`, mais l'adapter DiddiGo -> DiddiMap traces n'est pas
-encore branche. Les champs `actual_distance_km` et `actual_duration_seconds`
-restent donc `null` tant que cette integration n'est pas livree.
+DiddiGo recalcule maintenant le prix final depuis ces traces. Le frontend doit
+envoyer les samples chauffeur pendant la course; DiddiGo demarre la trace
+DiddiMap, envoie les samples au moment de terminer, analyse la trace, puis
+remplit `actual_distance_km`, `actual_duration_seconds`, `final_fare`,
+`platform_commission` et le montant net chauffeur.
 
 Pipeline retenu avec DiddiMap Core :
 
 ```text
 DiddiGo collecte les traces chauffeur
-DiddiGo demarrera une trace DiddiMap au debut de course
-DiddiGo enverra les positions via REST batch
-DiddiGo terminera puis analysera la trace a la fin du ride
+DiddiGo demarre une trace DiddiMap au debut de course
+DiddiGo envoie les positions via REST batch a la fin du ride
+DiddiGo termine puis analyse la trace a la fin du ride
 DiddiMap produira distance/duree reelles et insights
 un admin validera/rejettera ces insights
 les routes/scoring s'amelioreront ensuite
 ```
 
-Impact frontend actuel : envoyer les positions. Ne pas encore afficher
-d'insights DiddiMap dans l'UI DiddiGo tant que DiddiGo ne renvoie pas ces
-champs dans son propre contrat API.
+Impact frontend actuel :
+
+- Envoyer les positions via `POST /v1/rides/{ride_id}/location-samples`.
+- Continuer le WebSocket pour le temps reel/share ride.
+- Lire les champs `pricing.actual_distance_km` et
+  `pricing.actual_duration_seconds` dans le detail de course terminee.
+- Si la finalisation retourne `DIDDIMAP_UNAVAILABLE` ou
+  `DIDDIMAP_INVALID_RESPONSE`, afficher une erreur claire au chauffeur/support:
+  la course n'a pas pu etre cloturee car l'analyse geographique a echoue.
 
 ## 4.4 Partage de course
 

@@ -38,7 +38,10 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await ping_db()
     app.state.redis = create_redis_pool(settings.redis_url)
-    app.state.diddimap = DiddiMapRoutingClient(base_url=settings.diddimap_base_url)
+    app.state.diddimap = DiddiMapRoutingClient(
+        base_url=settings.diddimap_base_url,
+        access_token=settings.diddimap_access_token,
+    )
     app.state.driver_locations = RedisDriverLocationService(redis=app.state.redis)
 
     app.state.payment_reconciliation_task = None

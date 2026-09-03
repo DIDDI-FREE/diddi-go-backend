@@ -236,6 +236,7 @@ services de course le rÃ©cupÃ¨rent ensuite via l'injection `get_diddimap`.
 
 Configuration recommandÃ©e :
 - staging / Portainer : `DIDDIMAP_BASE_URL=http://abidjanmaps-backend-staging.diddifree.com`
+- staging / Portainer, traces GPS : `DIDDIMAP_ACCESS_TOKEN=<service-token-diddimap-pour-diddigo>`
 - local : garder la mÃªme URL staging, sauf si un DiddiMap local tourne vraiment
   sur la machine de dev
 - local avec DiddiMap lancÃ© sur la machine hÃ´te :
@@ -249,7 +250,13 @@ DiddiMap reste le seul fournisseur des informations geographiques.
 
 DiddiGo garde en revanche sa propre politique de pricing : il utilise la
 distance/duree DiddiMap, puis applique `ride.pricing_rules` ou la formule
-tarifaire DiddiGo par defaut si aucune regle n'est encore seedee.
+tarifaire DiddiGo par defaut si aucune regle n'est encore seedee. Au passage
+`in_progress`, DiddiGo cree une trace DiddiMap. Au passage `completed`, il
+envoie les points GPS stockes localement, demande l'analyse DiddiMap, puis
+recalcule `final_fare`, `platform_commission` et le montant net chauffeur avec
+la distance/duree reelles. Si DiddiMap echoue alors que des points GPS existent,
+la finalisation echoue explicitement avec `DIDDIMAP_UNAVAILABLE` ou
+`DIDDIMAP_INVALID_RESPONSE`; il n'y a pas de fallback silencieux.
 
 ---
 

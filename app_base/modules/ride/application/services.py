@@ -233,6 +233,8 @@ class RideService:
 
     async def update_status(self, ride_id: UUID, new_status: RideStatus, *, actor_user_id: UUID) -> dict:
         ride = await self.load_ride(ride_id)
+        if new_status is RideStatus.IN_PROGRESS:
+            await self._ensure_map_trace_started(ride)
         if new_status is RideStatus.COMPLETED:
             await self._apply_actual_pricing_if_possible(ride)
         try:
@@ -388,17 +390,64 @@ class RideService:
         return None
 
     async def _apply_actual_pricing_if_possible(self, ride: Ride) -> None:
-        # V3 records real GPS samples. Until Map Core exposes a route-match REST
-        # contract, final fare keeps the DiddiMap estimate but stores the actual
-        # fields only after an explicit provider-backed calculation. Do not copy
-        # the estimate into "actual" fields: that would be a silent fallback.
-        latest = await self.ride_repo.latest_route_point(ride.id)
-        if latest is None:
+        points = await self.ride_repo.list_route_points(ride.id)
+        if not points:
+            logger.info("ride_actual_pricing_skipped ride_id=%s reason=no_route_samples", ride.id)
             return
-        logger.info(
-            "ride_actual_pricing_pending ride_id=%s reason=diddimap_map_matching_rest_contract_missing",
-            ride.id,
+
+        await self._ensure_map_trace_started(ride)
+        if ride.map_trace_id is None:
+            logger.error("ride_actual_pricing_failed ride_id=%s reason=missing_map_trace_id", ride.id)
+            raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Trace DiddiMap absente.")
+
+        await self.routing.append_trace_positions(ride.map_trace_id, points)
+        await self.routing.finish_trace(ride.map_trace_id, finished_at=datetime.now(UTC))
+        analysis = await self.routing.analyze_trace(ride.map_trace_id)
+
+        actual_distance_km = Decimal(str(analysis.actual_distance_km))
+        actual_duration_seconds = int(analysis.actual_duration_seconds)
+        pricing = _pricing_breakdown(
+            distance_km=actual_distance_km,
+            duration_seconds=actual_duration_seconds,
+            base_fare=ride.base_fare or _DEFAULT_BASE_FARE,
+            price_per_km=_infer_price_per_km(ride),
+            price_per_min=_infer_price_per_min(ride),
+            surge_multiplier=min(ride.surge_multiplier, _SURGE_CAP),
+            comfort_multiplier=_comfort_multiplier(ride.comfort_level),
         )
+        ride.actual_distance_km = actual_distance_km
+        ride.actual_duration_seconds = actual_duration_seconds
+        ride.final_fare = pricing["total_fare"]
+        ride.distance_fare = pricing["distance_fare"]
+        ride.duration_fare = pricing["duration_fare"]
+        ride.platform_commission = pricing["platform_commission"]
+        ride.driver_payout_estimate = pricing["driver_payout_estimate"]
+        logger.info(
+            "ride_actual_pricing_applied ride_id=%s map_trace_id=%s actual_distance_km=%s "
+            "actual_duration_seconds=%s final_fare=%s platform_commission=%s driver_payout=%s",
+            ride.id,
+            ride.map_trace_id,
+            ride.actual_distance_km,
+            ride.actual_duration_seconds,
+            ride.final_fare,
+            ride.platform_commission,
+            ride.driver_payout_estimate,
+        )
+
+    async def _ensure_map_trace_started(self, ride: Ride) -> None:
+        if ride.map_trace_id:
+            return
+        if ride.pickup_location is None or ride.dropoff_location is None:
+            logger.error("ride_map_trace_failed ride_id=%s reason=missing_pickup_or_dropoff", ride.id)
+            raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Coordonnees course incompletes.")
+        ride.map_trace_id = await self.routing.start_trace(
+            start=ride.pickup_location,
+            end=ride.dropoff_location,
+            planned_distance_km=ride.distance_km,
+            planned_duration_seconds=ride.duration_seconds,
+            profile="palh_vtc",
+        )
+        logger.info("ride_map_trace_started ride_id=%s map_trace_id=%s", ride.id, ride.map_trace_id)
 
 
 def ride_creation_payload(ride: Ride) -> dict:
@@ -565,6 +614,20 @@ def _payment_method(value: str) -> PaymentMethod:
         return PaymentMethod(value)
     except ValueError as exc:
         raise ApiError(422, "INVALID_PAYMENT_METHOD", "Methode de paiement invalide.") from exc
+
+
+def _infer_price_per_km(ride: Ride) -> Decimal:
+    if ride.distance_fare is not None and ride.distance_km is not None and ride.distance_km > 0:
+        return ride.distance_fare / ride.distance_km
+    return _DEFAULT_PRICE_PER_KM
+
+
+def _infer_price_per_min(ride: Ride) -> Decimal:
+    if ride.duration_fare is not None and ride.duration_seconds is not None and ride.duration_seconds > 0:
+        duration_minutes = Decimal(ride.duration_seconds) / Decimal(60)
+        if duration_minutes > 0:
+            return ride.duration_fare / duration_minutes
+    return _DEFAULT_PRICE_PER_MIN
 
 
 def _coerce_decimal(value: object) -> Decimal:

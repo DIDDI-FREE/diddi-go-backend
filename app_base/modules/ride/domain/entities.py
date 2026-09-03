@@ -145,6 +145,7 @@ class Ride:
     platform_commission: Decimal | None = None
     actual_distance_km: Decimal | None = None
     actual_duration_seconds: int | None = None
+    map_trace_id: str | None = None
     payment_method: PaymentMethod = PaymentMethod.CASH
 
     # Cross-module refs (logical — resolved via module APIs, never via SQL)

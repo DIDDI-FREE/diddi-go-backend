@@ -375,10 +375,16 @@ comfort_multiplier = standard:1.00, comfort:1.15, premium:1.30
 commission_rate = 0.08
 ```
 
-Le prix final sera attache a la course terminee. En v3, DiddiGo stocke deja les
-champs necessaires pour basculer sur la distance/duree reellement parcourues.
-Actuellement, `actual_distance_km` et `actual_duration_seconds` restent `null`
-tant que DiddiGo n'a pas encore envoye/analyse la trace via DiddiMap Core.
+Le prix final est attache a la course terminee. En v3, si DiddiGo a recu des
+points GPS chauffeur, il envoie la trace a DiddiMap Core au moment de terminer
+la course, recupere `actual_distance_km` et `actual_duration_seconds`, puis
+recalcule `final_fare`, `platform_commission` et le montant net chauffeur avec
+ces valeurs reelles.
+
+Si aucun point GPS n'a ete recu, DiddiGo garde le prix estime et logge
+explicitement `ride_actual_pricing_skipped reason=no_route_samples`. Si des
+points GPS existent mais que DiddiMap trace/analyze echoue, DiddiGo retourne
+une erreur explicite et ne fait pas de fallback silencieux.
 
 ---
 
@@ -516,13 +522,14 @@ Reponse :
 ```
 
 Decision v3 : DiddiMap Core expose maintenant un contrat REST de traces via
-`/api/v1/map-traces/*`. DiddiGo stocke deja les samples localement, mais
-l'adapter DiddiGo -> DiddiMap traces n'est pas encore branche. Tant que cet
-adapter n'est pas implemente, DiddiGo garde le prix final base sur l'estimation
-initiale. Aucun fallback cache n'est fait.
+`/api/v1/map-traces/*`. DiddiGo stocke les samples localement, demarre une
+trace DiddiMap quand la course passe `in_progress`, puis envoie les samples et
+analyse la trace quand la course passe `completed`.
 
-Le backend logge `ride_actual_pricing_pending` a la completion si des samples
-existent mais que le recalcul fournisseur n'est pas encore applique.
+Le backend logge `ride_map_trace_started` au debut de course,
+`ride_actual_pricing_applied` quand le prix final reel est calcule, ou
+`ride_actual_pricing_skipped reason=no_route_samples` si aucune trace chauffeur
+n'a ete recue.
 
 ### Pipeline DiddiMap Core retenu
 

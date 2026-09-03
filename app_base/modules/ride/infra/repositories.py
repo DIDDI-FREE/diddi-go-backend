@@ -199,6 +199,26 @@ class SqlAlchemyRideRepository:
             extra=row.extra,
         )
 
+    async def list_route_points(self, ride_id: UUID) -> list[RideRoutePoint]:
+        result = await self._session.execute(
+            select(orm.RideRoutePointModel)
+            .where(orm.RideRoutePointModel.ride_id == ride_id)
+            .order_by(orm.RideRoutePointModel.recorded_at.asc(), orm.RideRoutePointModel.id.asc()),
+        )
+        return [
+            RideRoutePoint(
+                ride_id=row.ride_id,
+                location=_from_orm_geo(row.location),
+                recorded_at=row.recorded_at,
+                heading=row.heading,
+                speed_kmh=Decimal(str(row.speed_kmh)) if row.speed_kmh is not None else None,
+                accuracy_m=Decimal(str(row.accuracy_m)) if row.accuracy_m is not None else None,
+                source=row.source,
+                extra=row.extra,
+            )
+            for row in result.scalars().all()
+        ]
+
     # -- mapping helpers -----------------------------------------------------
 
     @staticmethod
@@ -232,6 +252,7 @@ class SqlAlchemyRideRepository:
         row.platform_commission = ride.platform_commission
         row.actual_distance_km = ride.actual_distance_km
         row.actual_duration_seconds = ride.actual_duration_seconds
+        row.map_trace_id = ride.map_trace_id
         row.payment_method = ride.payment_method.value
         row.driver_id = ride.driver_id
         row.vehicle_id = ride.vehicle_id
@@ -281,6 +302,7 @@ class SqlAlchemyRideRepository:
             platform_commission=Decimal(str(row.platform_commission)) if row.platform_commission is not None else None,
             actual_distance_km=Decimal(str(row.actual_distance_km)) if row.actual_distance_km is not None else None,
             actual_duration_seconds=row.actual_duration_seconds,
+            map_trace_id=row.map_trace_id,
             payment_method=PaymentMethod(row.payment_method),
             driver_id=row.driver_id,
             vehicle_id=row.vehicle_id,
