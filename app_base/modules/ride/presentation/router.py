@@ -118,7 +118,9 @@ async def create_ride(
                 "address": payload.pickup.address,
             },
             "dropoff_address": payload.dropoff.address,
-            "estimated_fare": int(ride.estimated_fare) if ride.estimated_fare else None,
+            "vehicle_category": ride.vehicle_category.value,
+            "comfort_level": ride.comfort_level.value,
+            "payment_method": ride.payment_method.value,
             "expires_in_seconds": OFFER_TTL_SECONDS,
         }
         await manager.send_new_request(
@@ -177,7 +179,9 @@ async def decline_ride(
                     "address": ride.pickup_address,
                 },
                 "dropoff_address": ride.dropoff_address,
-                "estimated_fare": int(ride.estimated_fare) if ride.estimated_fare else None,
+                "vehicle_category": ride.vehicle_category.value,
+                "comfort_level": ride.comfort_level.value,
+                "payment_method": ride.payment_method.value,
                 "expires_in_seconds": OFFER_TTL_SECONDS,
             },
         )
@@ -245,6 +249,7 @@ async def update_status(
         ride_id,
         new_status,
         actor_user_id=current_user.id,
+        actor_role=current_user.role,
     )
     if new_status is RideStatus.COMPLETED:
         # Ride is over: the driver returns to the matching pool.

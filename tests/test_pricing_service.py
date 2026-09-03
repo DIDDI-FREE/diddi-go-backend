@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from app_base.modules.ride.application.services import RideService
+from app_base.modules.ride.application.services import RideService, _ride_detail_payload
 from app_base.modules.ride.domain.entities import (
     ComfortLevel,
     PaymentMethod,
@@ -168,7 +168,58 @@ async def test_completed_ride_pricing_uses_diddimap_trace_metrics():
     assert ride.map_trace_id == "trace-123"
     assert ride.actual_distance_km == Decimal("12.5")
     assert ride.actual_duration_seconds == 900
-    assert ride.final_fare == Decimal("3250")
-    assert ride.platform_commission == Decimal("260")
-    assert ride.driver_payout_estimate == Decimal("2990")
+    assert ride.final_fare == Decimal("3100")
+    assert ride.actual_pricing_fare == Decimal("3250")
+    assert ride.pricing_delta == Decimal("150")
+    assert ride.platform_commission is None
+    assert ride.driver_payout_estimate is None
     assert routing.trace_points == points
+
+
+@pytest.mark.asyncio
+async def test_driver_price_visibility_starts_only_when_ride_is_in_progress():
+    ride = Ride(
+        id=uuid4(),
+        passenger_user_id=uuid4(),
+        status=RideStatus.MATCHED,
+        vehicle_category=VehicleCategory.STANDARD,
+        comfort_level=ComfortLevel.STANDARD,
+        estimated_fare=Decimal("3100"),
+        final_fare=Decimal("3100"),
+        base_fare=Decimal("250"),
+        distance_fare=Decimal("2850"),
+        duration_fare=Decimal("0"),
+        platform_commission=Decimal("248"),
+        driver_payout_estimate=Decimal("2852"),
+    )
+
+    hidden = _ride_detail_payload(ride, driver=None, viewer_role="driver")
+    assert hidden["estimated_fare"] is None
+    assert hidden["final_fare"] is None
+    assert hidden["pricing"]["platform_commission"] is None
+    assert hidden["pricing"]["driver_payout_estimate"] is None
+
+    ride.status = RideStatus.IN_PROGRESS
+    visible = _ride_detail_payload(ride, driver=None, viewer_role="driver")
+    assert visible["estimated_fare"] == 3100
+    assert visible["final_fare"] == 3100
+    assert visible["pricing"]["driver_payout_estimate"] == 2852
+
+
+@pytest.mark.asyncio
+async def test_actual_pricing_analytics_are_admin_only():
+    ride = Ride(
+        id=uuid4(),
+        passenger_user_id=uuid4(),
+        status=RideStatus.COMPLETED,
+        actual_pricing_fare=Decimal("3250"),
+        pricing_delta=Decimal("150"),
+    )
+
+    passenger = _ride_detail_payload(ride, driver=None, viewer_role="passenger")
+    admin = _ride_detail_payload(ride, driver=None, viewer_role="admin")
+
+    assert passenger["pricing"]["actual_pricing_fare"] is None
+    assert passenger["pricing"]["pricing_delta"] is None
+    assert admin["pricing"]["actual_pricing_fare"] == 3250
+    assert admin["pricing"]["pricing_delta"] == 150

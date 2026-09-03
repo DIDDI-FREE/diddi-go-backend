@@ -18,6 +18,7 @@ from uuid import UUID
 
 from app_base.core.errors import ApiError
 from app_base.modules.ride.domain.entities import (
+    ComfortLevel,
     DriverStatus,
     Ride,
     RideStatus,
@@ -238,9 +239,8 @@ class MatchingService:
             return False, "no_active_vehicle"
         if vehicle.category != ride.vehicle_category:
             return False, f"vehicle_category_mismatch:{vehicle.category.value}!={ride.vehicle_category.value}"
-        # For the MVP, comfort_level is a commercial/pricing choice, not a hard
-        # availability lock. This keeps the passenger flow simple: the frontend
-        # can default vehicle_category and only expose comfort level.
+        if not _comfort_can_serve(vehicle.comfort_level, ride.comfort_level):
+            return False, f"comfort_level_mismatch:{vehicle.comfort_level.value}<{ride.comfort_level.value}"
         return True, None
 
     async def _give_up(self, ride: Ride) -> None:
@@ -265,3 +265,12 @@ class MatchingService:
                 {"current_status": ride.status.value},
             )
         return ride
+
+
+def _comfort_can_serve(vehicle_comfort: ComfortLevel, requested_comfort: ComfortLevel) -> bool:
+    rank = {
+        ComfortLevel.STANDARD: 1,
+        ComfortLevel.COMFORT: 2,
+        ComfortLevel.PREMIUM: 3,
+    }
+    return rank[vehicle_comfort] >= rank[requested_comfort]

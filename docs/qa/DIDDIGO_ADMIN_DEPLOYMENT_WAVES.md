@@ -137,8 +137,7 @@ Ces elements ne sont pas de simples tests. Ce sont les vrais chantiers V2.
 
 Probleme :
 
-- aujourd'hui le confort influence le prix, mais n'est pas encore un filtre dur
-  suffisant de matching.
+- le confort influence le prix et devient un filtre hierarchique de matching.
 
 Objectif V2 :
 
@@ -153,17 +152,17 @@ Duree estimee : 3 a 5 jours.
 
 Probleme :
 
-- DiddiGo stocke deja des samples GPS, mais ne recalcule pas encore le prix
-  final avec la distance/duree reellement parcourue.
+- DiddiGo recalcule un prix theorique depuis la trace reelle, mais le prix
+  facture client reste le prix accepte au depart.
 
 Objectif V2 :
 
 - envoyer la trace finale a DiddiMap;
 - recevoir distance/duree reelles;
-- comparer estimation vs reel;
-- calculer `driver_payout_final`;
-- figer commission finale;
-- documenter les regles d'ajustement.
+- comparer estimation vs reel via `actual_pricing_fare` et `pricing_delta`;
+- garder `final_fare` verrouille sur le prix accepte;
+- figer commission et payout sur le prix facture;
+- alimenter les futures regles de dynamic pricing.
 
 Duree estimee : 1 a 2 semaines. Le contrat REST DiddiMap traces existe; le
 travail restant est l'adapter DiddiGo, le stockage des references trace et la
