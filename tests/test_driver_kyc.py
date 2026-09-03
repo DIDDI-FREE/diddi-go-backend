@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from app_base.core.errors import ApiError
 from app_base.modules.ride.application.driver_service import DriverService
 
 pytestmark = pytest.mark.unit
@@ -52,7 +53,9 @@ async def test_create_driver_profile_stores_kyc_fields() -> None:
     service = DriverService(driver_repo=repo, vehicle_repo=FakeVehicleRepo())
     user_id = uuid4()
     license_file_id = uuid4()
+    license_back_file_id = uuid4()
     national_id_file_id = uuid4()
+    national_id_back_file_id = uuid4()
     selfie_file_id = uuid4()
 
     payload = await service.create_profile(
@@ -62,10 +65,14 @@ async def test_create_driver_profile_stores_kyc_fields() -> None:
         birth_date=date(1992, 4, 20),
         residence_address=" Cocody, Abidjan ",
         license_document_file_id=license_file_id,
+        license_back_document_file_id=license_back_file_id,
         national_id_document_file_id=national_id_file_id,
+        national_id_back_document_file_id=national_id_back_file_id,
         selfie_document_file_id=selfie_file_id,
         license_document_url=" https://cdn.example/license.jpg ",
+        license_back_document_url="https://cdn.example/license-back.jpg",
         national_id_document_url="https://cdn.example/id.jpg",
+        national_id_back_document_url="https://cdn.example/id-back.jpg",
         selfie_document_url="https://cdn.example/selfie.jpg",
     )
 
@@ -75,10 +82,14 @@ async def test_create_driver_profile_stores_kyc_fields() -> None:
     assert payload["kyc"]["birth_date"] == "1992-04-20"
     assert payload["kyc"]["residence_address"] == "Cocody, Abidjan"
     assert payload["kyc"]["license_document_file_id"] == str(license_file_id)
+    assert payload["kyc"]["license_back_document_file_id"] == str(license_back_file_id)
     assert payload["kyc"]["national_id_document_file_id"] == str(national_id_file_id)
+    assert payload["kyc"]["national_id_back_document_file_id"] == str(national_id_back_file_id)
     assert payload["kyc"]["selfie_document_file_id"] == str(selfie_file_id)
     assert payload["kyc"]["license_document_url"] == "https://cdn.example/license.jpg"
+    assert payload["kyc"]["license_back_document_url"] == "https://cdn.example/license-back.jpg"
     assert payload["kyc"]["national_id_document_url"] == "https://cdn.example/id.jpg"
+    assert payload["kyc"]["national_id_back_document_url"] == "https://cdn.example/id-back.jpg"
     assert payload["kyc"]["selfie_document_url"] == "https://cdn.example/selfie.jpg"
     assert payload["kyc"]["submitted_at"] is not None
     assert repo.profile.user_id == user_id
@@ -93,7 +104,7 @@ async def test_admin_approval_activates_driver_profile() -> None:
     user_id = uuid4()
     admin_id = uuid4()
 
-    created = await service.create_profile(user_id=user_id, license_number="CI-123456")
+    created = await service.create_profile(user_id=user_id, license_number="CI-123456", **full_kyc_documents())
     approved = await service.approve_kyc(
         driver_id=UUID(created["id"]),
         reviewed_by_user_id=admin_id,
@@ -106,14 +117,38 @@ async def test_admin_approval_activates_driver_profile() -> None:
 
 
 @pytest.mark.asyncio
+async def test_admin_approval_rejects_incomplete_kyc_documents() -> None:
+    repo = FakeDriverRepo()
+    service = DriverService(driver_repo=repo, vehicle_repo=FakeVehicleRepo())
+    created = await service.create_profile(
+        user_id=uuid4(),
+        license_number="CI-123456",
+        license_document_file_id=uuid4(),
+    )
+
+    with pytest.raises(ApiError) as exc_info:
+        await service.approve_kyc(driver_id=UUID(created["id"]), reviewed_by_user_id=uuid4())
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.code == "INVALID_KYC_DOCUMENTS"
+    assert exc_info.value.details["missing_documents"] == [
+        "license_back_document",
+        "national_id_document",
+        "national_id_back_document",
+        "selfie_document",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_driver_can_resubmit_rejected_kyc() -> None:
     repo = FakeDriverRepo()
     service = DriverService(driver_repo=repo, vehicle_repo=FakeVehicleRepo())
     user_id = uuid4()
     admin_id = uuid4()
     new_license_file_id = uuid4()
+    new_license_back_file_id = uuid4()
 
-    created = await service.create_profile(user_id=user_id, license_number="CI-123456")
+    created = await service.create_profile(user_id=user_id, license_number="CI-123456", **full_kyc_documents())
     await service.reject_kyc(
         driver_id=UUID(created["id"]),
         reviewed_by_user_id=admin_id,
@@ -124,11 +159,13 @@ async def test_driver_can_resubmit_rejected_kyc() -> None:
         user_id=user_id,
         license_number=" CI-654321 ",
         license_document_file_id=new_license_file_id,
+        license_back_document_file_id=new_license_back_file_id,
     )
 
     assert payload["license_number"] == "CI-654321"
     assert payload["status"] == "pending_verification"
     assert payload["kyc"]["license_document_file_id"] == str(new_license_file_id)
+    assert payload["kyc"]["license_back_document_file_id"] == str(new_license_back_file_id)
     assert payload["kyc"]["reviewed_at"] is None
     assert payload["kyc"]["review_notes"] is None
     assert repo.profile.license_verified_at is None
@@ -168,3 +205,13 @@ async def test_register_vehicle_stores_registration_file_id() -> None:
     assert payload["plate_number"] == "CE-123-AA"
     assert payload["registration_document_file_id"] == str(registration_file_id)
     assert vehicle_repo.vehicle.registration_document_file_id == registration_file_id
+
+
+def full_kyc_documents() -> dict:
+    return {
+        "license_document_file_id": uuid4(),
+        "license_back_document_file_id": uuid4(),
+        "national_id_document_file_id": uuid4(),
+        "national_id_back_document_file_id": uuid4(),
+        "selfie_document_file_id": uuid4(),
+    }

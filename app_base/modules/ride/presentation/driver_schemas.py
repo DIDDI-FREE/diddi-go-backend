@@ -14,10 +14,14 @@ class DriverProfileCreateRequest(BaseModel):
     birth_date: date | None = None
     residence_address: str | None = Field(default=None, min_length=1, max_length=500)
     license_document_file_id: UUID | None = None
+    license_back_document_file_id: UUID | None = None
     national_id_document_file_id: UUID | None = None
+    national_id_back_document_file_id: UUID | None = None
     selfie_document_file_id: UUID | None = None
     license_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    license_back_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     national_id_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    national_id_back_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     selfie_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
 
 
@@ -27,10 +31,14 @@ class DriverKycResubmitRequest(BaseModel):
     birth_date: date | None = None
     residence_address: str | None = Field(default=None, min_length=1, max_length=500)
     license_document_file_id: UUID | None = None
+    license_back_document_file_id: UUID | None = None
     national_id_document_file_id: UUID | None = None
+    national_id_back_document_file_id: UUID | None = None
     selfie_document_file_id: UUID | None = None
     license_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    license_back_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     national_id_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    national_id_back_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     selfie_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
 
 

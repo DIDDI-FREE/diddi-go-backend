@@ -62,7 +62,7 @@ Ces routes restent utiles en local/dev si l'auth locale est active.
 | `409` | `NO_ACTIVE_VEHICLE` | Aucun vehicule actif associe au chauffeur |
 | `409` | `PLATE_ALREADY_REGISTERED` | Plaque vehicule deja enregistree |
 | `422` | `DRIVER_KYC_STATUS_INVALID` | Filtre de statut KYC invalide |
-| `422` | `INVALID_KYC_DOCUMENTS` | Documents KYC incoherents ou incomplets |
+| `422` | `INVALID_KYC_DOCUMENTS` | Dossier KYC incomplet ou incoherent au moment de l'approbation admin |
 | `422` | `INVALID_LICENSE_NUMBER` | Numero de permis vide ou invalide |
 | `422` | `INVALID_VEHICLE_CATEGORY` | Categorie vehicule inconnue |
 | `422` | `INVALID_COMFORT_LEVEL` | Niveau de confort inconnu |
@@ -144,7 +144,7 @@ un autre sens :
 
 | Code | Usage prevu |
 |---|---|
-| `INVALID_KYC_DOCUMENTS` | Validation stricte future des documents KYC |
+| `INVALID_KYC_DOCUMENTS` | Validation stricte active des documents KYC chauffeur |
 | `DIDDIPAY_UNAVAILABLE` | Provider DiddiPay indisponible |
 | `WAVE_UNAVAILABLE` | Provider Wave indisponible |
 | `PUSH_PROVIDER_UNAVAILABLE` | FCM indisponible |

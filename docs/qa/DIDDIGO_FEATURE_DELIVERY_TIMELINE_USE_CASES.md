@@ -90,7 +90,8 @@ Rendre l'activation chauffeur fiable et controlable par admin.
 
 Use cases inclus :
 
-- UC-101 Chauffeur soumet permis, piece, selfie et documents vehicule.
+- UC-101 Chauffeur soumet permis recto/verso, CNI recto/verso, selfie et
+  documents vehicule.
 - UC-102 Chauffeur voit le statut du dossier : draft, pending, approved, rejected.
 - UC-103 Admin consulte la file KYC.
 - UC-104 Admin approuve un dossier.

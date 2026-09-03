@@ -14,6 +14,7 @@ from uuid import uuid4
 from app_base.core.redis import create_redis_pool
 from app_base.core.settings import settings
 from app_base.modules.ride.infra.offer_store import OFFER_KEY_PREFIX
+from tests.conftest import full_driver_kyc_documents
 from tests.test_ride_flow import create_ride
 
 # Yopougon (the default pickup) and a point ~200 km away in Yamoussoukro,
@@ -140,7 +141,9 @@ async def test_driver_can_resubmit_rejected_kyc_over_http(client, driver_headers
 async def test_going_online_requires_a_vehicle_after_kyc_approval(client, driver_headers, admin_headers) -> None:
     """A validated driver with no vehicle must still never enter the pool."""
     profile = await client.post(
-        "/v1/drivers/profile", json={"license_number": "CI-999"}, headers=driver_headers,
+        "/v1/drivers/profile",
+        json={"license_number": "CI-999", **full_driver_kyc_documents()},
+        headers=driver_headers,
     )
     await client.post(
         f"/v1/drivers/{profile.json()['id']}/kyc/approve",
@@ -205,7 +208,7 @@ async def test_business_driver_with_user_role_can_find_assigned_rides(
     business_driver = await passenger_factory()
     r = await client.post(
         "/v1/drivers/profile",
-        json={"license_number": "CI-BUSINESS"},
+        json={"license_number": "CI-BUSINESS", **full_driver_kyc_documents()},
         headers=business_driver,
     )
     assert r.status_code == 201, r.text

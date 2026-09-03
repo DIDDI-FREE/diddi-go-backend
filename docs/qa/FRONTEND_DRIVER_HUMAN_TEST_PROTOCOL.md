@@ -178,11 +178,13 @@ DiddiFiles disponible, compte connecte.
 
 Etapes :
 
-1. Ajouter photo permis.
-2. Ajouter piece d'identite si demandee.
-3. Ajouter selfie si demande.
-4. Ajouter document vehicule si demande.
-5. Soumettre le dossier.
+1. Ajouter permis recto.
+2. Ajouter permis verso.
+3. Ajouter CNI recto.
+4. Ajouter CNI verso.
+5. Ajouter selfie si demande.
+6. Ajouter document vehicule si demande.
+7. Soumettre le dossier.
 
 Resultat attendu :
 
@@ -190,6 +192,8 @@ Resultat attendu :
 - l'app ne montre jamais une URL technique MinIO;
 - en cas d'erreur upload, le message explique quoi refaire;
 - le dossier passe en attente de verification.
+- l'admin ne peut pas valider le dossier si permis recto/verso, CNI
+  recto/verso ou selfie manque.
 
 Bloquant si :
 

@@ -17,8 +17,8 @@ from fastapi import APIRouter, Depends, Query
 
 from app_base.core.auth_deps import get_current_active_user, require_business_driver, require_role
 from app_base.core.deps import driver_service, driver_wallet_service, get_driver_locations
-from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.auth.infra.models import UserModel
+from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.domain.entities import DriverProfile
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
@@ -48,10 +48,14 @@ async def create_profile(
         birth_date=payload.birth_date,
         residence_address=payload.residence_address,
         license_document_file_id=payload.license_document_file_id,
+        license_back_document_file_id=payload.license_back_document_file_id,
         national_id_document_file_id=payload.national_id_document_file_id,
+        national_id_back_document_file_id=payload.national_id_back_document_file_id,
         selfie_document_file_id=payload.selfie_document_file_id,
         license_document_url=payload.license_document_url,
+        license_back_document_url=payload.license_back_document_url,
         national_id_document_url=payload.national_id_document_url,
+        national_id_back_document_url=payload.national_id_back_document_url,
         selfie_document_url=payload.selfie_document_url,
     )
 
@@ -69,10 +73,14 @@ async def resubmit_kyc(
         birth_date=payload.birth_date,
         residence_address=payload.residence_address,
         license_document_file_id=payload.license_document_file_id,
+        license_back_document_file_id=payload.license_back_document_file_id,
         national_id_document_file_id=payload.national_id_document_file_id,
+        national_id_back_document_file_id=payload.national_id_back_document_file_id,
         selfie_document_file_id=payload.selfie_document_file_id,
         license_document_url=payload.license_document_url,
+        license_back_document_url=payload.license_back_document_url,
         national_id_document_url=payload.national_id_document_url,
+        national_id_back_document_url=payload.national_id_back_document_url,
         selfie_document_url=payload.selfie_document_url,
     )
 
