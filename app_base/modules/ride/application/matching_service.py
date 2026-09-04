@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from app_base.core.errors import ApiError
+from app_base.core.observability import log_event
 from app_base.modules.ride.domain.entities import (
     ComfortLevel,
     DriverStatus,
@@ -59,6 +60,17 @@ class MatchingService:
             ride.pickup_location.lat if ride.pickup_location else None,
             ride.pickup_location.lng if ride.pickup_location else None,
         )
+        log_event(
+            "ride.matching.started",
+            ride_id=ride.id,
+            status=ride.status.value,
+            pickup={
+                "lat": ride.pickup_location.lat if ride.pickup_location else None,
+                "lng": ride.pickup_location.lng if ride.pickup_location else None,
+            },
+            vehicle_category=ride.vehicle_category.value,
+            comfort_level=ride.comfort_level.value,
+        )
 
         if ride.status != RideStatus.REQUESTED:
             logger.info("matching_skip ride_id=%s reason=status_not_requested status=%s", ride.id, ride.status.value)
@@ -67,6 +79,7 @@ class MatchingService:
         outstanding = await self.offers.current_offer(ride.id)
         if outstanding is not None:
             logger.info("matching_existing_offer ride_id=%s driver_user_id=%s", ride.id, outstanding)
+            log_event("ride.matching.existing_offer", ride_id=ride.id, driver_user_id=outstanding)
             return outstanding
 
         candidate = await self._next_candidate(ride)
@@ -76,6 +89,7 @@ class MatchingService:
 
         await self.offers.open_offer(ride.id, candidate)
         logger.info("matching_offer_opened ride_id=%s driver_user_id=%s", ride.id, candidate)
+        log_event("ride.matching.offer_sent", ride_id=ride.id, driver_user_id=candidate)
         return candidate
 
     async def accept(self, ride_id: UUID, driver_user_id: UUID) -> Ride:
@@ -89,6 +103,12 @@ class MatchingService:
                 ride_id,
                 driver_user_id,
             )
+            log_event(
+                "ride.matching.accept_rejected",
+                ride_id=ride_id,
+                driver_user_id=driver_user_id,
+                reason="offer_expired",
+            )
             raise ApiError(409, "OFFER_EXPIRED", "Cette demande n'est plus disponible.")
         if holder != driver_user_id:
             logger.info(
@@ -96,6 +116,13 @@ class MatchingService:
                 ride_id,
                 driver_user_id,
                 holder,
+            )
+            log_event(
+                "ride.matching.accept_rejected",
+                ride_id=ride_id,
+                driver_user_id=driver_user_id,
+                reason="offer_not_yours",
+                holder=holder,
             )
             raise ApiError(403, "OFFER_NOT_YOURS", "Cette demande a ete proposee a un autre chauffeur.")
 
@@ -146,6 +173,13 @@ class MatchingService:
             driver_user_id,
             profile.id,
             vehicle.id,
+        )
+        log_event(
+            "ride.accepted",
+            ride_id=ride_id,
+            driver_user_id=driver_user_id,
+            driver_id=profile.id,
+            vehicle_id=vehicle.id,
         )
         return ride
 
@@ -199,6 +233,12 @@ class MatchingService:
             len(nearby),
             [str(user_id) for user_id in nearby],
         )
+        log_event(
+            "ride.matching.candidates_found",
+            ride_id=ride.id,
+            candidates_count=len(nearby),
+            radius_km=SEARCH_RADIUS_KM,
+        )
         if not nearby:
             logger.info("matching_no_candidate ride_id=%s reason=no_available_nearby", ride.id)
             return None
@@ -216,6 +256,7 @@ class MatchingService:
             can_take, reason = await self._can_take_ride(user_id, ride)
             if can_take:
                 logger.info("matching_candidate_selected ride_id=%s driver_user_id=%s", ride.id, user_id)
+                log_event("ride.matching.driver_candidate_selected", ride_id=ride.id, driver_user_id=user_id)
                 return user_id
 
             logger.info(
@@ -223,6 +264,12 @@ class MatchingService:
                 ride.id,
                 user_id,
                 reason,
+            )
+            log_event(
+                "ride.matching.driver_filtered",
+                ride_id=ride.id,
+                driver_user_id=user_id,
+                reason=reason,
             )
 
         logger.info("matching_no_candidate ride_id=%s reason=all_candidates_rejected", ride.id)
@@ -250,6 +297,7 @@ class MatchingService:
             await self.ride_repo.record_status_transition(transition)
         await self.offers.clear(ride.id)
         logger.info("matching_no_driver_found ride_id=%s", ride.id)
+        log_event("ride.matching.no_driver_found", ride_id=ride.id)
 
     async def _load_active_ride(self, ride_id: UUID) -> Ride:
         ride = await self.ride_repo.find_by_id(ride_id)

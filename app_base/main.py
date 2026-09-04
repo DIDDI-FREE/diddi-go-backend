@@ -3,19 +3,21 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app_base.core.errors import ApiError, api_error_handler
 from app_base.core.lifespan import lifespan
+from app_base.core.observability import configure_observability
 from app_base.core.request_logging import RequestLoggingMiddleware
 from app_base.core.settings import settings
 from app_base.modules.auth.presentation.router import router as auth_router
 from app_base.modules.notification.presentation import router as notification_router
+from app_base.modules.payment.presentation.router import admin_payment_router, admin_wallet_router, wallet_router
 from app_base.modules.payment.presentation.router import internal_router as payment_internal_router
-from app_base.modules.payment.presentation.router import admin_payment_router, admin_wallet_router
-from app_base.modules.payment.presentation.router import router as payment_router
 from app_base.modules.payment.presentation.router import return_router as payment_return_router
-from app_base.modules.payment.presentation.router import wallet_router
+from app_base.modules.payment.presentation.router import router as payment_router
 from app_base.modules.ride.presentation.driver_router import router as driver_router
 from app_base.modules.ride.presentation.router import places_router
 from app_base.modules.ride.presentation.router import router as ride_router
 from app_base.modules.ride.presentation.websocket import router as ride_ws_router
+
+configure_observability(log_level=settings.log_level)
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.add_middleware(RequestLoggingMiddleware)

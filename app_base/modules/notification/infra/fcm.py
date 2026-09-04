@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 import jwt
 
+from app_base.core.observability import log_event
 from app_base.core.settings import settings
 
 logger = logging.getLogger("uvicorn.error")
@@ -46,8 +47,17 @@ class FcmPushGateway:
             )
         if response.status_code >= 400:
             logger.error("push_fcm_failed status=%s body=%s", response.status_code, response.text[:500])
+            log_event(
+                "push.fcm.failed",
+                level="error",
+                project_id=project_id,
+                token_suffix=token[-8:],
+                status_code=response.status_code,
+                response_body=response.text[:500],
+            )
             response.raise_for_status()
         logger.info("push_fcm_sent project_id=%s token_suffix=%s", project_id, token[-8:])
+        log_event("push.fcm.sent", project_id=project_id, token_suffix=token[-8:])
 
     async def _access_token_for(self, service_account: dict[str, Any]) -> str:
         now = int(time.time())
@@ -85,6 +95,14 @@ class FcmPushGateway:
 class DisabledPushGateway:
     async def send(self, *, token: str, title: str, body: str, data: dict[str, str]) -> None:
         logger.info("push_skipped_disabled provider=fcm token_suffix=%s title=%s", token[-8:], title)
+        log_event(
+            "push.fcm.skipped",
+            provider="fcm",
+            token_suffix=token[-8:],
+            reason="push_disabled",
+            title=title,
+            data=data,
+        )
 
 
 def build_push_gateway():

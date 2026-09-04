@@ -9,6 +9,7 @@ silent fallback distance, duration, or geocode result.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -16,6 +17,7 @@ from decimal import Decimal
 import httpx
 
 from app_base.core.errors import ApiError
+from app_base.core.observability import log_event
 from app_base.shared_kernel.contracts.routing import GeoPoint, RouteTracePoint
 from app_base.shared_kernel.types import GeoPoint as _GeoPoint
 
@@ -80,18 +82,44 @@ class DiddiMapRoutingClient:
             "start": {"lat": origin.lat, "lng": origin.lng},
             "end": {"lat": destination.lat, "lng": destination.lng},
         }
+        started = time.perf_counter()
         try:
             response = await self._http().post("/api/v1/route", json=request_payload)
             response.raise_for_status()
             payload = response.json()
         except httpx.HTTPError as exc:
             logger.exception("DiddiMap route unavailable: %s", exc)
+            log_event(
+                "diddimap.request.failed",
+                level="error",
+                path="/api/v1/route",
+                operation="route",
+                duration_ms=_duration_ms(started),
+                error=str(exc),
+            )
             raise ApiError(503, "DIDDIMAP_UNAVAILABLE", "Service geographique indisponible.") from exc
         except ValueError as exc:
             logger.exception("DiddiMap route returned invalid JSON: %s", exc)
+            log_event(
+                "diddimap.request.failed",
+                level="error",
+                path="/api/v1/route",
+                operation="route",
+                duration_ms=_duration_ms(started),
+                error="invalid_json",
+            )
             raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Reponse geographique invalide.") from exc
 
-        return self._parse_route(payload)
+        result = self._parse_route(payload)
+        log_event(
+            "diddimap.request.succeeded",
+            path="/api/v1/route",
+            operation="route",
+            duration_ms=_duration_ms(started),
+            distance_km=result.distance_km,
+            duration_seconds=result.duration_seconds,
+        )
+        return result
 
     async def geocode(
         self,
@@ -105,18 +133,43 @@ class DiddiMapRoutingClient:
             params["bias_lng"] = str(bias.lng)
         if limit is not None:
             params["limit"] = str(limit)
+        started = time.perf_counter()
         try:
             response = await self._http().get("/api/v1/geocoding/search", params=params)
             response.raise_for_status()
             payload = response.json()
         except httpx.HTTPError as exc:
             logger.exception("DiddiMap geocoding unavailable: %s", exc)
+            log_event(
+                "diddimap.request.failed",
+                level="error",
+                path="/api/v1/geocoding/search",
+                operation="geocode",
+                duration_ms=_duration_ms(started),
+                error=str(exc),
+            )
             raise ApiError(503, "DIDDIMAP_UNAVAILABLE", "Service geographique indisponible.") from exc
         except ValueError as exc:
             logger.exception("DiddiMap geocoding returned invalid JSON: %s", exc)
+            log_event(
+                "diddimap.request.failed",
+                level="error",
+                path="/api/v1/geocoding/search",
+                operation="geocode",
+                duration_ms=_duration_ms(started),
+                error="invalid_json",
+            )
             raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Reponse geographique invalide.") from exc
 
-        return self._parse_geocode(payload)
+        results = self._parse_geocode(payload)
+        log_event(
+            "diddimap.request.succeeded",
+            path="/api/v1/geocoding/search",
+            operation="geocode",
+            duration_ms=_duration_ms(started),
+            results_count=len(results),
+        )
+        return results
 
     async def start_trace(
         self,
@@ -202,15 +255,39 @@ class DiddiMapRoutingClient:
         )
 
     async def _post_json(self, path: str, payload: dict, *, unavailable_message: str) -> object:
+        started = time.perf_counter()
         try:
             response = await self._http().post(path, json=payload, headers=self._auth_headers())
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+            log_event(
+                "diddimap.request.succeeded",
+                path=path,
+                operation=_operation_from_path(path),
+                duration_ms=_duration_ms(started),
+            )
+            return result
         except httpx.HTTPError as exc:
             logger.exception("%s: %s", unavailable_message, exc)
+            log_event(
+                "diddimap.request.failed",
+                level="error",
+                path=path,
+                operation=_operation_from_path(path),
+                duration_ms=_duration_ms(started),
+                error=str(exc),
+            )
             raise ApiError(503, "DIDDIMAP_UNAVAILABLE", "Service geographique indisponible.") from exc
         except ValueError as exc:
             logger.exception("DiddiMap returned invalid JSON for %s: %s", path, exc)
+            log_event(
+                "diddimap.request.failed",
+                level="error",
+                path=path,
+                operation=_operation_from_path(path),
+                duration_ms=_duration_ms(started),
+                error="invalid_json",
+            )
             raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Reponse geographique invalide.") from exc
 
     async def close(self) -> None:
@@ -301,3 +378,13 @@ def _iso(dt: datetime) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
     return dt.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _duration_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000, 2)
+
+
+def _operation_from_path(path: str) -> str:
+    if "map-traces" in path:
+        return "trace"
+    return path.strip("/").replace("/", ".")

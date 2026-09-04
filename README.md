@@ -120,6 +120,8 @@ Variables Portainer optionnelles/recommandees :
 ```env
 APP_NAME=DiddiGo
 APP_ENV=production
+LOG_LEVEL=INFO
+LOG_FORMAT=json
 BACKEND_PORT=18000
 POSTGRES_DB=diddi_go
 POSTGRES_USER=postgres
@@ -314,7 +316,20 @@ Profils :
 
 ## Logs et diagnostic
 
-DiddiGo emet une ligne JSON par requete HTTP avec :
+DiddiGo emet des logs JSON lisibles directement dans Docker/Portainer.
+
+Chaque requete HTTP retourne aussi :
+
+```http
+X-Request-ID: <uuid-ou-valeur-client>
+```
+
+Si le frontend/proxy envoie deja `X-Request-ID`, DiddiGo le conserve. Sinon
+DiddiGo en cree un. Les erreurs API retournent aussi `details.request_id`, pour
+relier une erreur vue par le frontend a la ligne correspondante dans les logs
+backend.
+
+La ligne `http.request` contient :
 - `request_id` : identifiant unique de la requete, reutilisable avec
   `X-Request-ID` si le frontend/proxy l'envoie
 - `hour` : bucket horaire UTC, utile pour compter les requetes par heure dans
@@ -323,29 +338,82 @@ DiddiGo emet une ligne JSON par requete HTTP avec :
 - `user_id` et `user_role` : utilisateur authentifie quand le token est valide
 - `path`, `query`, `status_code`, `duration_ms`, `user_agent`
 
-Les erreurs API retournent aussi `details.request_id`, pour relier une erreur
-vue par le frontend a la ligne correspondante dans les logs backend.
+Les tokens et secrets dans les query strings sont masques dans les logs.
 
-Les WebSockets loggent aussi :
-- `ws_connected`
-- `ws_auth_failed`
-- `ws_ride_subscribe`
-- `ws_driver_location_push`
-- `ws_disconnected`
+Evenements metier importants a rechercher :
 
-Logs matching utiles :
-- `driver_online`
-- `driver_position_updated`
-- `driver_available_set`
-- `driver_geo_search_raw`
-- `driver_geo_candidate_rejected`
-- `driver_geo_search_result`
-- `matching_start`
-- `matching_candidate_selected`
-- `matching_candidate_rejected`
-- `matching_offer_opened`
-- `ws_send_new_request`
-- `matching_no_driver_found`
+```text
+http.request
+ride.created
+ride.matching.started
+ride.matching.candidates_found
+ride.matching.driver_filtered
+ride.matching.driver_candidate_selected
+ride.matching.offer_sent
+ride.matching.no_driver_found
+ride.accepted
+ride.status_changed
+ride.cancelled
+ride.location_samples.saved
+ride.actual_pricing.applied
+ride.map_trace.started
+driver.kyc.submitted
+driver.kyc.resubmitted
+driver.kyc.approved
+driver.kyc.rejected
+driver.vehicle.registered
+driver.online
+driver.online.blocked
+driver.offline
+payment.prepare.started
+payment.prepare.created
+payment.prepare.reused
+payment.cash.confirmed
+payment.webhook.processed
+payment.webhook.duplicate
+push.device.registered
+push.device.unregistered
+push.ride_offer.sent
+push.ride_offer.failed
+push.ride_offer.skipped
+push.fcm.sent
+push.fcm.failed
+push.fcm.skipped
+diddimap.request.succeeded
+diddimap.request.failed
+ws.connected
+ws.auth_failed
+ws.ride_subscribed
+ws.driver_location.received
+ws.ride_offer.sent
+ws.disconnected
+ws.failed
+```
+
+Exemples Portainer :
+
+```text
+Chercher une course precise        : ride_id":"<ride-id>
+Chercher un chauffeur              : driver_id":"<driver-id>
+Chercher un utilisateur            : user_id":"<user-id>
+Chercher un paiement               : payment_intent_id":"<intent-id>
+Voir les courses sans chauffeur    : ride.matching.no_driver_found
+Voir les refus de matching         : ride.matching.driver_filtered
+Voir les erreurs DiddiMap          : diddimap.request.failed
+Voir les erreurs push              : push.ride_offer.failed ou push.fcm.failed
+Voir les blocages online chauffeur : driver.online.blocked
+```
+
+Variables de logs :
+
+```env
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+```
+
+`LOG_FORMAT` reste `json` pour la V0.5. Les dashboards/metrics viendront dans
+une vague ulterieure; pour l'instant, l'objectif est de rendre Portainer
+exploitable pendant les tests terrain.
 
 ---
 

@@ -10,6 +10,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from app_base.core.errors import ApiError
+from app_base.core.observability import log_event
 from app_base.modules.auth.domain.interfaces import UserRepository
 from app_base.modules.ride.domain.entities import (
     VALID_CANCEL_REASONS,
@@ -145,6 +146,17 @@ class RideService:
         await self.ride_repo.save(ride)
         for transition in ride.status_history:
             await self.ride_repo.record_status_transition(transition)
+        log_event(
+            "ride.created",
+            ride_id=ride.id,
+            passenger_user_id=passenger_user_id,
+            vehicle_category=category.value,
+            comfort_level=comfort.value,
+            payment_method=method.value,
+            estimated_fare=ride.estimated_fare,
+            distance_km=ride.distance_km,
+            duration_seconds=ride.duration_seconds,
+        )
         return ride
 
     async def load_ride(self, ride_id: UUID) -> Ride:
@@ -257,6 +269,13 @@ class RideService:
         await self.ride_repo.save(ride)
         for transition in ride.status_history:
             await self.ride_repo.record_status_transition(transition)
+        log_event(
+            "ride.status_changed",
+            ride_id=ride.id,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            status=ride.status.value,
+        )
         viewer_role = "admin" if actor_role == "admin" else "driver"
         return _ride_detail_payload(ride, driver=None, viewer_role=viewer_role)
 
@@ -279,6 +298,14 @@ class RideService:
         ride.transition(new_status, metadata={"reason": reason})
         ride.cancellation_reason = reason
         await self.ride_repo.save(ride)
+        log_event(
+            "ride.cancelled",
+            ride_id=ride.id,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            reason=reason,
+            status=ride.status.value,
+        )
         return {"id": str(ride.id), "status": ride.status.value, "cancelled_at": iso_utc(ride.cancelled_at)}
 
     async def rate(
@@ -326,6 +353,12 @@ class RideService:
             for sample in samples
         ]
         await self.ride_repo.save_route_points(points)
+        log_event(
+            "ride.location_samples.saved",
+            ride_id=ride_id,
+            actor_user_id=actor_user_id,
+            samples_count=len(points),
+        )
         return {"ride_id": str(ride_id), "accepted_samples": len(points)}
 
     async def create_share_link(self, ride_id: UUID, *, actor_user_id: UUID, actor_role: str) -> dict:
@@ -337,6 +370,7 @@ class RideService:
             ride.share_token = secrets.token_urlsafe(_SHARE_TOKEN_BYTES)
         ride.share_expires_at = datetime.now(UTC) + timedelta(hours=_SHARE_TTL_HOURS)
         await self.ride_repo.save(ride)
+        log_event("ride.share_link.created", ride_id=ride.id, actor_user_id=actor_user_id, actor_role=actor_role)
         return {
             "ride_id": str(ride.id),
             "share_token": ride.share_token,
@@ -376,6 +410,13 @@ class RideService:
         ride.emergency_note = note
         await self.ride_repo.save(ride)
         logger.warning("ride_emergency ride_id=%s actor_user_id=%s actor_role=%s", ride_id, actor_user_id, actor_role)
+        log_event(
+            "ride.emergency.requested",
+            level="warning",
+            ride_id=ride_id,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+        )
         return {"ride_id": str(ride.id), "status": "open", "requested_at": iso_utc(ride.emergency_requested_at)}
 
     async def _driver_profile_id_for_user(self, user_id: UUID) -> UUID | None:
@@ -442,6 +483,16 @@ class RideService:
             ride.actual_pricing_fare,
             ride.pricing_delta,
         )
+        log_event(
+            "ride.actual_pricing.applied",
+            ride_id=ride.id,
+            map_trace_id=ride.map_trace_id,
+            actual_distance_km=ride.actual_distance_km,
+            actual_duration_seconds=ride.actual_duration_seconds,
+            final_fare=ride.final_fare,
+            actual_pricing_fare=ride.actual_pricing_fare,
+            pricing_delta=ride.pricing_delta,
+        )
 
     async def _ensure_map_trace_started(self, ride: Ride) -> None:
         if ride.map_trace_id:
@@ -457,6 +508,7 @@ class RideService:
             profile="palh_vtc",
         )
         logger.info("ride_map_trace_started ride_id=%s map_trace_id=%s", ride.id, ride.map_trace_id)
+        log_event("ride.map_trace.started", ride_id=ride.id, map_trace_id=ride.map_trace_id)
 
 
 def ride_creation_payload(ride: Ride) -> dict:

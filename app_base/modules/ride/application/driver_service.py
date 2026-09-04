@@ -16,6 +16,7 @@ from uuid import UUID
 
 from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
+from app_base.core.observability import log_event
 from app_base.modules.ride.domain.entities import (
     ComfortLevel,
     DriverProfile,
@@ -90,6 +91,7 @@ class DriverService:
             updated_at=now,
         )
         await self.driver_repo.save(profile)
+        log_event("driver.kyc.submitted", driver_id=profile.id, user_id=user_id, status=profile.status.value)
         return _profile_payload(profile)
 
     async def resubmit_kyc(
@@ -146,6 +148,7 @@ class DriverService:
         profile.kyc_review_notes = None
         profile.updated_at = now
         await self.driver_repo.save(profile)
+        log_event("driver.kyc.resubmitted", driver_id=profile.id, user_id=user_id, status=profile.status.value)
         return _profile_payload(profile)
 
     async def approve_kyc(self, driver_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None = None) -> dict:
@@ -160,6 +163,12 @@ class DriverService:
         profile.kyc_review_notes = _review_note(notes, reviewed_by_user_id)
         profile.updated_at = now
         await self.driver_repo.save(profile)
+        log_event(
+            "driver.kyc.approved",
+            driver_id=profile.id,
+            user_id=profile.user_id,
+            reviewed_by_user_id=reviewed_by_user_id,
+        )
         return _profile_payload(profile)
 
     async def reject_kyc(self, driver_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None = None) -> dict:
@@ -173,6 +182,13 @@ class DriverService:
         profile.kyc_review_notes = _review_note(notes, reviewed_by_user_id)
         profile.updated_at = now
         await self.driver_repo.save(profile)
+        log_event(
+            "driver.kyc.rejected",
+            level="warning",
+            driver_id=profile.id,
+            user_id=profile.user_id,
+            reviewed_by_user_id=reviewed_by_user_id,
+        )
         return _profile_payload(profile)
 
     async def register_vehicle(
@@ -220,6 +236,14 @@ class DriverService:
                     409, "PLATE_ALREADY_REGISTERED", "Cette plaque est déjà enregistrée.",
                 ) from exc
             raise
+        log_event(
+            "driver.vehicle.registered",
+            driver_id=profile.id,
+            user_id=user_id,
+            vehicle_id=vehicle.id,
+            category=vehicle.category.value,
+            comfort_level=vehicle.comfort_level.value,
+        )
         return _vehicle_payload(vehicle)
 
     async def get_profile(self, user_id: UUID) -> dict:
@@ -273,6 +297,14 @@ class DriverService:
         a driver with no vehicle on file."""
         profile = await self._require_profile(user_id)
         if profile.status != DriverStatus.ACTIVE:
+            log_event(
+                "driver.online.blocked",
+                level="warning",
+                driver_id=profile.id,
+                user_id=user_id,
+                reason="driver_not_verified",
+                status=profile.status.value,
+            )
             raise ApiError(
                 403,
                 "DRIVER_NOT_VERIFIED",
@@ -281,6 +313,13 @@ class DriverService:
             )
         vehicle = await self.vehicle_repo.find_active_for_driver(profile.id)
         if vehicle is None:
+            log_event(
+                "driver.online.blocked",
+                level="warning",
+                driver_id=profile.id,
+                user_id=user_id,
+                reason="no_active_vehicle",
+            )
             raise ApiError(
                 409, "NO_ACTIVE_VEHICLE", "Aucun véhicule actif n'est associé à ce chauffeur.",
             )
