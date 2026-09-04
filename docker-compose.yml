@@ -9,6 +9,8 @@ services:
       API_PREFIX: ${API_PREFIX:-/v1}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       CORS_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:-^https?://(localhost|127\.0\.0\.1)(:\d+)?$}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/diddi_go}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-prod-at-least-32-characters-long}

@@ -40,6 +40,7 @@ from app_base.core.identity import (
     identity_mode_enabled,
     user_id_from_identity_payload,
 )
+from app_base.core.observability import log_event
 from app_base.core.security import decode_token, user_id_from_token
 from app_base.modules.ride.domain.entities import DriverStatus
 from app_base.modules.ride.infra.repositories import SqlAlchemyDriverProfileRepository
@@ -99,6 +100,7 @@ class ConnectionManager:
             len(sockets),
             payload.get("event"),
         )
+        log_event("ws.send_to_user", user_id=user_id, socket_count=len(sockets), ws_event=payload.get("event"))
         await self._fan_out(sockets, payload)
 
     async def send_to_ride(self, ride_id: UUID, payload: dict[str, Any]) -> None:
@@ -109,6 +111,7 @@ class ConnectionManager:
             len(sockets),
             payload.get("event"),
         )
+        log_event("ws.send_to_ride", ride_id=ride_id, socket_count=len(sockets), ws_event=payload.get("event"))
         await self._fan_out(sockets, payload)
 
     async def _fan_out(self, sockets: set[WebSocket], payload: dict[str, Any]) -> None:
@@ -154,6 +157,12 @@ class ConnectionManager:
             payload.get("ride_id"),
             len(self._by_user.get(driver_user_id, set())),
         )
+        log_event(
+            "ws.ride_offer.sent",
+            driver_user_id=driver_user_id,
+            ride_id=payload.get("ride_id"),
+            socket_count=len(self._by_user.get(driver_user_id, set())),
+        )
         await self.send_to_user(driver_user_id, {"event": "ride.new_request", **payload})
 
 
@@ -194,6 +203,7 @@ async def websocket_endpoint(
             exc.code,
             websocket.url.path,
         )
+        log_event("ws.auth_failed", level="warning", client_ip=_ws_client_ip(websocket), error_code=exc.code)
         await websocket.close(code=WS_UNAUTHORIZED, reason=exc.code)
         return
 
@@ -207,6 +217,14 @@ async def websocket_endpoint(
         _ws_client_ip(websocket),
         websocket.url.path,
     )
+    log_event(
+        "ws.connected",
+        connection_id=connection_id,
+        user_id=user_id,
+        role=role,
+        client_ip=_ws_client_ip(websocket),
+        path=websocket.url.path,
+    )
 
     # The driver location service lives on app.state (mounted by the lifespan).
     locations = getattr(websocket.app.state, "driver_locations", None)
@@ -217,8 +235,10 @@ async def websocket_endpoint(
             await _handle_message(websocket, message, user_id=user_id, role=role, locations=locations)
     except WebSocketDisconnect:
         logger.info("ws_disconnected connection_id=%s user_id=%s role=%s", connection_id, user_id, role)
+        log_event("ws.disconnected", connection_id=connection_id, user_id=user_id, role=role)
     except Exception:
         logger.exception("ws_failed connection_id=%s user_id=%s role=%s", connection_id, user_id, role)
+        log_event("ws.failed", level="error", connection_id=connection_id, user_id=user_id, role=role)
     finally:
         if role == "driver" and locations is not None:
             await locations.go_offline(user_id)
@@ -273,6 +293,7 @@ async def _handle_message(
                 return
         await websocket.send_json({"event": "ack", "received_event": event})
         logger.info("ws_driver_location_push user_id=%s ride_id=%s", user_id, ride_id)
+        log_event("ws.driver_location.received", user_id=user_id, ride_id=ride_id, role=role)
         return
 
     if event == "ride.subscribe":
@@ -286,6 +307,7 @@ async def _handle_message(
             {"event": "ack", "received_event": event, "ride_id": str(ride_id)},
         )
         logger.info("ws_ride_subscribe user_id=%s role=%s ride_id=%s", user_id, role, ride_id)
+        log_event("ws.ride_subscribed", user_id=user_id, role=role, ride_id=ride_id)
         return
 
     # Unknown events are acknowledged and ignored rather than fatal — the

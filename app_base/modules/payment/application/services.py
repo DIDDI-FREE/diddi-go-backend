@@ -17,6 +17,7 @@ from uuid import UUID
 
 from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
+from app_base.core.observability import log_event
 from app_base.core.settings import settings
 from app_base.modules.payment.domain.entities import (
     KEEP,
@@ -25,10 +26,10 @@ from app_base.modules.payment.domain.entities import (
     PaymentMethod,
     PaymentStatus,
     TopupStatus,
+    Transaction,
     WalletEntryDirection,
     WalletEntryStatus,
     WalletEntryType,
-    Transaction,
 )
 from app_base.modules.payment.domain.interfaces import PaymentRepository
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
@@ -119,6 +120,15 @@ class PaymentService:
             collected_at=now,
         )
         await self._record_ride_settlement(ride, payment.status)
+        log_event(
+            "payment.cash.confirmed",
+            ride_id=ride_id,
+            payment_id=payment.id,
+            collected_by=collected_by,
+            amount=payment.amount,
+            currency=payment.currency,
+            status=payment.status.value,
+        )
         return {
             "ride_id": str(payment.ride_id),
             "status": payment.status.value,
@@ -172,6 +182,7 @@ class PaymentService:
         except ValueError as exc:
             raise ApiError(422, ErrorCode.INVALID_PAYMENT_METHOD, "Methode de paiement invalide.") from exc
 
+        log_event("payment.prepare.started", ride_id=ride_id, payer_user_id=payer_user_id, method=payment_method.value)
         if payment_method is PaymentMethod.CASH:
             return await self._prepare_cash(ride_id)
 
@@ -225,6 +236,7 @@ class PaymentService:
             payload=raw_body.decode("utf-8"),
         )
         if not stored:
+            log_event("payment.webhook.duplicate", event_id=event_id, payment_intent_id=intent_id)
             return {"status": "duplicate"}
         if intent_id is None:
             raise ApiError(422, ErrorCode.PAYMENT_CALLBACK_INVALID, "PaymentIntent ID manquant.")
@@ -244,6 +256,13 @@ class PaymentService:
                 provider_status=str(data.get("status") or ""),
                 paid_at=paid_at,
             )
+            log_event(
+                "payment.webhook.processed",
+                event_id=event_id,
+                payment_intent_id=intent_id,
+                reference_type="ride",
+                status=status.value,
+            )
             return {"status": "processed", "payment_intent_id": str(intent_id), "reference_type": "ride"}
 
         topup = await self.payment_repo.find_topup_by_payment_intent_id(intent_id)
@@ -259,6 +278,13 @@ class PaymentService:
             status=_topup_status_from_payment_status(status),
             provider_status=str(data.get("status") or ""),
             paid_at=paid_at,
+        )
+        log_event(
+            "payment.webhook.processed",
+            event_id=event_id,
+            payment_intent_id=intent_id,
+            reference_type="driver_topup",
+            status=status.value,
         )
         return {"status": "processed", "payment_intent_id": str(intent_id), "reference_type": "driver_topup"}
 
@@ -564,6 +590,13 @@ class PaymentService:
 
         existing = await self.payment_repo.find_by_ride_id(ride_id)
         if existing and existing.payment_intent_id:
+            log_event(
+                "payment.prepare.reused",
+                ride_id=ride_id,
+                payment_id=existing.id,
+                payment_intent_id=existing.payment_intent_id,
+                status=existing.status.value,
+            )
             return _external_payment_payload(existing, next_action=existing.provider_next_action)
         if existing:
             raise ApiError(
@@ -609,6 +642,17 @@ class PaymentService:
             paid_at=datetime.now(UTC) if status is PaymentStatus.SUCCEEDED else None,
         )
         await self.payment_repo.save(payment)
+        log_event(
+            "payment.prepare.created",
+            ride_id=ride_id,
+            payment_id=payment.id,
+            payment_intent_id=payment.payment_intent_id,
+            method=payment_method.value,
+            amount=payment.amount,
+            currency=payment.currency,
+            provider_status=payment.provider_status,
+            has_next_action=next_action is not None,
+        )
         return _external_payment_payload(payment, next_action=next_action)
 
     async def _record_ride_settlement(self, ride, payment_status: PaymentStatus) -> None:
@@ -633,7 +677,8 @@ class PaymentService:
                 ),
             )
             return
-        if ride.payment_method.value in {PaymentMethod.DIDDIPAY.value, PaymentMethod.WAVE.value} and payment_status is PaymentStatus.SUCCEEDED:
+        is_digital_payment = ride.payment_method.value in {PaymentMethod.DIDDIPAY.value, PaymentMethod.WAVE.value}
+        if is_digital_payment and payment_status is PaymentStatus.SUCCEEDED:
             await self.payment_repo.record_ledger_entry_once(
                 DriverLedgerEntry(
                     id=DriverLedgerEntry.new_id(),

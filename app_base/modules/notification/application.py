@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
+from app_base.core.observability import log_event
 from app_base.modules.notification.domain import PushGateway, UserDevice, UserDeviceRepository
 
 logger = logging.getLogger("uvicorn.error")
@@ -39,6 +40,14 @@ class DeviceService:
             provider,
             push_token[-8:],
         )
+        log_event(
+            "push.device.registered",
+            user_id=user_id,
+            device_id=device.id,
+            platform=platform,
+            provider=provider,
+            token_suffix=push_token[-8:],
+        )
         return {
             "status": "registered",
             "id": str(device.id),
@@ -49,6 +58,7 @@ class DeviceService:
     async def unregister(self, *, user_id: UUID, push_token: str) -> dict:
         await self.devices.disable(user_id=user_id, push_token=push_token)
         logger.info("device_unregistered user_id=%s token_suffix=%s", user_id, push_token[-8:])
+        log_event("push.device.unregistered", user_id=user_id, token_suffix=push_token[-8:])
         return {"status": "unregistered"}
 
 
@@ -61,6 +71,12 @@ class PushNotificationService:
         devices = await self.devices.active_for_user(driver_user_id)
         if not devices:
             logger.info("push_ride_offer_skipped driver_user_id=%s reason=no_registered_device", driver_user_id)
+            log_event(
+                "push.ride_offer.skipped",
+                driver_user_id=driver_user_id,
+                ride_id=payload.get("ride_id"),
+                reason="no_registered_device",
+            )
             return
 
         data = {
@@ -75,6 +91,15 @@ class PushNotificationService:
                     driver_user_id,
                     device.id,
                     device.push_provider,
+                )
+                log_event(
+                    "push.ride_offer.skipped",
+                    level="warning",
+                    driver_user_id=driver_user_id,
+                    device_id=device.id,
+                    ride_id=payload.get("ride_id"),
+                    provider=device.push_provider,
+                    reason="fcm_only",
                 )
                 continue
             try:
@@ -91,6 +116,13 @@ class PushNotificationService:
                     device.push_provider,
                     payload.get("ride_id"),
                 )
+                log_event(
+                    "push.ride_offer.sent",
+                    driver_user_id=driver_user_id,
+                    device_id=device.id,
+                    ride_id=payload.get("ride_id"),
+                    provider=device.push_provider,
+                )
             except Exception:
                 logger.exception(
                     "push_ride_offer_failed driver_user_id=%s device_id=%s provider=%s ride_id=%s",
@@ -98,4 +130,12 @@ class PushNotificationService:
                     device.id,
                     device.push_provider,
                     payload.get("ride_id"),
+                )
+                log_event(
+                    "push.ride_offer.failed",
+                    level="error",
+                    driver_user_id=driver_user_id,
+                    device_id=device.id,
+                    ride_id=payload.get("ride_id"),
+                    provider=device.push_provider,
                 )

@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     api_prefix: str = "/v1"
     cors_origins: str = ""
     cors_origin_regex: str | None = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+    log_level: str = "INFO"
+    log_format: str = "json"
 
     # The runtime async engine uses `database_url` (asyncpg driver).
     # Alembic and any sync-only tooling can coexist with a separate url later.

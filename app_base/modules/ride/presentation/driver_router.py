@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app_base.core.auth_deps import get_current_active_user, require_business_driver, require_role
 from app_base.core.deps import driver_service, driver_wallet_service, get_driver_locations
+from app_base.core.observability import log_event
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.ride.application.driver_service import DriverService
@@ -184,6 +185,14 @@ async def go_online(
         position.lat,
         position.lng,
     )
+    log_event(
+        "driver.online",
+        user_id=current_user.id,
+        driver_id=profile.id,
+        vehicle_id=vehicle.id,
+        lat=position.lat,
+        lng=position.lng,
+    )
     return {
         "status": "online",
         "driver_id": str(profile.id),
@@ -200,4 +209,5 @@ async def go_offline(
 ) -> dict:
     await locations.go_offline(current_user.id)
     logger.info("driver_offline_requested user_id=%s", current_user.id)
+    log_event("driver.offline", user_id=current_user.id)
     return {"status": "offline"}

@@ -233,7 +233,12 @@ def _payment_status_from_diddipay(status: str) -> PaymentStatus:
     try:
         return PaymentStatus(status or PaymentStatus.REQUIRES_ACTION.value)
     except ValueError as exc:
-        raise ApiError(422, ErrorCode.PAYMENT_STATUS_INVALID, "Statut DiddiPay non reconnu.", {"status": status}) from exc
+        raise ApiError(
+            422,
+            ErrorCode.PAYMENT_STATUS_INVALID,
+            "Statut DiddiPay non reconnu.",
+            {"status": status},
+        ) from exc
 
 
 def _topup_status_from_payment_status(status: PaymentStatus) -> TopupStatus:

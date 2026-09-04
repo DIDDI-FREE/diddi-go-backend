@@ -220,7 +220,11 @@ async def payment_browser_return(
     <title>DiddiGo - Paiement</title>
     <style>
       body {{ font-family: sans-serif; margin: 0; padding: 32px; background: #f8fafc; color: #0f172a; }}
-      main {{ max-width: 520px; margin: 10vh auto; background: white; border-radius: 20px; padding: 28px; box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12); }}
+      main {{
+        max-width: 520px; margin: 10vh auto; background: white;
+        border-radius: 20px; padding: 28px;
+        box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+      }}
       h1 {{ margin-top: 0; font-size: 24px; }}
       p {{ line-height: 1.5; }}
       code {{ background: #e2e8f0; padding: 3px 6px; border-radius: 6px; }}
