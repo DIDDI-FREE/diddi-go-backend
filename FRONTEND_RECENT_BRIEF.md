@@ -1,5 +1,9 @@
 # DiddiGo - Brief frontend ajouts recents
 
+**Version brief :** `v3.1`
+**Date :** `2026-09-04`
+**Perimetre :** application mobile/frontend DiddiGo consommant DiddiGo API v3
+
 Ce brief resume les changements recents a consommer cote mobile/frontend.
 
 ## 0. Contrat API v3
@@ -53,6 +57,42 @@ demander explicitement le canal :
 La reponse DiddiFreeID retourne le canal effectif (`email`, `telegram` ou
 `logging`). Pour DiddiGo, rien ne change : une fois l'OTP verifie, le frontend
 utilise toujours le meme `access_token` Bearer.
+
+## 1.1 Biometrie locale : Face ID, Touch ID, empreinte
+
+Le frontend peut implementer Face ID, Touch ID ou empreinte digitale.
+
+Regle importante :
+
+```text
+La biometrie ne remplace pas DiddiFreeID.
+Elle sert seulement a deverrouiller localement une session deja authentifiee.
+```
+
+Workflow recommande :
+
+```text
+1. L'utilisateur se connecte normalement via DiddiFreeID OTP.
+2. L'app recoit et stocke les tokens dans le coffre securise du telephone.
+3. L'utilisateur active Face ID / Touch ID / empreinte.
+4. Au prochain lancement, l'app demande la biometrie.
+5. Si la biometrie reussit, l'app reutilise les tokens stockes.
+6. Si le token est expire, l'app utilise le refresh token ou renvoie vers login.
+```
+
+Cote backend DiddiGo :
+
+- aucun endpoint supplementaire n'est necessaire;
+- DiddiGo continue a recevoir `Authorization: Bearer <access_token>`;
+- DiddiGo ne recoit jamais l'empreinte, le visage ou une donnee biometrique;
+- si le token est expire, DiddiGo retourne `401 TOKEN_EXPIRED`.
+
+Cote securite frontend :
+
+- stocker les tokens uniquement dans le stockage securise OS;
+- ne jamais stocker les tokens en clair dans SharedPreferences/localStorage;
+- proposer un fallback PIN/app login si la biometrie echoue;
+- desactiver la biometrie apres deconnexion explicite.
 
 ## 2. Profil global utilisateur
 
