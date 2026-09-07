@@ -46,6 +46,7 @@ class MatchingService:
     vehicle_repo: VehicleRepository
     locations: DriverLocationService
     offers: OfferStore
+    partner_service: object | None = None
 
     async def try_match(self, ride: Ride) -> UUID | None:
         """Offer `ride` to the next suitable driver.
@@ -284,6 +285,10 @@ class MatchingService:
         vehicle = await self.vehicle_repo.find_active_for_driver(profile.id)
         if vehicle is None:
             return False, "no_active_vehicle"
+        if self.partner_service is not None and hasattr(self.partner_service, "driver_is_blocked_by_partner"):
+            blocked, partner_reason = await self.partner_service.driver_is_blocked_by_partner(profile.id)
+            if blocked:
+                return False, partner_reason or "partner_not_active"
         if vehicle.category != ride.vehicle_category:
             return False, f"vehicle_category_mismatch:{vehicle.category.value}!={ride.vehicle_category.value}"
         if not _comfort_can_serve(vehicle.comfort_level, ride.comfort_level):

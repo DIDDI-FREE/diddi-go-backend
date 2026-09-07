@@ -8,6 +8,8 @@ from app_base.core.request_logging import RequestLoggingMiddleware
 from app_base.core.settings import settings
 from app_base.modules.auth.presentation.router import router as auth_router
 from app_base.modules.notification.presentation import router as notification_router
+from app_base.modules.partner.presentation.router import admin_router as partner_admin_router
+from app_base.modules.partner.presentation.router import router as partner_router
 from app_base.modules.payment.presentation.router import admin_payment_router, admin_wallet_router, wallet_router
 from app_base.modules.payment.presentation.router import internal_router as payment_internal_router
 from app_base.modules.payment.presentation.router import return_router as payment_return_router
@@ -40,6 +42,8 @@ app.include_router(payment_router, prefix="/v1")
 app.include_router(wallet_router, prefix="/v1")
 app.include_router(admin_wallet_router, prefix="/v1")
 app.include_router(admin_payment_router, prefix="/v1")
+app.include_router(partner_admin_router, prefix="/v1")
+app.include_router(partner_router, prefix="/v1")
 app.include_router(ride_ws_router, prefix="/v1")
 app.include_router(payment_internal_router)
 app.include_router(payment_return_router)

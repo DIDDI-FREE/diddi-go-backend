@@ -441,6 +441,8 @@ class SqlAlchemyVehicleRepository:
             model=vehicle.model,
             color=vehicle.color,
             registration_document_file_id=vehicle.registration_document_file_id,
+            owner_type=vehicle.owner_type,
+            partner_id=vehicle.partner_id,
             category=vehicle.category.value,
             comfort_level=vehicle.comfort_level.value,
             active=vehicle.active,
@@ -469,6 +471,8 @@ class SqlAlchemyVehicleRepository:
             model=row.model,
             color=row.color,
             registration_document_file_id=row.registration_document_file_id,
+            owner_type=row.owner_type,
+            partner_id=row.partner_id,
             active=row.active,
             created_at=row.created_at,
         )

@@ -88,6 +88,26 @@ Ces routes restent utiles en local/dev si l'auth locale est active.
 | `422` | `RATING_OUT_OF_RANGE` | Note hors intervalle 1 a 5 |
 | `409` | `RATING_ALREADY_SUBMITTED` | Note deja envoyee pour ce role |
 
+## Partenaires et flottes
+
+| HTTP | Code | Sens |
+|---|---|---|
+| `403` | `PARTNER_SUSPENDED` | Chauffeur bloque car son partenaire actif n'est plus actif |
+| `404` | `PARTNER_NOT_FOUND` | Partenaire introuvable |
+| `404` | `PARTNER_MEMBER_NOT_FOUND` | Membre partenaire introuvable |
+| `404` | `VEHICLE_NOT_FOUND` | Vehicule introuvable |
+| `404` | `VEHICLE_ASSIGNMENT_NOT_FOUND` | Assignation vehicule introuvable |
+| `409` | `PARTNER_ALREADY_EXISTS` | Ressource partenaire deja existante |
+| `409` | `PARTNER_NOT_ACTIVE` | Operation reservee a un partenaire actif |
+| `409` | `DRIVER_ALREADY_AFFILIATED` | Chauffeur deja affilie a un partenaire actif |
+| `409` | `DRIVER_NOT_AFFILIATED` | Chauffeur non affilie au partenaire requis |
+| `409` | `VEHICLE_ALREADY_ASSIGNED` | Vehicule deja assigne a un chauffeur actif |
+| `409` | `VEHICLE_NOT_PARTNER_OWNED` | Vehicule non reconnu comme vehicule partenaire |
+| `422` | `INVALID_PARTNER_TYPE` | Type partenaire invalide |
+| `422` | `INVALID_PARTNER_STATUS` | Statut partenaire invalide |
+| `422` | `INVALID_PARTNER_ROLE` | Role partenaire invalide |
+| `422` | `INVALID_PARTNER_COMMISSION` | Commission partenaire invalide |
+
 ## Places, routing et DiddiMap
 
 DiddiMap est le fournisseur geographique unique. DiddiGo ne fait pas de fallback
