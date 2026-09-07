@@ -741,6 +741,9 @@ PATCH  /v1/admin/partners/{partner_id}
 POST   /v1/admin/partners/{partner_id}/activate
 POST   /v1/admin/partners/{partner_id}/suspend
 POST   /v1/admin/partners/{partner_id}/reject
+PATCH  /v1/admin/partners/{partner_id}/kyc
+POST   /v1/admin/partners/{partner_id}/kyc/approve
+POST   /v1/admin/partners/{partner_id}/kyc/reject
 POST   /v1/admin/partners/{partner_id}/members
 GET    /v1/admin/partners/{partner_id}/members
 DELETE /v1/admin/partners/{partner_id}/members/{member_id}
@@ -766,6 +769,26 @@ partner_role: partner_manager | partner_operator | partner_viewer
 partner_commission_mode: percentage | fixed
 ```
 
+KYC partenaire :
+
+```json
+{
+  "registration_document_file_id": "file-id",
+  "tax_document_file_id": "file-id",
+  "representative_id_document_file_id": "file-id",
+  "fleet_ownership_document_file_id": "file-id"
+}
+```
+
+Purposes DiddiFiles recommandes :
+
+```text
+diddigo_partner_kyc_registration
+diddigo_partner_kyc_tax
+diddigo_partner_kyc_representative_id
+diddigo_partner_kyc_fleet_ownership
+```
+
 Commission partenaire :
 
 ```json
@@ -781,6 +804,8 @@ Important produit :
 - La commission partenaire est configurable par partenaire.
 - Sprint 1 expose/preparera la donnee, mais ne declenche pas encore de payout
   automatique partenaire.
+- Un partenaire ne peut etre active que si son KYC partenaire contient registre,
+  document fiscal et piece du representant.
 - Si un partenaire est suspendu, les chauffeurs affilies ne peuvent plus passer
   en ligne et ne sont plus eligibles au matching.
 - Le frontend chauffeur doit afficher un blocage clair si
@@ -803,6 +828,7 @@ Erreur attendue pour chauffeur bloque :
 Impact UI recommande :
 
 - Backoffice admin: creer/activer/suspendre partenaires.
+- Backoffice admin: soumettre/approuver/rejeter KYC partenaire.
 - Backoffice admin: affilier chauffeur et assigner vehicule.
 - Espace partenaire futur: lire `GET /v1/partners/me`.
 - App chauffeur: seulement gerer l'erreur `PARTNER_SUSPENDED`.

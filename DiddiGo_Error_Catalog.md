@@ -107,6 +107,7 @@ Ces routes restent utiles en local/dev si l'auth locale est active.
 | `422` | `INVALID_PARTNER_STATUS` | Statut partenaire invalide |
 | `422` | `INVALID_PARTNER_ROLE` | Role partenaire invalide |
 | `422` | `INVALID_PARTNER_COMMISSION` | Commission partenaire invalide |
+| `422` | `INVALID_PARTNER_KYC_DOCUMENTS` | Dossier KYC partenaire incomplet ou incoherent |
 
 ## Places, routing et DiddiMap
 

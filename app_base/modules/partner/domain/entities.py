@@ -53,6 +53,17 @@ class Partner:
     partner_commission_enabled: bool = False
     partner_commission_mode: PartnerCommissionMode = PartnerCommissionMode.PERCENTAGE
     partner_commission_rate: Decimal = Decimal("0.00")
+    registration_document_file_id: UUID | None = None
+    tax_document_file_id: UUID | None = None
+    representative_id_document_file_id: UUID | None = None
+    fleet_ownership_document_file_id: UUID | None = None
+    registration_document_url: str | None = None
+    tax_document_url: str | None = None
+    representative_id_document_url: str | None = None
+    fleet_ownership_document_url: str | None = None
+    kyc_submitted_at: datetime | None = None
+    kyc_reviewed_at: datetime | None = None
+    kyc_review_notes: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

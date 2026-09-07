@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
@@ -37,7 +38,16 @@ class PartnerService:
         partner_commission_enabled: bool = False,
         partner_commission_mode: str = "percentage",
         partner_commission_rate: Decimal | str = Decimal("0.00"),
+        registration_document_file_id: UUID | None = None,
+        tax_document_file_id: UUID | None = None,
+        representative_id_document_file_id: UUID | None = None,
+        fleet_ownership_document_file_id: UUID | None = None,
+        registration_document_url: str | None = None,
+        tax_document_url: str | None = None,
+        representative_id_document_url: str | None = None,
+        fleet_ownership_document_url: str | None = None,
     ) -> dict:
+        now = datetime.now(UTC)
         partner = Partner(
             id=Partner.new_id(),
             name=_required_text(name, "name"),
@@ -49,6 +59,26 @@ class PartnerService:
             partner_commission_enabled=partner_commission_enabled,
             partner_commission_mode=_commission_mode(partner_commission_mode),
             partner_commission_rate=_commission_rate(partner_commission_rate, partner_commission_mode),
+            registration_document_file_id=registration_document_file_id,
+            tax_document_file_id=tax_document_file_id,
+            representative_id_document_file_id=representative_id_document_file_id,
+            fleet_ownership_document_file_id=fleet_ownership_document_file_id,
+            registration_document_url=_blank_to_none(registration_document_url),
+            tax_document_url=_blank_to_none(tax_document_url),
+            representative_id_document_url=_blank_to_none(representative_id_document_url),
+            fleet_ownership_document_url=_blank_to_none(fleet_ownership_document_url),
+            kyc_submitted_at=now
+            if _has_any_partner_kyc_document(
+                registration_document_file_id=registration_document_file_id,
+                tax_document_file_id=tax_document_file_id,
+                representative_id_document_file_id=representative_id_document_file_id,
+                fleet_ownership_document_file_id=fleet_ownership_document_file_id,
+                registration_document_url=registration_document_url,
+                tax_document_url=tax_document_url,
+                representative_id_document_url=representative_id_document_url,
+                fleet_ownership_document_url=fleet_ownership_document_url,
+            )
+            else None,
         )
         await self.partner_repo.save(partner)
         log_event(
@@ -96,6 +126,14 @@ class PartnerService:
         partner_commission_enabled: bool | None = None,
         partner_commission_mode: str | None = None,
         partner_commission_rate: Decimal | str | None = None,
+        registration_document_file_id: UUID | None = None,
+        tax_document_file_id: UUID | None = None,
+        representative_id_document_file_id: UUID | None = None,
+        fleet_ownership_document_file_id: UUID | None = None,
+        registration_document_url: str | None = None,
+        tax_document_url: str | None = None,
+        representative_id_document_url: str | None = None,
+        fleet_ownership_document_url: str | None = None,
     ) -> dict:
         partner = await self._require_partner(partner_id)
         if name is not None:
@@ -117,15 +155,71 @@ class PartnerService:
                 partner_commission_rate,
                 partner.partner_commission_mode.value,
             )
+        _update_partner_kyc_fields(
+            partner,
+            registration_document_file_id=registration_document_file_id,
+            tax_document_file_id=tax_document_file_id,
+            representative_id_document_file_id=representative_id_document_file_id,
+            fleet_ownership_document_file_id=fleet_ownership_document_file_id,
+            registration_document_url=registration_document_url,
+            tax_document_url=tax_document_url,
+            representative_id_document_url=representative_id_document_url,
+            fleet_ownership_document_url=fleet_ownership_document_url,
+        )
         await self.partner_repo.save(partner)
         log_event("partner.updated", partner_id=partner.id, status=partner.status.value)
         return _partner_payload(partner)
 
+    async def submit_kyc(
+        self,
+        partner_id: UUID,
+        *,
+        registration_document_file_id: UUID | None = None,
+        tax_document_file_id: UUID | None = None,
+        representative_id_document_file_id: UUID | None = None,
+        fleet_ownership_document_file_id: UUID | None = None,
+        registration_document_url: str | None = None,
+        tax_document_url: str | None = None,
+        representative_id_document_url: str | None = None,
+        fleet_ownership_document_url: str | None = None,
+    ) -> dict:
+        partner = await self._require_partner(partner_id)
+        _update_partner_kyc_fields(
+            partner,
+            registration_document_file_id=registration_document_file_id,
+            tax_document_file_id=tax_document_file_id,
+            representative_id_document_file_id=representative_id_document_file_id,
+            fleet_ownership_document_file_id=fleet_ownership_document_file_id,
+            registration_document_url=registration_document_url,
+            tax_document_url=tax_document_url,
+            representative_id_document_url=representative_id_document_url,
+            fleet_ownership_document_url=fleet_ownership_document_url,
+        )
+        partner.status = PartnerStatus.PENDING_VERIFICATION
+        partner.kyc_submitted_at = datetime.now(UTC)
+        partner.kyc_reviewed_at = None
+        partner.kyc_review_notes = None
+        await self.partner_repo.save(partner)
+        log_event("partner.kyc.submitted", partner_id=partner.id, status=partner.status.value)
+        return _partner_payload(partner)
+
     async def activate_partner(self, partner_id: UUID) -> dict:
         partner = await self._require_partner(partner_id)
+        _ensure_partner_kyc_complete(partner)
         partner.status = PartnerStatus.ACTIVE
+        partner.kyc_reviewed_at = datetime.now(UTC)
         await self.partner_repo.save(partner)
         log_event("partner.activated", partner_id=partner.id)
+        return _partner_payload(partner)
+
+    async def approve_kyc(self, partner_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None = None) -> dict:
+        partner = await self._require_partner(partner_id)
+        _ensure_partner_kyc_complete(partner)
+        partner.status = PartnerStatus.ACTIVE
+        partner.kyc_reviewed_at = datetime.now(UTC)
+        partner.kyc_review_notes = _review_note(notes, reviewed_by_user_id)
+        await self.partner_repo.save(partner)
+        log_event("partner.kyc.approved", partner_id=partner.id, reviewed_by_user_id=reviewed_by_user_id)
         return _partner_payload(partner)
 
     async def suspend_partner(self, partner_id: UUID) -> dict:
@@ -138,8 +232,23 @@ class PartnerService:
     async def reject_partner(self, partner_id: UUID) -> dict:
         partner = await self._require_partner(partner_id)
         partner.status = PartnerStatus.REJECTED
+        partner.kyc_reviewed_at = datetime.now(UTC)
         await self.partner_repo.save(partner)
         log_event("partner.rejected", level="warning", partner_id=partner.id)
+        return _partner_payload(partner)
+
+    async def reject_kyc(self, partner_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None = None) -> dict:
+        partner = await self._require_partner(partner_id)
+        partner.status = PartnerStatus.REJECTED
+        partner.kyc_reviewed_at = datetime.now(UTC)
+        partner.kyc_review_notes = _review_note(notes, reviewed_by_user_id)
+        await self.partner_repo.save(partner)
+        log_event(
+            "partner.kyc.rejected",
+            level="warning",
+            partner_id=partner.id,
+            reviewed_by_user_id=reviewed_by_user_id,
+        )
         return _partner_payload(partner)
 
     async def add_member(self, partner_id: UUID, *, user_id: UUID, role: str) -> dict:
@@ -295,6 +404,25 @@ def _partner_payload(partner: Partner) -> dict:
         "partner_commission_enabled": partner.partner_commission_enabled,
         "partner_commission_mode": partner.partner_commission_mode.value,
         "partner_commission_rate": float(partner.partner_commission_rate),
+        "kyc": {
+            "registration_document_file_id": str(partner.registration_document_file_id)
+            if partner.registration_document_file_id
+            else None,
+            "tax_document_file_id": str(partner.tax_document_file_id) if partner.tax_document_file_id else None,
+            "representative_id_document_file_id": str(partner.representative_id_document_file_id)
+            if partner.representative_id_document_file_id
+            else None,
+            "fleet_ownership_document_file_id": str(partner.fleet_ownership_document_file_id)
+            if partner.fleet_ownership_document_file_id
+            else None,
+            "registration_document_url": partner.registration_document_url,
+            "tax_document_url": partner.tax_document_url,
+            "representative_id_document_url": partner.representative_id_document_url,
+            "fleet_ownership_document_url": partner.fleet_ownership_document_url,
+            "submitted_at": partner.kyc_submitted_at.isoformat() if partner.kyc_submitted_at else None,
+            "reviewed_at": partner.kyc_reviewed_at.isoformat() if partner.kyc_reviewed_at else None,
+            "review_notes": partner.kyc_review_notes,
+        },
         "created_at": partner.created_at.isoformat() if partner.created_at else None,
         "updated_at": partner.updated_at.isoformat() if partner.updated_at else None,
     }
@@ -416,6 +544,61 @@ def _commission_rate(value: Decimal | str, mode: str) -> Decimal:
     return rate
 
 
+def _update_partner_kyc_fields(
+    partner: Partner,
+    *,
+    registration_document_file_id: UUID | None,
+    tax_document_file_id: UUID | None,
+    representative_id_document_file_id: UUID | None,
+    fleet_ownership_document_file_id: UUID | None,
+    registration_document_url: str | None,
+    tax_document_url: str | None,
+    representative_id_document_url: str | None,
+    fleet_ownership_document_url: str | None,
+) -> None:
+    if registration_document_file_id is not None:
+        partner.registration_document_file_id = registration_document_file_id
+    if tax_document_file_id is not None:
+        partner.tax_document_file_id = tax_document_file_id
+    if representative_id_document_file_id is not None:
+        partner.representative_id_document_file_id = representative_id_document_file_id
+    if fleet_ownership_document_file_id is not None:
+        partner.fleet_ownership_document_file_id = fleet_ownership_document_file_id
+    if registration_document_url is not None:
+        partner.registration_document_url = _blank_to_none(registration_document_url)
+    if tax_document_url is not None:
+        partner.tax_document_url = _blank_to_none(tax_document_url)
+    if representative_id_document_url is not None:
+        partner.representative_id_document_url = _blank_to_none(representative_id_document_url)
+    if fleet_ownership_document_url is not None:
+        partner.fleet_ownership_document_url = _blank_to_none(fleet_ownership_document_url)
+
+
+def _ensure_partner_kyc_complete(partner: Partner) -> None:
+    missing = [
+        key
+        for key, present in {
+            "registration_document": bool(partner.registration_document_file_id or partner.registration_document_url),
+            "tax_document": bool(partner.tax_document_file_id or partner.tax_document_url),
+            "representative_id_document": bool(
+                partner.representative_id_document_file_id or partner.representative_id_document_url
+            ),
+        }.items()
+        if not present
+    ]
+    if missing:
+        raise ApiError(
+            422,
+            ErrorCode.INVALID_PARTNER_KYC_DOCUMENTS,
+            "Le dossier KYC partenaire est incomplet.",
+            {"missing_documents": missing},
+        )
+
+
+def _has_any_partner_kyc_document(**values: object) -> bool:
+    return any(value is not None and str(value).strip() for value in values.values())
+
+
 def _required_text(value: str, field: str) -> str:
     cleaned = _blank_to_none(value)
     if cleaned is None:
@@ -428,3 +611,9 @@ def _blank_to_none(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _review_note(notes: str | None, reviewed_by_user_id: UUID) -> str:
+    cleaned = _blank_to_none(notes)
+    suffix = f"reviewed_by={reviewed_by_user_id}"
+    return f"{cleaned} ({suffix})" if cleaned else suffix

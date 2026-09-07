@@ -17,6 +17,14 @@ class PartnerCreateRequest(BaseModel):
     partner_commission_enabled: bool = False
     partner_commission_mode: str = "percentage"
     partner_commission_rate: Decimal = Decimal("0.00")
+    registration_document_file_id: UUID | None = None
+    tax_document_file_id: UUID | None = None
+    representative_id_document_file_id: UUID | None = None
+    fleet_ownership_document_file_id: UUID | None = None
+    registration_document_url: str | None = Field(default=None, max_length=1000)
+    tax_document_url: str | None = Field(default=None, max_length=1000)
+    representative_id_document_url: str | None = Field(default=None, max_length=1000)
+    fleet_ownership_document_url: str | None = Field(default=None, max_length=1000)
 
 
 class PartnerUpdateRequest(BaseModel):
@@ -28,6 +36,29 @@ class PartnerUpdateRequest(BaseModel):
     partner_commission_enabled: bool | None = None
     partner_commission_mode: str | None = None
     partner_commission_rate: Decimal | None = None
+    registration_document_file_id: UUID | None = None
+    tax_document_file_id: UUID | None = None
+    representative_id_document_file_id: UUID | None = None
+    fleet_ownership_document_file_id: UUID | None = None
+    registration_document_url: str | None = Field(default=None, max_length=1000)
+    tax_document_url: str | None = Field(default=None, max_length=1000)
+    representative_id_document_url: str | None = Field(default=None, max_length=1000)
+    fleet_ownership_document_url: str | None = Field(default=None, max_length=1000)
+
+
+class PartnerKycSubmitRequest(BaseModel):
+    registration_document_file_id: UUID | None = None
+    tax_document_file_id: UUID | None = None
+    representative_id_document_file_id: UUID | None = None
+    fleet_ownership_document_file_id: UUID | None = None
+    registration_document_url: str | None = Field(default=None, max_length=1000)
+    tax_document_url: str | None = Field(default=None, max_length=1000)
+    representative_id_document_url: str | None = Field(default=None, max_length=1000)
+    fleet_ownership_document_url: str | None = Field(default=None, max_length=1000)
+
+
+class PartnerKycReviewRequest(BaseModel):
+    notes: str | None = Field(default=None, max_length=1000)
 
 
 class PartnerMemberCreateRequest(BaseModel):
