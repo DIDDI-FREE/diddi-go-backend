@@ -32,6 +32,7 @@ from app_base.modules.ride.presentation.driver_schemas import (
     DriverProfileCreateRequest,
     GoOnlineRequest,
     VehicleCreateRequest,
+    VehicleKyvResubmitRequest,
 )
 from app_base.shared_kernel.types import GeoPoint
 
@@ -104,6 +105,30 @@ async def register_vehicle(
         category=payload.category,
         comfort_level=payload.comfort_level,
         registration_document_file_id=payload.registration_document_file_id,
+        insurance_document_file_id=payload.insurance_document_file_id,
+        technical_inspection_document_file_id=payload.technical_inspection_document_file_id,
+        transport_authorization_document_file_id=payload.transport_authorization_document_file_id,
+        vehicle_photo_file_id=payload.vehicle_photo_file_id,
+        registration_document_url=payload.registration_document_url,
+        insurance_document_url=payload.insurance_document_url,
+        technical_inspection_document_url=payload.technical_inspection_document_url,
+        transport_authorization_document_url=payload.transport_authorization_document_url,
+        vehicle_photo_url=payload.vehicle_photo_url,
+    )
+
+
+@router.post("/vehicles/{vehicle_id}/kyv/resubmit")
+async def resubmit_vehicle_kyv(
+    vehicle_id: UUID,
+    payload: VehicleKyvResubmitRequest,
+    service: DriverService = Depends(driver_service),
+    current_user: UserModel = Depends(get_current_active_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    return await service.resubmit_vehicle_kyv(
+        vehicle_id,
+        user_id=current_user.id,
+        **payload.model_dump(exclude_unset=True),
     )
 
 
@@ -161,6 +186,26 @@ async def reject_driver_kyc(
         reviewed_by_user_id=current_user.id,
         notes=payload.notes,
     )
+
+
+@router.post("/vehicles/{vehicle_id}/kyv/approve")
+async def approve_vehicle_kyv(
+    vehicle_id: UUID,
+    payload: DriverKycReviewRequest,
+    service: DriverService = Depends(driver_service),
+    current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.approve_vehicle_kyv(vehicle_id, reviewed_by_user_id=current_user.id, notes=payload.notes)
+
+
+@router.post("/vehicles/{vehicle_id}/kyv/reject")
+async def reject_vehicle_kyv(
+    vehicle_id: UUID,
+    payload: DriverKycReviewRequest,
+    service: DriverService = Depends(driver_service),
+    current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.reject_vehicle_kyv(vehicle_id, reviewed_by_user_id=current_user.id, notes=payload.notes)
 
 
 @router.post("/online")

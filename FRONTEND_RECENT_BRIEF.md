@@ -227,12 +227,49 @@ Pour le vehicule, `POST /v1/drivers/vehicle` accepte aussi :
 
 ```json
 {
-  "registration_document_file_id": "681effc5-4176-43d0-b42f-d0855fb2a7d8"
+  "registration_document_file_id": "681effc5-4176-43d0-b42f-d0855fb2a7d8",
+  "insurance_document_file_id": "file-id",
+  "technical_inspection_document_file_id": "file-id",
+  "transport_authorization_document_file_id": "file-id",
+  "vehicle_photo_file_id": "file-id"
 }
 ```
 
 Ce fichier doit etre cree dans DiddiFiles avec le purpose
 `diddigo_vehicle_registration`.
+
+KYV vehicule :
+
+```text
+obligatoire: carte grise, assurance, visite technique, photo vehicule
+optionnel: autorisation transport
+```
+
+Purposes DiddiFiles recommandes :
+
+```text
+diddigo_vehicle_registration
+diddigo_vehicle_insurance
+diddigo_vehicle_technical_inspection
+diddigo_vehicle_transport_authorization
+diddigo_vehicle_photo
+```
+
+Nouvelles routes KYV :
+
+```http
+POST /v1/drivers/vehicles/{vehicle_id}/kyv/resubmit
+POST /v1/drivers/vehicles/{vehicle_id}/kyv/approve
+POST /v1/drivers/vehicles/{vehicle_id}/kyv/reject
+```
+
+`approve` et `reject` exigent un token admin. La route `resubmit` est pour le
+chauffeur proprietaire du vehicule.
+
+La creation vehicule retourne maintenant `verification_status=pending_verification`.
+Tant que le vehicule n'est pas approuve, `POST /v1/drivers/online` retourne
+`VEHICLE_NOT_VERIFIED`. L'app chauffeur doit afficher "Vehicule en cours de
+verification".
 
 ## 4. Recherche de lieux
 

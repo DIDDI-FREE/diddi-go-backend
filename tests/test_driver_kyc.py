@@ -43,7 +43,14 @@ class FakeVehicleRepo:
         self.vehicle = vehicle
         return vehicle
 
+    async def find_by_id(self, vehicle_id):
+        if self.vehicle and self.vehicle.id == vehicle_id:
+            return self.vehicle
+        return None
+
     async def find_active_for_driver(self, driver_id):
+        if self.vehicle and self.vehicle.driver_id == driver_id and self.vehicle.active:
+            return self.vehicle
         return None
 
 
@@ -190,6 +197,9 @@ async def test_register_vehicle_stores_registration_file_id() -> None:
     service = DriverService(driver_repo=driver_repo, vehicle_repo=vehicle_repo)
     user_id = uuid4()
     registration_file_id = uuid4()
+    insurance_file_id = uuid4()
+    technical_file_id = uuid4()
+    photo_file_id = uuid4()
 
     await service.create_profile(user_id=user_id, license_number="CI-123456")
     payload = await service.register_vehicle(
@@ -200,11 +210,81 @@ async def test_register_vehicle_stores_registration_file_id() -> None:
         color="gris",
         category="standard",
         registration_document_file_id=registration_file_id,
+        insurance_document_file_id=insurance_file_id,
+        technical_inspection_document_file_id=technical_file_id,
+        vehicle_photo_file_id=photo_file_id,
     )
 
     assert payload["plate_number"] == "CE-123-AA"
     assert payload["registration_document_file_id"] == str(registration_file_id)
+    assert payload["insurance_document_file_id"] == str(insurance_file_id)
+    assert payload["technical_inspection_document_file_id"] == str(technical_file_id)
+    assert payload["vehicle_photo_file_id"] == str(photo_file_id)
+    assert payload["verification_status"] == "pending_verification"
     assert vehicle_repo.vehicle.registration_document_file_id == registration_file_id
+
+
+@pytest.mark.asyncio
+async def test_vehicle_kyv_approval_rejects_incomplete_documents() -> None:
+    driver_repo = FakeDriverRepo()
+    vehicle_repo = FakeVehicleRepo()
+    service = DriverService(driver_repo=driver_repo, vehicle_repo=vehicle_repo)
+    user_id = uuid4()
+
+    await service.create_profile(user_id=user_id, license_number="CI-123456")
+    vehicle = await service.register_vehicle(
+        user_id=user_id,
+        plate_number="CE-123-AA",
+        make="Toyota",
+        model="Yaris",
+        color="gris",
+        category="standard",
+        registration_document_file_id=uuid4(),
+    )
+
+    with pytest.raises(ApiError) as exc_info:
+        await service.approve_vehicle_kyv(UUID(vehicle["id"]), reviewed_by_user_id=uuid4())
+
+    assert exc_info.value.code == "INVALID_VEHICLE_KYV_DOCUMENTS"
+    assert exc_info.value.details["missing_documents"] == [
+        "insurance_document",
+        "technical_inspection_document",
+        "vehicle_photo",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_vehicle_kyv_approval_allows_driver_online_resolution() -> None:
+    driver_repo = FakeDriverRepo()
+    vehicle_repo = FakeVehicleRepo()
+    service = DriverService(driver_repo=driver_repo, vehicle_repo=vehicle_repo)
+    user_id = uuid4()
+    admin_id = uuid4()
+
+    profile = await service.create_profile(user_id=user_id, license_number="CI-123456", **full_kyc_documents())
+    await service.approve_kyc(UUID(profile["id"]), reviewed_by_user_id=admin_id)
+    vehicle = await service.register_vehicle(
+        user_id=user_id,
+        plate_number="CE-123-AA",
+        make="Toyota",
+        model="Yaris",
+        color="gris",
+        category="standard",
+        registration_document_file_id=uuid4(),
+        insurance_document_file_id=uuid4(),
+        technical_inspection_document_file_id=uuid4(),
+        vehicle_photo_file_id=uuid4(),
+    )
+
+    with pytest.raises(ApiError) as exc_info:
+        await service.resolve_driver(user_id)
+    assert exc_info.value.code == "VEHICLE_NOT_VERIFIED"
+
+    await service.approve_vehicle_kyv(UUID(vehicle["id"]), reviewed_by_user_id=admin_id)
+    resolved_profile, resolved_vehicle = await service.resolve_driver(user_id)
+
+    assert resolved_profile.id == UUID(profile["id"])
+    assert resolved_vehicle.id == UUID(vehicle["id"])
 
 
 def full_kyc_documents() -> dict:

@@ -23,6 +23,7 @@ from app_base.modules.ride.domain.entities import (
     DriverStatus,
     Vehicle,
     VehicleCategory,
+    VehicleVerificationStatus,
 )
 from app_base.modules.ride.domain.interfaces import (
     DriverProfileRepository,
@@ -202,6 +203,15 @@ class DriverService:
         category: str,
         comfort_level: str = "standard",
         registration_document_file_id: UUID | None = None,
+        insurance_document_file_id: UUID | None = None,
+        technical_inspection_document_file_id: UUID | None = None,
+        transport_authorization_document_file_id: UUID | None = None,
+        vehicle_photo_file_id: UUID | None = None,
+        registration_document_url: str | None = None,
+        insurance_document_url: str | None = None,
+        technical_inspection_document_url: str | None = None,
+        transport_authorization_document_url: str | None = None,
+        vehicle_photo_url: str | None = None,
     ) -> dict:
         if category not in {c.value for c in VehicleCategory}:
             raise ApiError(
@@ -223,6 +233,16 @@ class DriverService:
             model=model,
             color=color,
             registration_document_file_id=registration_document_file_id,
+            insurance_document_file_id=insurance_document_file_id,
+            technical_inspection_document_file_id=technical_inspection_document_file_id,
+            transport_authorization_document_file_id=transport_authorization_document_file_id,
+            vehicle_photo_file_id=vehicle_photo_file_id,
+            registration_document_url=_blank_to_none(registration_document_url),
+            insurance_document_url=_blank_to_none(insurance_document_url),
+            technical_inspection_document_url=_blank_to_none(technical_inspection_document_url),
+            transport_authorization_document_url=_blank_to_none(transport_authorization_document_url),
+            vehicle_photo_url=_blank_to_none(vehicle_photo_url),
+            verification_status=VehicleVerificationStatus.PENDING_VERIFICATION,
             category=VehicleCategory(category),
             comfort_level=ComfortLevel(comfort_level),
             active=True,
@@ -243,7 +263,85 @@ class DriverService:
             vehicle_id=vehicle.id,
             category=vehicle.category.value,
             comfort_level=vehicle.comfort_level.value,
+            verification_status=vehicle.verification_status.value,
         )
+        return _vehicle_payload(vehicle)
+
+    async def resubmit_vehicle_kyv(
+        self,
+        vehicle_id: UUID,
+        *,
+        user_id: UUID,
+        registration_document_file_id: UUID | None = None,
+        insurance_document_file_id: UUID | None = None,
+        technical_inspection_document_file_id: UUID | None = None,
+        transport_authorization_document_file_id: UUID | None = None,
+        vehicle_photo_file_id: UUID | None = None,
+        registration_document_url: str | None = None,
+        insurance_document_url: str | None = None,
+        technical_inspection_document_url: str | None = None,
+        transport_authorization_document_url: str | None = None,
+        vehicle_photo_url: str | None = None,
+    ) -> dict:
+        profile = await self._require_profile(user_id)
+        vehicle = await self._require_vehicle(vehicle_id)
+        if vehicle.driver_id != profile.id:
+            raise ApiError(403, ErrorCode.RIDE_NOT_OWNED_BY_USER, "Ce vehicule n'appartient pas a ce chauffeur.")
+        _update_vehicle_kyv_fields(
+            vehicle,
+            registration_document_file_id=registration_document_file_id,
+            insurance_document_file_id=insurance_document_file_id,
+            technical_inspection_document_file_id=technical_inspection_document_file_id,
+            transport_authorization_document_file_id=transport_authorization_document_file_id,
+            vehicle_photo_file_id=vehicle_photo_file_id,
+            registration_document_url=registration_document_url,
+            insurance_document_url=insurance_document_url,
+            technical_inspection_document_url=technical_inspection_document_url,
+            transport_authorization_document_url=transport_authorization_document_url,
+            vehicle_photo_url=vehicle_photo_url,
+        )
+        vehicle.verification_status = VehicleVerificationStatus.PENDING_VERIFICATION
+        vehicle.verified_at = None
+        vehicle.reviewed_at = None
+        vehicle.review_notes = None
+        await self.vehicle_repo.save(vehicle)
+        log_event("driver.vehicle.kyv.resubmitted", driver_id=profile.id, user_id=user_id, vehicle_id=vehicle.id)
+        return _vehicle_payload(vehicle)
+
+    async def approve_vehicle_kyv(
+        self,
+        vehicle_id: UUID,
+        *,
+        reviewed_by_user_id: UUID,
+        notes: str | None = None,
+    ) -> dict:
+        vehicle = await self._require_vehicle(vehicle_id)
+        _ensure_vehicle_kyv_documents_complete(vehicle)
+        now = datetime.now(UTC)
+        vehicle.verification_status = VehicleVerificationStatus.ACTIVE
+        vehicle.verified_at = now
+        vehicle.reviewed_at = now
+        vehicle.review_notes = _review_note(notes, reviewed_by_user_id)
+        vehicle.active = True
+        await self.vehicle_repo.save(vehicle)
+        log_event("driver.vehicle.kyv.approved", vehicle_id=vehicle.id, driver_id=vehicle.driver_id)
+        return _vehicle_payload(vehicle)
+
+    async def reject_vehicle_kyv(
+        self,
+        vehicle_id: UUID,
+        *,
+        reviewed_by_user_id: UUID,
+        notes: str | None = None,
+    ) -> dict:
+        vehicle = await self._require_vehicle(vehicle_id)
+        vehicle.verification_status = VehicleVerificationStatus.REJECTED
+        vehicle.verified_at = None
+        vehicle.reviewed_at = datetime.now(UTC)
+        vehicle.review_notes = _review_note(notes, reviewed_by_user_id)
+        vehicle.active = False
+        await self.vehicle_repo.save(vehicle)
+        log_event("driver.vehicle.kyv.rejected", level="warning", vehicle_id=vehicle.id, driver_id=vehicle.driver_id)
         return _vehicle_payload(vehicle)
 
     async def get_profile(self, user_id: UUID) -> dict:
@@ -323,6 +421,22 @@ class DriverService:
             raise ApiError(
                 409, "NO_ACTIVE_VEHICLE", "Aucun véhicule actif n'est associé à ce chauffeur.",
             )
+        if vehicle.verification_status != VehicleVerificationStatus.ACTIVE:
+            log_event(
+                "driver.online.blocked",
+                level="warning",
+                driver_id=profile.id,
+                user_id=user_id,
+                reason="vehicle_not_verified",
+                vehicle_id=vehicle.id,
+                vehicle_status=vehicle.verification_status.value,
+            )
+            raise ApiError(
+                403,
+                ErrorCode.VEHICLE_NOT_VERIFIED,
+                "Votre vehicule n'est pas encore valide.",
+                {"vehicle_id": str(vehicle.id), "status": vehicle.verification_status.value},
+            )
         return profile, vehicle
 
     async def _require_profile(self, user_id: UUID) -> DriverProfile:
@@ -332,6 +446,12 @@ class DriverService:
                 404, "DRIVER_PROFILE_NOT_FOUND", "Aucun profil chauffeur pour ce compte.",
             )
         return profile
+
+    async def _require_vehicle(self, vehicle_id: UUID) -> Vehicle:
+        vehicle = await self.vehicle_repo.find_by_id(vehicle_id)
+        if vehicle is None:
+            raise ApiError(404, ErrorCode.VEHICLE_NOT_FOUND, "Vehicule introuvable.")
+        return vehicle
 
 
 def _profile_payload(profile: DriverProfile) -> dict:
@@ -453,10 +573,87 @@ def _vehicle_payload(vehicle: Vehicle) -> dict:
         "registration_document_file_id": str(vehicle.registration_document_file_id)
         if vehicle.registration_document_file_id
         else None,
+        "insurance_document_file_id": str(vehicle.insurance_document_file_id)
+        if vehicle.insurance_document_file_id
+        else None,
+        "technical_inspection_document_file_id": str(vehicle.technical_inspection_document_file_id)
+        if vehicle.technical_inspection_document_file_id
+        else None,
+        "transport_authorization_document_file_id": str(vehicle.transport_authorization_document_file_id)
+        if vehicle.transport_authorization_document_file_id
+        else None,
+        "vehicle_photo_file_id": str(vehicle.vehicle_photo_file_id) if vehicle.vehicle_photo_file_id else None,
+        "registration_document_url": vehicle.registration_document_url,
+        "insurance_document_url": vehicle.insurance_document_url,
+        "technical_inspection_document_url": vehicle.technical_inspection_document_url,
+        "transport_authorization_document_url": vehicle.transport_authorization_document_url,
+        "vehicle_photo_url": vehicle.vehicle_photo_url,
+        "verification_status": vehicle.verification_status.value,
+        "verified_at": vehicle.verified_at.isoformat() if vehicle.verified_at else None,
+        "reviewed_at": vehicle.reviewed_at.isoformat() if vehicle.reviewed_at else None,
+        "review_notes": vehicle.review_notes,
         "owner_type": vehicle.owner_type,
         "partner_id": str(vehicle.partner_id) if vehicle.partner_id else None,
         "active": vehicle.active,
     }
+
+
+def _update_vehicle_kyv_fields(
+    vehicle: Vehicle,
+    *,
+    registration_document_file_id: UUID | None,
+    insurance_document_file_id: UUID | None,
+    technical_inspection_document_file_id: UUID | None,
+    transport_authorization_document_file_id: UUID | None,
+    vehicle_photo_file_id: UUID | None,
+    registration_document_url: str | None,
+    insurance_document_url: str | None,
+    technical_inspection_document_url: str | None,
+    transport_authorization_document_url: str | None,
+    vehicle_photo_url: str | None,
+) -> None:
+    if registration_document_file_id is not None:
+        vehicle.registration_document_file_id = registration_document_file_id
+    if insurance_document_file_id is not None:
+        vehicle.insurance_document_file_id = insurance_document_file_id
+    if technical_inspection_document_file_id is not None:
+        vehicle.technical_inspection_document_file_id = technical_inspection_document_file_id
+    if transport_authorization_document_file_id is not None:
+        vehicle.transport_authorization_document_file_id = transport_authorization_document_file_id
+    if vehicle_photo_file_id is not None:
+        vehicle.vehicle_photo_file_id = vehicle_photo_file_id
+    if registration_document_url is not None:
+        vehicle.registration_document_url = _blank_to_none(registration_document_url)
+    if insurance_document_url is not None:
+        vehicle.insurance_document_url = _blank_to_none(insurance_document_url)
+    if technical_inspection_document_url is not None:
+        vehicle.technical_inspection_document_url = _blank_to_none(technical_inspection_document_url)
+    if transport_authorization_document_url is not None:
+        vehicle.transport_authorization_document_url = _blank_to_none(transport_authorization_document_url)
+    if vehicle_photo_url is not None:
+        vehicle.vehicle_photo_url = _blank_to_none(vehicle_photo_url)
+
+
+def _ensure_vehicle_kyv_documents_complete(vehicle: Vehicle) -> None:
+    missing = [
+        key
+        for key, present in {
+            "registration_document": bool(vehicle.registration_document_file_id or vehicle.registration_document_url),
+            "insurance_document": bool(vehicle.insurance_document_file_id or vehicle.insurance_document_url),
+            "technical_inspection_document": bool(
+                vehicle.technical_inspection_document_file_id or vehicle.technical_inspection_document_url
+            ),
+            "vehicle_photo": bool(vehicle.vehicle_photo_file_id or vehicle.vehicle_photo_url),
+        }.items()
+        if not present
+    ]
+    if missing:
+        raise ApiError(
+            422,
+            ErrorCode.INVALID_VEHICLE_KYV_DOCUMENTS,
+            "Le dossier KYV vehicule est incomplet.",
+            {"missing_documents": missing},
+        )
 
 
 def _blank_to_none(value: str | None) -> str | None:

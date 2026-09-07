@@ -76,6 +76,13 @@ class PaymentMethod(str, Enum):
     DIDDIPAY = "diddipay"
 
 
+class VehicleVerificationStatus(str, Enum):
+    PENDING_VERIFICATION = "pending_verification"
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    REJECTED = "rejected"
+
+
 class DriverStatus(str, Enum):
     """Lifecycle of a driver's account (architecture doc §3.2).
 
@@ -278,6 +285,19 @@ class Vehicle:
     model: str | None = None
     color: str | None = None
     registration_document_file_id: UUID | None = None
+    insurance_document_file_id: UUID | None = None
+    technical_inspection_document_file_id: UUID | None = None
+    transport_authorization_document_file_id: UUID | None = None
+    vehicle_photo_file_id: UUID | None = None
+    registration_document_url: str | None = None
+    insurance_document_url: str | None = None
+    technical_inspection_document_url: str | None = None
+    transport_authorization_document_url: str | None = None
+    vehicle_photo_url: str | None = None
+    verification_status: VehicleVerificationStatus = VehicleVerificationStatus.PENDING_VERIFICATION
+    verified_at: datetime | None = None
+    reviewed_at: datetime | None = None
+    review_notes: str | None = None
     owner_type: str = "driver"
     partner_id: UUID | None = None
     active: bool = True

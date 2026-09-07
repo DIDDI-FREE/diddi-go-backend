@@ -180,6 +180,9 @@ class SqlAlchemyPartnerRepository:
         row.owner_type = "partner"
         row.partner_id = partner_id
         row.driver_id = driver_id
+        if row.verification_status != "active":
+            row.verification_status = "pending_verification"
+            row.active = False
         await self._session.flush()
         return True
 

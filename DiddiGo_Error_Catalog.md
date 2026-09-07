@@ -66,6 +66,10 @@ Ces routes restent utiles en local/dev si l'auth locale est active.
 | `422` | `INVALID_LICENSE_NUMBER` | Numero de permis vide ou invalide |
 | `422` | `INVALID_VEHICLE_CATEGORY` | Categorie vehicule inconnue |
 | `422` | `INVALID_COMFORT_LEVEL` | Niveau de confort inconnu |
+| `403` | `VEHICLE_NOT_VERIFIED` | Vehicule non valide par l'admin KYV |
+| `404` | `VEHICLE_NOT_FOUND` | Vehicule introuvable |
+| `422` | `INVALID_VEHICLE_KYV_DOCUMENTS` | Dossier KYV vehicule incomplet |
+| `422` | `INVALID_VEHICLE_STATUS` | Statut KYV vehicule invalide |
 
 ## Rides et matching
 
