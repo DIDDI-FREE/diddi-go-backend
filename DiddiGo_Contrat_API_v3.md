@@ -1,4 +1,4 @@
-# DiddiGo - Contrat API v3
+# DiddiGo - Contrat API v3.2
 
 **Destine a :** equipes Frontend / Mobile / Backend DiddiGo
 **Base URL staging :** `https://go-staging.diddifree.com/v1`
@@ -6,7 +6,7 @@
 **DiddiFiles :** `https://diddifiles.diddifree.com/v1`
 **DiddiMap staging :** `http://abidjanmaps-backend-staging.diddifree.com`
 
-Important : le prefixe HTTP reste `/v1`. Le terme `v3` designe la version du
+Important : le prefixe HTTP reste `/v1`. Le terme `v3.2` designe la version du
 contrat fonctionnel.
 
 ---
@@ -25,6 +25,9 @@ echoue, DiddiGo retourne une erreur documentee.
 
 Le token DiddiFreeID ne porte pas le role chauffeur. Le role chauffeur est une
 qualification metier DiddiGo via `driver_profiles` + `vehicles`.
+
+Les roles partenaires sont locaux a DiddiGo. DiddiFreeID continue a porter
+seulement les roles globaux `user` et `admin`.
 
 Les erreurs DiddiGo suivent toujours le format `{"error":{"code","message","details"}}`.
 Le catalogue complet des codes est maintenu dans `DiddiGo_Error_Catalog.md`.
@@ -45,6 +48,10 @@ Le catalogue complet des codes est maintenu dans `DiddiGo_Error_Catalog.md`.
 | `wallet.entry_type` | `ride_payout`, `platform_commission`, `topup`, `adjustment` |
 | `wallet.entry_status` | `pending`, `confirmed`, `failed` |
 | `topup.status` | `pending`, `requires_action`, `processing`, `succeeded`, `failed`, `cancelled` |
+| `partner.type` | `company`, `fleet_owner` |
+| `partner.status` | `pending_verification`, `active`, `suspended`, `rejected` |
+| `partner.member_role` | `partner_manager`, `partner_operator`, `partner_viewer` |
+| `partner.commission_mode` | `percentage`, `fixed` |
 
 Note produit : on garde les categories vehicule existantes cote backend.
 Pour reduire la friction MVP, le frontend passager peut omettre
@@ -1021,12 +1028,234 @@ ni `driver_payout_estimate`. Le chauffeur recupere ces champs via
 
 ---
 
-## 12. Hors Scope v3
+## 12. Partenaires et flottes
+
+Le module partenaire appartient a DiddiGo, car il impacte chauffeurs,
+vehicules, matching, reporting et commissions metier VTC.
+
+### Principes
+
+```text
+DiddiFreeID = identite globale user/admin
+DiddiGo = roles partenaire locaux, affiliation chauffeur, vehicule partenaire
+```
+
+Un chauffeur peut avoir un seul partenaire actif. Un vehicule peut appartenir
+au chauffeur solo ou a un partenaire. Un vehicule partenaire peut etre assigne
+a un seul chauffeur actif a la fois.
+
+Si un partenaire actif d'affiliation devient `suspended` ou `rejected`, ses
+chauffeurs encore affilies ne peuvent pas passer en ligne et ne sont plus
+eligibles au matching.
+
+La commission partenaire est configurable par partenaire. En v3.2, DiddiGo
+prepare le calcul/reporting; le payout automatique partenaire reste hors scope.
+
+### `POST /admin/partners`
+
+Route admin. Cree un partenaire en `pending_verification`.
+
+Requete :
+
+```json
+{
+  "name": "Fleet Abidjan Nord",
+  "partner_type": "fleet_owner",
+  "legal_name": "Fleet Abidjan Nord SARL",
+  "contact_phone": "+2250700000000",
+  "contact_email": "ops@example.com",
+  "partner_commission_enabled": true,
+  "partner_commission_mode": "percentage",
+  "partner_commission_rate": 0.05
+}
+```
+
+Reponse `201` :
+
+```json
+{
+  "id": "partner-id",
+  "name": "Fleet Abidjan Nord",
+  "partner_type": "fleet_owner",
+  "status": "pending_verification",
+  "legal_name": "Fleet Abidjan Nord SARL",
+  "contact_phone": "+2250700000000",
+  "contact_email": "ops@example.com",
+  "partner_commission_enabled": true,
+  "partner_commission_mode": "percentage",
+  "partner_commission_rate": 0.05,
+  "created_at": "2026-09-07T09:00:00Z",
+  "updated_at": "2026-09-07T09:00:00Z"
+}
+```
+
+### `GET /admin/partners`
+
+Route admin. Liste les partenaires.
+
+Query params :
+
+```text
+status       optionnel: pending_verification | active | suspended | rejected
+partner_type optionnel: company | fleet_owner
+page         defaut 1
+page_size    defaut 20, max 100
+```
+
+### `GET /admin/partners/{partner_id}`
+
+Route admin. Detail partenaire.
+
+### `PATCH /admin/partners/{partner_id}`
+
+Route admin. Modifie les informations et la commission partenaire.
+
+Champs acceptes : memes champs que `POST /admin/partners`, tous optionnels.
+
+### `POST /admin/partners/{partner_id}/activate`
+
+Route admin. Passe le partenaire a `active`.
+
+### `POST /admin/partners/{partner_id}/suspend`
+
+Route admin. Passe le partenaire a `suspended`.
+
+Impact :
+
+```text
+chauffeurs affilies -> ne peuvent plus passer en ligne
+matching -> filtre ces chauffeurs avec reason=partner_not_active:suspended
+```
+
+### `POST /admin/partners/{partner_id}/reject`
+
+Route admin. Passe le partenaire a `rejected`.
+
+### `POST /admin/partners/{partner_id}/members`
+
+Route admin. Ajoute un utilisateur comme membre local du partenaire.
+
+Requete :
+
+```json
+{
+  "user_id": "identity-user-id",
+  "role": "partner_manager"
+}
+```
+
+Roles autorises :
+
+```text
+partner_manager
+partner_operator
+partner_viewer
+```
+
+### `GET /admin/partners/{partner_id}/members`
+
+Route admin. Liste les membres du partenaire.
+
+### `DELETE /admin/partners/{partner_id}/members/{member_id}`
+
+Route admin. Desactive le membre, sans supprimer l'historique.
+
+### `GET /partners/me`
+
+Route utilisateur authentifie. Retourne les partenaires auxquels l'utilisateur
+appartient.
+
+Reponse :
+
+```json
+{
+  "partners": [
+    {
+      "id": "partner-id",
+      "name": "Fleet Abidjan Nord",
+      "partner_type": "fleet_owner",
+      "status": "active",
+      "role": "partner_manager",
+      "membership_id": "membership-id"
+    }
+  ]
+}
+```
+
+### `POST /admin/partners/{partner_id}/drivers`
+
+Route admin. Affilie un chauffeur au partenaire.
+
+Requete :
+
+```json
+{
+  "driver_id": "driver-profile-id"
+}
+```
+
+Regle : un chauffeur ne peut avoir qu'une affiliation partenaire active.
+
+### `GET /admin/partners/{partner_id}/drivers`
+
+Route admin. Liste les affiliations chauffeur actives.
+
+### `DELETE /admin/partners/{partner_id}/drivers/{driver_id}`
+
+Route admin. Termine l'affiliation active.
+
+### `POST /admin/partners/{partner_id}/vehicles/{vehicle_id}/assign`
+
+Route admin. Marque le vehicule comme vehicule partenaire et l'assigne a un
+chauffeur deja affilie a ce partenaire.
+
+Requete :
+
+```json
+{
+  "driver_id": "driver-profile-id"
+}
+```
+
+Regles :
+
+```text
+partenaire doit etre active
+chauffeur doit etre affilie au partenaire
+vehicule ne doit pas avoir une assignation active
+```
+
+### `POST /admin/partners/{partner_id}/vehicles/{vehicle_id}/unassign`
+
+Route admin. Termine l'assignation active du vehicule.
+
+### Erreurs partenaires
+
+| HTTP | Code | Sens |
+|---|---|---|
+| `403` | `PARTNER_SUSPENDED` | Chauffeur bloque car partenaire non actif |
+| `404` | `PARTNER_NOT_FOUND` | Partenaire introuvable |
+| `404` | `PARTNER_MEMBER_NOT_FOUND` | Membre partenaire introuvable |
+| `404` | `VEHICLE_NOT_FOUND` | Vehicule introuvable |
+| `404` | `VEHICLE_ASSIGNMENT_NOT_FOUND` | Assignation vehicule introuvable |
+| `409` | `PARTNER_NOT_ACTIVE` | Operation reservee a un partenaire actif |
+| `409` | `DRIVER_ALREADY_AFFILIATED` | Chauffeur deja affilie a un partenaire actif |
+| `409` | `DRIVER_NOT_AFFILIATED` | Chauffeur non affilie au partenaire requis |
+| `409` | `VEHICLE_ALREADY_ASSIGNED` | Vehicule deja assigne a un chauffeur actif |
+| `422` | `INVALID_PARTNER_TYPE` | Type partenaire invalide |
+| `422` | `INVALID_PARTNER_STATUS` | Statut partenaire invalide |
+| `422` | `INVALID_PARTNER_ROLE` | Role partenaire invalide |
+| `422` | `INVALID_PARTNER_COMMISSION` | Commission partenaire invalide |
+
+---
+
+## 13. Hors Scope v3.2
 
 ```text
 DiddiSend
 DiddiScore
 dispatch urgence complet
-map-matching DiddiMap Core officiel
+wallet partenaire complet
+payout automatique partenaire
 contrat physique /v2 ou /v3 dans l'URL
 ```

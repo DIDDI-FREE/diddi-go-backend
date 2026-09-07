@@ -1,8 +1,8 @@
 # DiddiGo - Brief frontend ajouts recents
 
-**Version brief :** `v3.1`
-**Date :** `2026-09-04`
-**Perimetre :** application mobile/frontend DiddiGo consommant DiddiGo API v3
+**Version brief :** `v3.2`
+**Date :** `2026-09-07`
+**Perimetre :** application mobile/frontend DiddiGo consommant DiddiGo API v3.2
 
 Ce brief resume les changements recents a consommer cote mobile/frontend.
 
@@ -28,6 +28,8 @@ Ajouts majeurs :
 - traces GPS chauffeur via REST.
 - lien public de partage de course sans login.
 - endpoint urgence course.
+- module partenaires/flottes: administration, membres, affiliation chauffeur,
+  assignation vehicule et commission partenaire configurable.
 
 ## 1. Auth DiddiFreeID
 
@@ -724,7 +726,89 @@ driver.location_push toutes les 3 a 5 secondes
 Pas encore implemente dans DiddiGo. A traiter comme un futur module separe,
 probablement `communication`, avec acces limite aux rides concernees.
 
-## 8. Staging / Portainer
+## 8. Partenaires et flottes
+
+Le module partenaires est principalement backoffice/admin au debut. Le
+frontend passager ne change pas: il ne voit pas la notion de partenaire.
+
+Routes admin ajoutees :
+
+```http
+POST   /v1/admin/partners
+GET    /v1/admin/partners
+GET    /v1/admin/partners/{partner_id}
+PATCH  /v1/admin/partners/{partner_id}
+POST   /v1/admin/partners/{partner_id}/activate
+POST   /v1/admin/partners/{partner_id}/suspend
+POST   /v1/admin/partners/{partner_id}/reject
+POST   /v1/admin/partners/{partner_id}/members
+GET    /v1/admin/partners/{partner_id}/members
+DELETE /v1/admin/partners/{partner_id}/members/{member_id}
+POST   /v1/admin/partners/{partner_id}/drivers
+GET    /v1/admin/partners/{partner_id}/drivers
+DELETE /v1/admin/partners/{partner_id}/drivers/{driver_id}
+POST   /v1/admin/partners/{partner_id}/vehicles/{vehicle_id}/assign
+POST   /v1/admin/partners/{partner_id}/vehicles/{vehicle_id}/unassign
+```
+
+Route membre partenaire :
+
+```http
+GET /v1/partners/me
+```
+
+Enums :
+
+```text
+partner_type: company | fleet_owner
+partner_status: pending_verification | active | suspended | rejected
+partner_role: partner_manager | partner_operator | partner_viewer
+partner_commission_mode: percentage | fixed
+```
+
+Commission partenaire :
+
+```json
+{
+  "partner_commission_enabled": true,
+  "partner_commission_mode": "percentage",
+  "partner_commission_rate": 0.05
+}
+```
+
+Important produit :
+
+- La commission partenaire est configurable par partenaire.
+- Sprint 1 expose/preparera la donnee, mais ne declenche pas encore de payout
+  automatique partenaire.
+- Si un partenaire est suspendu, les chauffeurs affilies ne peuvent plus passer
+  en ligne et ne sont plus eligibles au matching.
+- Le frontend chauffeur doit afficher un blocage clair si
+  `POST /v1/drivers/online` retourne `PARTNER_SUSPENDED`.
+
+Erreur attendue pour chauffeur bloque :
+
+```json
+{
+  "error": {
+    "code": "PARTNER_SUSPENDED",
+    "message": "Votre partenaire n'est pas actif. Vous ne pouvez pas passer en ligne.",
+    "details": {
+      "reason": "partner_not_active:suspended"
+    }
+  }
+}
+```
+
+Impact UI recommande :
+
+- Backoffice admin: creer/activer/suspendre partenaires.
+- Backoffice admin: affilier chauffeur et assigner vehicule.
+- Espace partenaire futur: lire `GET /v1/partners/me`.
+- App chauffeur: seulement gerer l'erreur `PARTNER_SUSPENDED`.
+- App passager: aucun changement.
+
+## 9. Staging / Portainer
 
 Le correctif recent concerne le deploiement backend, pas les endpoints
 frontend. Les URLs API ne changent pas :

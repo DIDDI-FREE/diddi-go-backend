@@ -38,6 +38,8 @@ from app_base.modules.auth.infra.repositories import (
 from app_base.modules.notification.application import DeviceService, PushNotificationService
 from app_base.modules.notification.infra.fcm import build_push_gateway
 from app_base.modules.notification.infra.repositories import SqlAlchemyUserDeviceRepository
+from app_base.modules.partner.application.services import PartnerService
+from app_base.modules.partner.infra.repositories import SqlAlchemyPartnerRepository
 from app_base.modules.payment.application.services import PaymentService
 from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
@@ -122,6 +124,10 @@ async def user_device_repo(session: AsyncSession = Depends(session_dep)) -> SqlA
     return SqlAlchemyUserDeviceRepository(session)
 
 
+async def partner_repo(session: AsyncSession = Depends(session_dep)) -> SqlAlchemyPartnerRepository:
+    return SqlAlchemyPartnerRepository(session)
+
+
 # --- services --------------------------------------------------------------
 
 async def auth_service(
@@ -190,6 +196,12 @@ async def push_notification_service(
     return PushNotificationService(devices=user_device_repo_dep, gateway=build_push_gateway())
 
 
+async def partner_service(
+    partner_repo_dep: SqlAlchemyPartnerRepository = Depends(partner_repo),
+) -> PartnerService:
+    return PartnerService(partner_repo=partner_repo_dep)
+
+
 def get_offer_store(redis: Redis = Depends(get_redis)) -> RedisOfferStore:
     return RedisOfferStore(redis=redis)
 
@@ -198,6 +210,7 @@ async def matching_service(
     ride_repo_dep: SqlAlchemyRideRepository = Depends(ride_repo),
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
     vehicle_repo_dep: SqlAlchemyVehicleRepository = Depends(vehicle_repo),
+    partner_service_dep: PartnerService = Depends(partner_service),
     locations: RedisDriverLocationService = Depends(get_driver_locations),
     offers: RedisOfferStore = Depends(get_offer_store),
 ) -> MatchingService:
@@ -205,6 +218,7 @@ async def matching_service(
         ride_repo=ride_repo_dep,
         driver_repo=driver_repo_dep,
         vehicle_repo=vehicle_repo_dep,
+        partner_service=partner_service_dep,
         locations=locations,
         offers=offers,
     )
@@ -234,4 +248,6 @@ __all__ = [
     "pricing_rule_repo",
     "payment_repo",
     "user_device_repo",
+    "partner_repo",
+    "partner_service",
 ]

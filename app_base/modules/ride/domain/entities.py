@@ -278,6 +278,8 @@ class Vehicle:
     model: str | None = None
     color: str | None = None
     registration_document_file_id: UUID | None = None
+    owner_type: str = "driver"
+    partner_id: UUID | None = None
     active: bool = True
     created_at: datetime | None = None
 

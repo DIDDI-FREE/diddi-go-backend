@@ -109,6 +109,8 @@ class VehicleModel(Base):
     model: Mapped[str | None] = mapped_column(String(50), nullable=True)
     color: Mapped[str | None] = mapped_column(String(30), nullable=True)
     registration_document_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    owner_type: Mapped[str] = mapped_column(String(20), nullable=False, default="driver")
+    partner_id: Mapped[UUID | None] = mapped_column(_PG_UUID, ForeignKey("partner.partners.id"), nullable=True)
     category: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")  # standard | comfort | van
     comfort_level: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

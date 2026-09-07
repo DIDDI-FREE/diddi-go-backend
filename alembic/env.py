@@ -4,7 +4,7 @@ Highlights:
   * `sqlalchemy.url` in alembic.ini is overridden at runtime from
     `app_base.core.settings.settings.database_url` — so `.env` controls
     the migrate target, not alembic.ini.
-  * Multiple schemas are in play (`auth`, `ride`, `payment`).
+  * Multiple schemas are in play (`auth`, `ride`, `payment`, `partner`).
     `include_schemas` makes Alembic diff those in addition to public.
   * PostGIS geography columns need geoalchemy2's renderers registered —
     `geoalchemy2.alembic_helpers` does that automatically when imported.
@@ -31,6 +31,7 @@ from app_base.core.settings import settings
 # onto Base.metadata so Alembic can see them for autogenerate.
 from app_base.modules.auth.infra import models as _auth_models  # noqa: F401
 from app_base.modules.notification.infra import models as _notification_models  # noqa: F401
+from app_base.modules.partner.infra import models as _partner_models  # noqa: F401
 from app_base.modules.payment.infra import models as _payment_models  # noqa: F401
 from app_base.modules.ride.infra import models as _ride_models  # noqa: F401
 
@@ -48,7 +49,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 # Schemas managed by this project. Alembic will ignore anything outside.
-INCLUDE_SCHEMAS = {"auth", "ride", "payment", "notification"}
+INCLUDE_SCHEMAS = {"auth", "ride", "payment", "notification", "partner"}
 
 
 def include_object(obj, name, type_, reflected, compare_to):

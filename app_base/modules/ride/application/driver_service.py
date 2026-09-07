@@ -453,6 +453,8 @@ def _vehicle_payload(vehicle: Vehicle) -> dict:
         "registration_document_file_id": str(vehicle.registration_document_file_id)
         if vehicle.registration_document_file_id
         else None,
+        "owner_type": vehicle.owner_type,
+        "partner_id": str(vehicle.partner_id) if vehicle.partner_id else None,
         "active": vehicle.active,
     }
 
