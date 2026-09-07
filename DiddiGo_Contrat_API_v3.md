@@ -1066,7 +1066,11 @@ Requete :
   "contact_email": "ops@example.com",
   "partner_commission_enabled": true,
   "partner_commission_mode": "percentage",
-  "partner_commission_rate": 0.05
+  "partner_commission_rate": 0.05,
+  "registration_document_file_id": "file-id",
+  "tax_document_file_id": "file-id",
+  "representative_id_document_file_id": "file-id",
+  "fleet_ownership_document_file_id": "file-id"
 }
 ```
 
@@ -1084,6 +1088,19 @@ Reponse `201` :
   "partner_commission_enabled": true,
   "partner_commission_mode": "percentage",
   "partner_commission_rate": 0.05,
+  "kyc": {
+    "registration_document_file_id": "file-id",
+    "tax_document_file_id": "file-id",
+    "representative_id_document_file_id": "file-id",
+    "fleet_ownership_document_file_id": "file-id",
+    "registration_document_url": null,
+    "tax_document_url": null,
+    "representative_id_document_url": null,
+    "fleet_ownership_document_url": null,
+    "submitted_at": "2026-09-07T09:00:00Z",
+    "reviewed_at": null,
+    "review_notes": null
+  },
   "created_at": "2026-09-07T09:00:00Z",
   "updated_at": "2026-09-07T09:00:00Z"
 }
@@ -1115,6 +1132,70 @@ Champs acceptes : memes champs que `POST /admin/partners`, tous optionnels.
 ### `POST /admin/partners/{partner_id}/activate`
 
 Route admin. Passe le partenaire a `active`.
+
+Depuis v3.2, cette route exige un KYC partenaire complet. Si le dossier est
+incomplet, DiddiGo retourne `422 INVALID_PARTNER_KYC_DOCUMENTS`.
+
+Documents obligatoires pour activation :
+
+| Document | Champ DiddiGo | Purpose DiddiFiles recommande |
+|---|---|---|
+| Registre / immatriculation | `registration_document_file_id` | `diddigo_partner_kyc_registration` |
+| Document fiscal | `tax_document_file_id` | `diddigo_partner_kyc_tax` |
+| Piece representant | `representative_id_document_file_id` | `diddigo_partner_kyc_representative_id` |
+
+Document optionnel :
+
+| Document | Champ DiddiGo | Purpose DiddiFiles recommande |
+|---|---|---|
+| Justificatif propriete flotte | `fleet_ownership_document_file_id` | `diddigo_partner_kyc_fleet_ownership` |
+
+Les champs legacy `*_document_url` restent acceptes temporairement pour le
+backoffice, mais la source de verite doit etre le `file_id` DiddiFiles.
+
+### `PATCH /admin/partners/{partner_id}/kyc`
+
+Route admin. Soumet ou corrige le dossier KYC partenaire. Le partenaire repasse
+en `pending_verification`.
+
+Requete :
+
+```json
+{
+  "registration_document_file_id": "file-id",
+  "tax_document_file_id": "file-id",
+  "representative_id_document_file_id": "file-id",
+  "fleet_ownership_document_file_id": "file-id",
+  "registration_document_url": "https://legacy.example/registration.pdf",
+  "tax_document_url": "https://legacy.example/tax.pdf",
+  "representative_id_document_url": "https://legacy.example/representative-id.jpg",
+  "fleet_ownership_document_url": "https://legacy.example/fleet.pdf"
+}
+```
+
+### `POST /admin/partners/{partner_id}/kyc/approve`
+
+Route admin. Valide le KYC partenaire et active le partenaire.
+
+Requete :
+
+```json
+{
+  "notes": "Dossier partenaire OK"
+}
+```
+
+### `POST /admin/partners/{partner_id}/kyc/reject`
+
+Route admin. Rejette le KYC partenaire et passe le partenaire en `rejected`.
+
+Requete :
+
+```json
+{
+  "notes": "Document fiscal manquant"
+}
+```
 
 ### `POST /admin/partners/{partner_id}/suspend`
 
@@ -1246,6 +1327,7 @@ Route admin. Termine l'assignation active du vehicule.
 | `422` | `INVALID_PARTNER_STATUS` | Statut partenaire invalide |
 | `422` | `INVALID_PARTNER_ROLE` | Role partenaire invalide |
 | `422` | `INVALID_PARTNER_COMMISSION` | Commission partenaire invalide |
+| `422` | `INVALID_PARTNER_KYC_DOCUMENTS` | Dossier KYC partenaire incomplet |
 
 ---
 

@@ -13,6 +13,8 @@ from app_base.modules.partner.application.services import PartnerService
 from app_base.modules.partner.presentation.schemas import (
     PartnerCreateRequest,
     PartnerDriverAffiliateRequest,
+    PartnerKycReviewRequest,
+    PartnerKycSubmitRequest,
     PartnerMemberCreateRequest,
     PartnerUpdateRequest,
     PartnerVehicleAssignRequest,
@@ -69,6 +71,36 @@ async def activate_partner(
     _current_user: UserModel = Depends(require_role("admin")),
 ) -> dict:
     return await service.activate_partner(partner_id)
+
+
+@admin_router.patch("/{partner_id}/kyc")
+async def submit_partner_kyc(
+    partner_id: UUID,
+    payload: PartnerKycSubmitRequest,
+    service: PartnerService = Depends(partner_service),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.submit_kyc(partner_id, **payload.model_dump(exclude_unset=True))
+
+
+@admin_router.post("/{partner_id}/kyc/approve")
+async def approve_partner_kyc(
+    partner_id: UUID,
+    payload: PartnerKycReviewRequest,
+    service: PartnerService = Depends(partner_service),
+    current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.approve_kyc(partner_id, reviewed_by_user_id=current_user.id, notes=payload.notes)
+
+
+@admin_router.post("/{partner_id}/kyc/reject")
+async def reject_partner_kyc(
+    partner_id: UUID,
+    payload: PartnerKycReviewRequest,
+    service: PartnerService = Depends(partner_service),
+    current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.reject_kyc(partner_id, reviewed_by_user_id=current_user.id, notes=payload.notes)
 
 
 @admin_router.post("/{partner_id}/suspend")

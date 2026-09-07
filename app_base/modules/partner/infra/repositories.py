@@ -41,6 +41,17 @@ class SqlAlchemyPartnerRepository:
         row.partner_commission_enabled = partner.partner_commission_enabled
         row.partner_commission_mode = partner.partner_commission_mode.value
         row.partner_commission_rate = partner.partner_commission_rate
+        row.registration_document_file_id = partner.registration_document_file_id
+        row.tax_document_file_id = partner.tax_document_file_id
+        row.representative_id_document_file_id = partner.representative_id_document_file_id
+        row.fleet_ownership_document_file_id = partner.fleet_ownership_document_file_id
+        row.registration_document_url = partner.registration_document_url
+        row.tax_document_url = partner.tax_document_url
+        row.representative_id_document_url = partner.representative_id_document_url
+        row.fleet_ownership_document_url = partner.fleet_ownership_document_url
+        row.kyc_submitted_at = partner.kyc_submitted_at
+        row.kyc_reviewed_at = partner.kyc_reviewed_at
+        row.kyc_review_notes = partner.kyc_review_notes
         row.updated_at = datetime.now(UTC)
         await self._session.flush()
         partner.created_at = row.created_at
@@ -225,6 +236,17 @@ def _partner_to_domain(row: orm.PartnerModel) -> Partner:
         partner_commission_enabled=row.partner_commission_enabled,
         partner_commission_mode=PartnerCommissionMode(row.partner_commission_mode),
         partner_commission_rate=Decimal(str(row.partner_commission_rate)),
+        registration_document_file_id=row.registration_document_file_id,
+        tax_document_file_id=row.tax_document_file_id,
+        representative_id_document_file_id=row.representative_id_document_file_id,
+        fleet_ownership_document_file_id=row.fleet_ownership_document_file_id,
+        registration_document_url=row.registration_document_url,
+        tax_document_url=row.tax_document_url,
+        representative_id_document_url=row.representative_id_document_url,
+        fleet_ownership_document_url=row.fleet_ownership_document_url,
+        kyc_submitted_at=row.kyc_submitted_at,
+        kyc_reviewed_at=row.kyc_reviewed_at,
+        kyc_review_notes=row.kyc_review_notes,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )

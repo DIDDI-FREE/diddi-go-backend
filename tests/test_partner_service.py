@@ -152,7 +152,13 @@ async def test_partner_commission_percentage_is_validated() -> None:
 async def test_partner_activation_and_driver_affiliation() -> None:
     repo = FakePartnerRepo()
     service = PartnerService(partner_repo=repo)
-    partner = await service.create_partner(name="Fleet", partner_type="fleet_owner")
+    partner = await service.create_partner(
+        name="Fleet",
+        partner_type="fleet_owner",
+        registration_document_file_id=uuid4(),
+        tax_document_file_id=uuid4(),
+        representative_id_document_file_id=uuid4(),
+    )
     partner_id = UUID(partner["id"])
 
     await service.activate_partner(partner_id)
@@ -160,6 +166,44 @@ async def test_partner_activation_and_driver_affiliation() -> None:
 
     assert link["partner_id"] == str(partner_id)
     assert link["active"] is True
+
+
+@pytest.mark.asyncio
+async def test_partner_activation_requires_partner_kyc_documents() -> None:
+    repo = FakePartnerRepo()
+    service = PartnerService(partner_repo=repo)
+    partner = await service.create_partner(name="Fleet", partner_type="fleet_owner")
+
+    with pytest.raises(ApiError) as exc_info:
+        await service.activate_partner(UUID(partner["id"]))
+
+    assert exc_info.value.code == "INVALID_PARTNER_KYC_DOCUMENTS"
+    assert exc_info.value.details == {
+        "missing_documents": [
+            "registration_document",
+            "tax_document",
+            "representative_id_document",
+        ]
+    }
+
+
+@pytest.mark.asyncio
+async def test_partner_kyc_approval_activates_partner() -> None:
+    repo = FakePartnerRepo()
+    service = PartnerService(partner_repo=repo)
+    partner = await service.create_partner(name="Fleet", partner_type="fleet_owner")
+    partner_id = UUID(partner["id"])
+
+    await service.submit_kyc(
+        partner_id,
+        registration_document_file_id=uuid4(),
+        tax_document_file_id=uuid4(),
+        representative_id_document_file_id=uuid4(),
+    )
+    approved = await service.approve_kyc(partner_id, reviewed_by_user_id=uuid4(), notes="OK")
+
+    assert approved["status"] == "active"
+    assert approved["kyc"]["reviewed_at"] is not None
 
 
 @pytest.mark.asyncio
