@@ -50,6 +50,28 @@ class VehicleCreateRequest(BaseModel):
     category: str = Field(default="standard")
     comfort_level: str = Field(default="standard")
     registration_document_file_id: UUID | None = None
+    insurance_document_file_id: UUID | None = None
+    technical_inspection_document_file_id: UUID | None = None
+    transport_authorization_document_file_id: UUID | None = None
+    vehicle_photo_file_id: UUID | None = None
+    registration_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    insurance_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    technical_inspection_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    transport_authorization_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    vehicle_photo_url: str | None = Field(default=None, min_length=1, max_length=1000)
+
+
+class VehicleKyvResubmitRequest(BaseModel):
+    registration_document_file_id: UUID | None = None
+    insurance_document_file_id: UUID | None = None
+    technical_inspection_document_file_id: UUID | None = None
+    transport_authorization_document_file_id: UUID | None = None
+    vehicle_photo_file_id: UUID | None = None
+    registration_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    insurance_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    technical_inspection_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    transport_authorization_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    vehicle_photo_url: str | None = Field(default=None, min_length=1, max_length=1000)
 
 
 class GoOnlineRequest(BaseModel):

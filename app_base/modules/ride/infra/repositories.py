@@ -30,6 +30,7 @@ from app_base.modules.ride.domain.entities import (
     RideStatusTransition,
     Vehicle,
     VehicleCategory,
+    VehicleVerificationStatus,
 )
 from app_base.modules.ride.infra import models as orm
 from app_base.shared_kernel.types import GeoPoint
@@ -441,6 +442,19 @@ class SqlAlchemyVehicleRepository:
             model=vehicle.model,
             color=vehicle.color,
             registration_document_file_id=vehicle.registration_document_file_id,
+            insurance_document_file_id=vehicle.insurance_document_file_id,
+            technical_inspection_document_file_id=vehicle.technical_inspection_document_file_id,
+            transport_authorization_document_file_id=vehicle.transport_authorization_document_file_id,
+            vehicle_photo_file_id=vehicle.vehicle_photo_file_id,
+            registration_document_url=vehicle.registration_document_url,
+            insurance_document_url=vehicle.insurance_document_url,
+            technical_inspection_document_url=vehicle.technical_inspection_document_url,
+            transport_authorization_document_url=vehicle.transport_authorization_document_url,
+            vehicle_photo_url=vehicle.vehicle_photo_url,
+            verification_status=vehicle.verification_status.value,
+            verified_at=vehicle.verified_at,
+            reviewed_at=vehicle.reviewed_at,
+            review_notes=vehicle.review_notes,
             owner_type=vehicle.owner_type,
             partner_id=vehicle.partner_id,
             category=vehicle.category.value,
@@ -450,6 +464,12 @@ class SqlAlchemyVehicleRepository:
         self._session.add(row)
         await self._session.flush()
         return vehicle
+
+    async def find_by_id(self, vehicle_id: UUID) -> Vehicle | None:
+        row = await self._session.get(orm.VehicleModel, vehicle_id)
+        if row is None:
+            return None
+        return self._vehicle_to_domain(row)
 
     async def find_active_for_driver(self, driver_id: UUID) -> Vehicle | None:
         result = await self._session.execute(
@@ -461,6 +481,10 @@ class SqlAlchemyVehicleRepository:
         row = result.scalar_one_or_none()
         if row is None:
             return None
+        return self._vehicle_to_domain(row)
+
+    @staticmethod
+    def _vehicle_to_domain(row: orm.VehicleModel) -> Vehicle:
         return Vehicle(
             id=row.id,
             driver_id=row.driver_id,
@@ -471,6 +495,19 @@ class SqlAlchemyVehicleRepository:
             model=row.model,
             color=row.color,
             registration_document_file_id=row.registration_document_file_id,
+            insurance_document_file_id=row.insurance_document_file_id,
+            technical_inspection_document_file_id=row.technical_inspection_document_file_id,
+            transport_authorization_document_file_id=row.transport_authorization_document_file_id,
+            vehicle_photo_file_id=row.vehicle_photo_file_id,
+            registration_document_url=row.registration_document_url,
+            insurance_document_url=row.insurance_document_url,
+            technical_inspection_document_url=row.technical_inspection_document_url,
+            transport_authorization_document_url=row.transport_authorization_document_url,
+            vehicle_photo_url=row.vehicle_photo_url,
+            verification_status=VehicleVerificationStatus(row.verification_status),
+            verified_at=row.verified_at,
+            reviewed_at=row.reviewed_at,
+            review_notes=row.review_notes,
             owner_type=row.owner_type,
             partner_id=row.partner_id,
             active=row.active,

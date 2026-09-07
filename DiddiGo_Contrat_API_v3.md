@@ -52,6 +52,7 @@ Le catalogue complet des codes est maintenu dans `DiddiGo_Error_Catalog.md`.
 | `partner.status` | `pending_verification`, `active`, `suspended`, `rejected` |
 | `partner.member_role` | `partner_manager`, `partner_operator`, `partner_viewer` |
 | `partner.commission_mode` | `percentage`, `fixed` |
+| `vehicle.verification_status` | `pending_verification`, `active`, `suspended`, `rejected` |
 
 Note produit : on garde les categories vehicule existantes cote backend.
 Pour reduire la friction MVP, le frontend passager peut omettre
@@ -299,8 +300,23 @@ Avant validation admin, retourne :
 ```
 
 Apres validation admin, le chauffeur peut passer online s'il a aussi un vehicule
-actif et, si la variable `DRIVER_MIN_BALANCE` est superieure a zero, un solde
-chauffeur suffisant.
+actif, un KYV vehicule valide et, si la variable `DRIVER_MIN_BALANCE` est
+superieure a zero, un solde chauffeur suffisant.
+
+Si le vehicule n'est pas valide :
+
+```json
+{
+  "error": {
+    "code": "VEHICLE_NOT_VERIFIED",
+    "message": "Votre vehicule n'est pas encore valide.",
+    "details": {
+      "vehicle_id": "vehicle-id",
+      "status": "pending_verification"
+    }
+  }
+}
+```
 
 Erreurs KYC principales :
 
@@ -314,6 +330,85 @@ Erreurs KYC principales :
 | `422` | `DRIVER_KYC_STATUS_INVALID` | Filtre `status` invalide sur la file KYC |
 | `422` | `INVALID_KYC_DOCUMENTS` | Dossier KYC incomplet : permis recto/verso, CNI recto/verso ou selfie absent |
 | `422` | `INVALID_LICENSE_NUMBER` | Numero de permis vide ou invalide |
+| `403` | `VEHICLE_NOT_VERIFIED` | Vehicule non valide par l'admin KYV |
+| `404` | `VEHICLE_NOT_FOUND` | Vehicule introuvable |
+| `422` | `INVALID_VEHICLE_KYV_DOCUMENTS` | Dossier KYV vehicule incomplet |
+
+### Vehicle KYV
+
+Le KYV vehicule est separe du KYC chauffeur. Il s'applique aux vehicules solo
+et aux vehicules partenaires.
+
+### `POST /drivers/vehicle`
+
+Le payload accepte maintenant des documents vehicule supplementaires :
+
+```json
+{
+  "plate_number": "CE-123-AA",
+  "make": "Toyota",
+  "model": "Yaris",
+  "color": "gris",
+  "category": "standard",
+  "comfort_level": "standard",
+  "registration_document_file_id": "file-id",
+  "insurance_document_file_id": "file-id",
+  "technical_inspection_document_file_id": "file-id",
+  "transport_authorization_document_file_id": "file-id",
+  "vehicle_photo_file_id": "file-id"
+}
+```
+
+Documents obligatoires pour validation admin :
+
+| Document | Champ DiddiGo | Purpose DiddiFiles recommande |
+|---|---|---|
+| Carte grise / immatriculation | `registration_document_file_id` | `diddigo_vehicle_registration` |
+| Assurance | `insurance_document_file_id` | `diddigo_vehicle_insurance` |
+| Visite technique | `technical_inspection_document_file_id` | `diddigo_vehicle_technical_inspection` |
+| Photo vehicule | `vehicle_photo_file_id` | `diddigo_vehicle_photo` |
+
+Document optionnel :
+
+| Document | Champ DiddiGo | Purpose DiddiFiles recommande |
+|---|---|---|
+| Autorisation transport | `transport_authorization_document_file_id` | `diddigo_vehicle_transport_authorization` |
+
+La creation vehicule retourne `verification_status=pending_verification`. Le
+vehicule ne permet pas au chauffeur de passer en ligne tant que l'admin ne l'a
+pas approuve.
+
+Les champs legacy `*_document_url` restent acceptes temporairement, mais le
+frontend doit privilegier les `file_id` DiddiFiles.
+
+### `POST /drivers/vehicles/{vehicle_id}/kyv/resubmit`
+
+Route chauffeur authentifie. Corrige ou complete le dossier KYV du vehicule.
+Le vehicule repasse en `pending_verification`.
+
+### `POST /drivers/vehicles/{vehicle_id}/kyv/approve`
+
+Route admin. Valide le KYV vehicule.
+
+Requete :
+
+```json
+{
+  "notes": "Vehicule OK"
+}
+```
+
+### `POST /drivers/vehicles/{vehicle_id}/kyv/reject`
+
+Route admin. Rejette le KYV vehicule et desactive le vehicule.
+
+Requete :
+
+```json
+{
+  "notes": "Assurance expiree"
+}
+```
 
 ---
 
