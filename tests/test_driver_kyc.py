@@ -199,7 +199,11 @@ async def test_register_vehicle_stores_registration_file_id() -> None:
     registration_file_id = uuid4()
     insurance_file_id = uuid4()
     technical_file_id = uuid4()
-    photo_file_id = uuid4()
+    front_photo_file_id = uuid4()
+    back_photo_file_id = uuid4()
+    left_photo_file_id = uuid4()
+    right_photo_file_id = uuid4()
+    interior_photo_file_id = uuid4()
 
     await service.create_profile(user_id=user_id, license_number="CI-123456")
     payload = await service.register_vehicle(
@@ -212,14 +216,22 @@ async def test_register_vehicle_stores_registration_file_id() -> None:
         registration_document_file_id=registration_file_id,
         insurance_document_file_id=insurance_file_id,
         technical_inspection_document_file_id=technical_file_id,
-        vehicle_photo_file_id=photo_file_id,
+        vehicle_front_photo_file_id=front_photo_file_id,
+        vehicle_back_photo_file_id=back_photo_file_id,
+        vehicle_left_photo_file_id=left_photo_file_id,
+        vehicle_right_photo_file_id=right_photo_file_id,
+        vehicle_interior_photo_file_id=interior_photo_file_id,
     )
 
     assert payload["plate_number"] == "CE-123-AA"
     assert payload["registration_document_file_id"] == str(registration_file_id)
     assert payload["insurance_document_file_id"] == str(insurance_file_id)
     assert payload["technical_inspection_document_file_id"] == str(technical_file_id)
-    assert payload["vehicle_photo_file_id"] == str(photo_file_id)
+    assert payload["vehicle_front_photo_file_id"] == str(front_photo_file_id)
+    assert payload["vehicle_back_photo_file_id"] == str(back_photo_file_id)
+    assert payload["vehicle_left_photo_file_id"] == str(left_photo_file_id)
+    assert payload["vehicle_right_photo_file_id"] == str(right_photo_file_id)
+    assert payload["vehicle_interior_photo_file_id"] == str(interior_photo_file_id)
     assert payload["verification_status"] == "pending_verification"
     assert vehicle_repo.vehicle.registration_document_file_id == registration_file_id
 
@@ -249,7 +261,11 @@ async def test_vehicle_kyv_approval_rejects_incomplete_documents() -> None:
     assert exc_info.value.details["missing_documents"] == [
         "insurance_document",
         "technical_inspection_document",
-        "vehicle_photo",
+        "vehicle_front_photo",
+        "vehicle_back_photo",
+        "vehicle_left_photo",
+        "vehicle_right_photo",
+        "vehicle_interior_photo",
     ]
 
 
@@ -273,7 +289,11 @@ async def test_vehicle_kyv_approval_allows_driver_online_resolution() -> None:
         registration_document_file_id=uuid4(),
         insurance_document_file_id=uuid4(),
         technical_inspection_document_file_id=uuid4(),
-        vehicle_photo_file_id=uuid4(),
+        vehicle_front_photo_file_id=uuid4(),
+        vehicle_back_photo_file_id=uuid4(),
+        vehicle_left_photo_file_id=uuid4(),
+        vehicle_right_photo_file_id=uuid4(),
+        vehicle_interior_photo_file_id=uuid4(),
     )
 
     with pytest.raises(ApiError) as exc_info:

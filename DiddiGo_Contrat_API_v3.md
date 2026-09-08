@@ -355,7 +355,11 @@ Le payload accepte maintenant des documents vehicule supplementaires :
   "insurance_document_file_id": "file-id",
   "technical_inspection_document_file_id": "file-id",
   "transport_authorization_document_file_id": "file-id",
-  "vehicle_photo_file_id": "file-id"
+  "vehicle_front_photo_file_id": "file-id",
+  "vehicle_back_photo_file_id": "file-id",
+  "vehicle_left_photo_file_id": "file-id",
+  "vehicle_right_photo_file_id": "file-id",
+  "vehicle_interior_photo_file_id": "file-id"
 }
 ```
 
@@ -366,7 +370,11 @@ Documents obligatoires pour validation admin :
 | Carte grise / immatriculation | `registration_document_file_id` | `diddigo_vehicle_registration` |
 | Assurance | `insurance_document_file_id` | `diddigo_vehicle_insurance` |
 | Visite technique | `technical_inspection_document_file_id` | `diddigo_vehicle_technical_inspection` |
-| Photo vehicule | `vehicle_photo_file_id` | `diddigo_vehicle_photo` |
+| Photo avant vehicule | `vehicle_front_photo_file_id` | `diddigo_vehicle_photo_front` |
+| Photo arriere vehicule | `vehicle_back_photo_file_id` | `diddigo_vehicle_photo_back` |
+| Photo cote gauche vehicule | `vehicle_left_photo_file_id` | `diddigo_vehicle_photo_left` |
+| Photo cote droit vehicule | `vehicle_right_photo_file_id` | `diddigo_vehicle_photo_right` |
+| Photo interieur vehicule | `vehicle_interior_photo_file_id` | `diddigo_vehicle_photo_interior` |
 
 Document optionnel :
 
@@ -378,8 +386,10 @@ La creation vehicule retourne `verification_status=pending_verification`. Le
 vehicule ne permet pas au chauffeur de passer en ligne tant que l'admin ne l'a
 pas approuve.
 
-Les champs legacy `*_document_url` restent acceptes temporairement, mais le
-frontend doit privilegier les `file_id` DiddiFiles.
+Les champs legacy `*_document_url` et `vehicle_photo_file_id` /
+`vehicle_photo_url` restent acceptes temporairement pour compatibilite, mais
+ils ne remplacent pas les 5 vues photo obligatoires du KYV. Le frontend doit
+privilegier les `file_id` DiddiFiles.
 
 ### `POST /drivers/vehicles/{vehicle_id}/kyv/resubmit`
 

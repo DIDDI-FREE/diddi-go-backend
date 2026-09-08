@@ -434,34 +434,44 @@ class SqlAlchemyVehicleRepository:
         self._session = session
 
     async def save(self, vehicle: Vehicle) -> Vehicle:
-        row = orm.VehicleModel(
-            id=vehicle.id,
-            driver_id=vehicle.driver_id,
-            plate_number=vehicle.plate_number,
-            make=vehicle.make,
-            model=vehicle.model,
-            color=vehicle.color,
-            registration_document_file_id=vehicle.registration_document_file_id,
-            insurance_document_file_id=vehicle.insurance_document_file_id,
-            technical_inspection_document_file_id=vehicle.technical_inspection_document_file_id,
-            transport_authorization_document_file_id=vehicle.transport_authorization_document_file_id,
-            vehicle_photo_file_id=vehicle.vehicle_photo_file_id,
-            registration_document_url=vehicle.registration_document_url,
-            insurance_document_url=vehicle.insurance_document_url,
-            technical_inspection_document_url=vehicle.technical_inspection_document_url,
-            transport_authorization_document_url=vehicle.transport_authorization_document_url,
-            vehicle_photo_url=vehicle.vehicle_photo_url,
-            verification_status=vehicle.verification_status.value,
-            verified_at=vehicle.verified_at,
-            reviewed_at=vehicle.reviewed_at,
-            review_notes=vehicle.review_notes,
-            owner_type=vehicle.owner_type,
-            partner_id=vehicle.partner_id,
-            category=vehicle.category.value,
-            comfort_level=vehicle.comfort_level.value,
-            active=vehicle.active,
-        )
-        self._session.add(row)
+        row = await self._session.get(orm.VehicleModel, vehicle.id)
+        if row is None:
+            row = orm.VehicleModel(id=vehicle.id)
+            self._session.add(row)
+        row.driver_id = vehicle.driver_id
+        row.plate_number = vehicle.plate_number
+        row.make = vehicle.make
+        row.model = vehicle.model
+        row.color = vehicle.color
+        row.registration_document_file_id = vehicle.registration_document_file_id
+        row.insurance_document_file_id = vehicle.insurance_document_file_id
+        row.technical_inspection_document_file_id = vehicle.technical_inspection_document_file_id
+        row.transport_authorization_document_file_id = vehicle.transport_authorization_document_file_id
+        row.vehicle_photo_file_id = vehicle.vehicle_photo_file_id
+        row.vehicle_front_photo_file_id = vehicle.vehicle_front_photo_file_id
+        row.vehicle_back_photo_file_id = vehicle.vehicle_back_photo_file_id
+        row.vehicle_left_photo_file_id = vehicle.vehicle_left_photo_file_id
+        row.vehicle_right_photo_file_id = vehicle.vehicle_right_photo_file_id
+        row.vehicle_interior_photo_file_id = vehicle.vehicle_interior_photo_file_id
+        row.registration_document_url = vehicle.registration_document_url
+        row.insurance_document_url = vehicle.insurance_document_url
+        row.technical_inspection_document_url = vehicle.technical_inspection_document_url
+        row.transport_authorization_document_url = vehicle.transport_authorization_document_url
+        row.vehicle_photo_url = vehicle.vehicle_photo_url
+        row.vehicle_front_photo_url = vehicle.vehicle_front_photo_url
+        row.vehicle_back_photo_url = vehicle.vehicle_back_photo_url
+        row.vehicle_left_photo_url = vehicle.vehicle_left_photo_url
+        row.vehicle_right_photo_url = vehicle.vehicle_right_photo_url
+        row.vehicle_interior_photo_url = vehicle.vehicle_interior_photo_url
+        row.verification_status = vehicle.verification_status.value
+        row.verified_at = vehicle.verified_at
+        row.reviewed_at = vehicle.reviewed_at
+        row.review_notes = vehicle.review_notes
+        row.owner_type = vehicle.owner_type
+        row.partner_id = vehicle.partner_id
+        row.category = vehicle.category.value
+        row.comfort_level = vehicle.comfort_level.value
+        row.active = vehicle.active
         await self._session.flush()
         return vehicle
 
@@ -499,11 +509,21 @@ class SqlAlchemyVehicleRepository:
             technical_inspection_document_file_id=row.technical_inspection_document_file_id,
             transport_authorization_document_file_id=row.transport_authorization_document_file_id,
             vehicle_photo_file_id=row.vehicle_photo_file_id,
+            vehicle_front_photo_file_id=row.vehicle_front_photo_file_id,
+            vehicle_back_photo_file_id=row.vehicle_back_photo_file_id,
+            vehicle_left_photo_file_id=row.vehicle_left_photo_file_id,
+            vehicle_right_photo_file_id=row.vehicle_right_photo_file_id,
+            vehicle_interior_photo_file_id=row.vehicle_interior_photo_file_id,
             registration_document_url=row.registration_document_url,
             insurance_document_url=row.insurance_document_url,
             technical_inspection_document_url=row.technical_inspection_document_url,
             transport_authorization_document_url=row.transport_authorization_document_url,
             vehicle_photo_url=row.vehicle_photo_url,
+            vehicle_front_photo_url=row.vehicle_front_photo_url,
+            vehicle_back_photo_url=row.vehicle_back_photo_url,
+            vehicle_left_photo_url=row.vehicle_left_photo_url,
+            vehicle_right_photo_url=row.vehicle_right_photo_url,
+            vehicle_interior_photo_url=row.vehicle_interior_photo_url,
             verification_status=VehicleVerificationStatus(row.verification_status),
             verified_at=row.verified_at,
             reviewed_at=row.reviewed_at,
