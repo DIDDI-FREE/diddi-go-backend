@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from app_base.core.errors import ApiError, api_error_handler
 from app_base.core.lifespan import lifespan
+from app_base.core.metrics import render_prometheus
 from app_base.core.observability import configure_observability
 from app_base.core.request_logging import RequestLoggingMiddleware
 from app_base.core.settings import settings
@@ -54,3 +56,8 @@ app.include_router(payment_return_router)
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "app": settings.app_name}
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics() -> Response:
+    return Response(render_prometheus(), media_type="text/plain; version=0.0.4; charset=utf-8")

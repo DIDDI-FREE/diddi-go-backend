@@ -17,6 +17,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app_base.core.metrics import record_http_request
 from app_base.core.observability import bind_request_id, log_event, reset_request_id
 
 REQUEST_ID_STATE_KEY = "request_id"
@@ -39,6 +40,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             duration_ms = round((time.perf_counter() - started) * 1000, 2)
             user = getattr(request.state, "current_user", None)
             now = datetime.now(UTC)
+            record_http_request(
+                method=request.method,
+                path=request.url.path,
+                status_code=status_code,
+                duration_ms=duration_ms,
+            )
             log_event(
                 "http.request",
                 hour=now.strftime("%Y-%m-%dT%H:00:00Z"),

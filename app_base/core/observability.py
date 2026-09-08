@@ -16,6 +16,8 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
+from app_base.core.metrics import record_business_event
+
 _request_id: ContextVar[str | None] = ContextVar("diddigo_request_id", default=None)
 _LOGGER_NAME = "uvicorn.error"
 
@@ -57,6 +59,7 @@ def log_event(event: str, *, level: str = "info", message: str | None = None, **
     if message:
         payload["message"] = message
     payload.update({key: _json_safe(value) for key, value in fields.items()})
+    record_business_event(event, payload)
     logger.log(_levelno(level), json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 
 

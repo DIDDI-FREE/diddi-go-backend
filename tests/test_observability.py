@@ -5,16 +5,20 @@ import logging
 from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from app_base.core.metrics import normalize_path, render_prometheus, reset_metrics
 from app_base.core.observability import bind_request_id, log_event, reset_request_id
 from app_base.core.request_logging import RequestLoggingMiddleware
+from app_base.main import app
 
 pytestmark = pytest.mark.unit
 
 
 def test_log_event_emits_json_with_bound_request_id(caplog) -> None:
+    reset_metrics()
     request_id = "req-test-123"
     user_id = uuid4()
     token = bind_request_id(request_id)
@@ -29,10 +33,14 @@ def test_log_event_emits_json_with_bound_request_id(caplog) -> None:
     assert payload["request_id"] == request_id
     assert payload["user_id"] == str(user_id)
     assert payload["nested"] == {"ok": True}
+    metrics = render_prometheus()
+    assert 'diddigo_business_events_total{event="ride.test_event"} 1' in metrics
 
 
 @pytest.mark.asyncio
 async def test_request_logging_middleware_adds_request_id_header(caplog) -> None:
+    reset_metrics()
+
     async def app(request: Request) -> JSONResponse:
         return JSONResponse({"ok": True})
 
@@ -59,6 +67,28 @@ async def test_request_logging_middleware_adds_request_id_header(caplog) -> None
     assert payload["request_id"] == "req-client-1"
     assert payload["path"] == "/v1/test"
     assert payload["query"] == "token=%2A%2A%2A&q=abc"
+    metrics = render_prometheus()
+    assert (
+        'diddigo_http_requests_total{method="GET",path="/v1/test",status_code="200",status_family="2xx"} 1'
+        in metrics
+    )
+
+
+def test_metrics_endpoint_exposes_prometheus_text() -> None:
+    reset_metrics()
+    log_event("ride.created", status="requested", payment_method="cash")
+
+    response = TestClient(app).get("/metrics")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert 'diddigo_business_events_total{event="ride.created",payment_method="cash",status="requested"} 1' in (
+        response.text
+    )
+
+
+def test_metrics_normalize_uuid_path_labels() -> None:
+    assert normalize_path("/v1/rides/17dd4635-02fb-4775-8bf1-d3686a959f39") == "/v1/rides/:uuid"
 
 
 async def _empty_receive() -> dict:

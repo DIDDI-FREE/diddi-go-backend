@@ -411,9 +411,73 @@ LOG_LEVEL=INFO
 LOG_FORMAT=json
 ```
 
-`LOG_FORMAT` reste `json` pour la V0.5. Les dashboards/metrics viendront dans
-une vague ulterieure; pour l'instant, l'objectif est de rendre Portainer
-exploitable pendant les tests terrain.
+`LOG_FORMAT` reste `json`; les logs gardent les details fins comme `ride_id`,
+`driver_id`, `user_id`, `client_ip` et `request_id`.
+
+## Metrics
+
+DiddiGo expose aussi des metrics Prometheus en texte :
+
+```http
+GET /metrics
+```
+
+Compteurs disponibles :
+
+```text
+diddigo_http_requests_total
+diddigo_http_request_duration_ms_count
+diddigo_http_request_duration_ms_sum
+diddigo_business_events_total
+```
+
+Labels HTTP :
+
+```text
+method
+path
+status_code
+status_family
+```
+
+Les UUID dans les paths sont remplaces par `:uuid`, par exemple :
+
+```text
+/v1/rides/:uuid
+```
+
+Labels metier :
+
+```text
+event
+reason
+status
+status_code
+payment_method
+provider
+error_code
+ws_event
+role
+```
+
+Important : les metrics ne contiennent pas `ride_id`, `driver_id`, `user_id` ou
+IP. Ces valeurs restent dans les logs JSON pour eviter une explosion de
+cardinalite.
+
+Exemples a surveiller pendant les tests terrain :
+
+```text
+diddigo_business_events_total{event="ride.matching.no_driver_found"}
+diddigo_business_events_total{event="ride.matching.driver_filtered"}
+diddigo_business_events_total{event="driver.online.blocked"}
+diddigo_business_events_total{event="push.ride_offer.failed"}
+diddigo_business_events_total{event="ws.driver_location.received"}
+diddigo_http_requests_total{status_family="5xx"}
+```
+
+En V1, les metrics sont en memoire par process. Elles servent au diagnostic
+terrain et au scraping Prometheus simple. Pour une production multi-replicas,
+prevoir Prometheus/Grafana ou un collecteur centralise.
 
 ---
 
