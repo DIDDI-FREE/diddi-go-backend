@@ -1,0 +1,30 @@
+meta {
+  name: 04b Get Vehicle KYV Detail
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/admin/vehicles/{{partner_vehicle_id}}/kyv
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{admin_access_token}}
+}
+
+tests {
+  test("vehicle KYV detail is readable", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("vehicle detail matches created partner vehicle", function () {
+    expect(res.body.id).to.equal(bru.getVar("partner_vehicle_id"));
+    expect(res.body.owner_type).to.equal("partner");
+    expect(res.body.verification_status).to.equal("pending_verification");
+  });
+}
+
+docs {
+  Run after "04 List Vehicle KYV Queue"; opens the admin detail page data.
+}

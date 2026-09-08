@@ -230,6 +230,15 @@ async def list_vehicle_kyv_queue(
     return await service.list_vehicle_kyv_queue(status=status, page=page, page_size=page_size)
 
 
+@admin_vehicle_router.get("/{vehicle_id}/kyv")
+async def get_vehicle_kyv_detail(
+    vehicle_id: UUID,
+    service: DriverService = Depends(driver_service),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.get_vehicle_kyv_detail(vehicle_id)
+
+
 @router.post("/online")
 async def go_online(
     payload: GoOnlineRequest,
