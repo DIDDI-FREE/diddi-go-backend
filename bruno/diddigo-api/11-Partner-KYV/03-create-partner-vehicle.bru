@@ -1,0 +1,70 @@
+meta {
+  name: 03 Create Partner Vehicle
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/admin/partners/{{partner_id}}/vehicles
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{admin_access_token}}
+}
+
+body:json {
+  {
+    "driver_id": "{{driver_profile_id}}",
+    "plate_number": "{{partner_vehicle_plate_number}}",
+    "make": "Toyota",
+    "model": "Corolla",
+    "color": "Black",
+    "category": "standard",
+    "comfort_level": "comfort",
+    "registration_document_file_id": "{{vehicle_registration_file_id}}",
+    "insurance_document_file_id": "{{vehicle_insurance_file_id}}",
+    "technical_inspection_document_file_id": "{{vehicle_technical_file_id}}",
+    "vehicle_front_photo_file_id": "{{vehicle_front_photo_file_id}}",
+    "vehicle_back_photo_file_id": "{{vehicle_back_photo_file_id}}",
+    "vehicle_left_photo_file_id": "{{vehicle_left_photo_file_id}}",
+    "vehicle_right_photo_file_id": "{{vehicle_right_photo_file_id}}",
+    "vehicle_interior_photo_file_id": "{{vehicle_interior_photo_file_id}}"
+  }
+}
+
+script:pre-request {
+  const suffix = Date.now().toString().slice(-6);
+  bru.setVar("partner_vehicle_plate_number", "PV-" + suffix);
+  bru.setVar("vehicle_registration_file_id", "44444444-4444-4444-8444-444444444444");
+  bru.setVar("vehicle_insurance_file_id", "55555555-5555-4555-8555-555555555555");
+  bru.setVar("vehicle_technical_file_id", "66666666-6666-4666-8666-666666666666");
+  bru.setVar("vehicle_front_photo_file_id", "77777777-7777-4777-8777-777777777777");
+  bru.setVar("vehicle_back_photo_file_id", "88888888-8888-4888-8888-888888888888");
+  bru.setVar("vehicle_left_photo_file_id", "99999999-9999-4999-8999-999999999999");
+  bru.setVar("vehicle_right_photo_file_id", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+  bru.setVar("vehicle_interior_photo_file_id", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("partner_vehicle_id", res.body.vehicle.id);
+    bru.setVar("vehicle_id", res.body.vehicle.id);
+  }
+}
+
+tests {
+  test("partner vehicle is created", function () {
+    expect(res.status).to.equal(201);
+  });
+  test("vehicle belongs to partner and is pending KYV", function () {
+    expect(res.body.vehicle.owner_type).to.equal("partner");
+    expect(res.body.vehicle.partner_id).to.equal(bru.getVar("partner_id"));
+    expect(res.body.vehicle.verification_status).to.equal("pending_verification");
+  });
+}
+
+docs {
+  Requires a real `driver_profile_id` already present in Bruno environment/runtime.
+}

@@ -1,0 +1,40 @@
+meta {
+  name: 06 Go Online After KYV
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/drivers/online
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+body:json {
+  {
+    "lat": 5.3600,
+    "lng": -4.0083
+  }
+}
+
+tests {
+  test("driver is online or explicitly blocked by wallet/business rule", function () {
+    expect([200, 403, 409]).to.include(res.status);
+  });
+  test("KYV must not be the blocker after approval", function () {
+    if (res.status !== 200 && res.body && res.body.error) {
+      expect(res.body.error.code).to.not.equal("VEHICLE_NOT_VERIFIED");
+    }
+  });
+}
+
+docs {
+  Requires `driver_access_token` for the same driver as `driver_profile_id`.
+  If wallet minimum balance is enabled, this request may return a documented
+  wallet/business block; the important assertion here is that KYV is no longer
+  the blocker after admin approval.
+}

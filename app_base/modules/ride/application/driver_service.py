@@ -429,6 +429,43 @@ class DriverService:
             "pagination": {"page": page, "page_size": page_size, "total": total},
         }
 
+    async def list_vehicle_kyv_queue(
+        self,
+        *,
+        status: str = "pending_verification",
+        page: int = 1,
+        page_size: int = 20,
+    ) -> dict:
+        if status == "all":
+            statuses = [
+                VehicleVerificationStatus.PENDING_VERIFICATION,
+                VehicleVerificationStatus.ACTIVE,
+                VehicleVerificationStatus.SUSPENDED,
+                VehicleVerificationStatus.REJECTED,
+            ]
+        else:
+            try:
+                statuses = [VehicleVerificationStatus(status)]
+            except ValueError as exc:
+                raise ApiError(
+                    422,
+                    ErrorCode.INVALID_VEHICLE_STATUS,
+                    "Statut KYV vehicule invalide.",
+                    {
+                        "field": "status",
+                        "allowed": ["pending_verification", "active", "suspended", "rejected", "all"],
+                    },
+                ) from exc
+        vehicles, total = await self.vehicle_repo.list_by_verification_status(
+            [item.value for item in statuses],
+            page=page,
+            page_size=page_size,
+        )
+        return {
+            "data": [_vehicle_payload(vehicle) for vehicle in vehicles],
+            "pagination": {"page": page, "page_size": page_size, "total": total},
+        }
+
     async def resolve_driver(self, user_id: UUID) -> tuple[DriverProfile, Vehicle]:
         """Profile + active vehicle for a driver about to go online or take a
         ride. Raises if either is missing — matching must never hand a ride to
@@ -604,6 +641,7 @@ def _ensure_kyc_documents_complete(profile: DriverProfile) -> None:
 def _vehicle_payload(vehicle: Vehicle) -> dict:
     return {
         "id": str(vehicle.id),
+        "driver_id": str(vehicle.driver_id),
         "plate_number": vehicle.plate_number,
         "make": vehicle.make,
         "model": vehicle.model,

@@ -88,7 +88,19 @@ class DriverProfileRepository(Protocol):
 class VehicleRepository(Protocol):
     async def find_active_for_driver(self, driver_id: UUID) -> Vehicle | None: ...
 
+    async def find_by_id(self, vehicle_id: UUID) -> Vehicle | None: ...
+
     async def save(self, vehicle: Vehicle) -> Vehicle: ...
+
+    async def list_by_verification_status(
+        self,
+        statuses: list[str],
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[Vehicle], int]:
+        """Return vehicle KYV/admin review queue entries + total count."""
+        ...
 
 
 class PricingRuleRepository(Protocol):

@@ -1,0 +1,36 @@
+meta {
+  name: 04 List Vehicle KYV Queue
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/admin/vehicles/kyv?status=pending_verification&page=1&page_size=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{admin_access_token}}
+}
+
+params:query {
+  status: pending_verification
+  page: 1
+  page_size: 20
+}
+
+tests {
+  test("vehicle KYV queue is readable", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("created partner vehicle appears in KYV queue", function () {
+    const expectedId = bru.getVar("partner_vehicle_id");
+    const ids = res.body.data.map((vehicle) => vehicle.id);
+    expect(ids).to.include(expectedId);
+  });
+}
+
+docs {
+  Admin backoffice queue for vehicle KYV review.
+}

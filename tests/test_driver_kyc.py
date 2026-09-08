@@ -38,9 +38,12 @@ class FakeDriverRepo:
 class FakeVehicleRepo:
     def __init__(self) -> None:
         self.vehicle = None
+        self.vehicles = []
 
     async def save(self, vehicle):
         self.vehicle = vehicle
+        self.vehicles = [item for item in self.vehicles if item.id != vehicle.id]
+        self.vehicles.append(vehicle)
         return vehicle
 
     async def find_by_id(self, vehicle_id):
@@ -52,6 +55,10 @@ class FakeVehicleRepo:
         if self.vehicle and self.vehicle.driver_id == driver_id and self.vehicle.active:
             return self.vehicle
         return None
+
+    async def list_by_verification_status(self, statuses, *, page=1, page_size=20):
+        vehicles = [vehicle for vehicle in self.vehicles if vehicle.verification_status.value in statuses]
+        return vehicles[(page - 1) * page_size : page * page_size], len(vehicles)
 
 
 @pytest.mark.asyncio
@@ -305,6 +312,56 @@ async def test_vehicle_kyv_approval_allows_driver_online_resolution() -> None:
 
     assert resolved_profile.id == UUID(profile["id"])
     assert resolved_vehicle.id == UUID(vehicle["id"])
+
+
+@pytest.mark.asyncio
+async def test_admin_lists_vehicle_kyv_queue() -> None:
+    driver_repo = FakeDriverRepo()
+    vehicle_repo = FakeVehicleRepo()
+    service = DriverService(driver_repo=driver_repo, vehicle_repo=vehicle_repo)
+    user_id = uuid4()
+
+    profile = await service.create_profile(user_id=user_id, license_number="CI-123456")
+    vehicle = await service.register_vehicle(
+        user_id=user_id,
+        plate_number="CE-123-AA",
+        make="Toyota",
+        model="Yaris",
+        color="gris",
+        category="standard",
+        registration_document_file_id=uuid4(),
+        insurance_document_file_id=uuid4(),
+        technical_inspection_document_file_id=uuid4(),
+        vehicle_front_photo_file_id=uuid4(),
+        vehicle_back_photo_file_id=uuid4(),
+        vehicle_left_photo_file_id=uuid4(),
+        vehicle_right_photo_file_id=uuid4(),
+        vehicle_interior_photo_file_id=uuid4(),
+    )
+
+    queue = await service.list_vehicle_kyv_queue(status="pending_verification")
+
+    assert queue["pagination"]["total"] == 1
+    assert queue["data"][0]["id"] == vehicle["id"]
+    assert queue["data"][0]["driver_id"] == profile["id"]
+    assert queue["data"][0]["verification_status"] == "pending_verification"
+
+
+@pytest.mark.asyncio
+async def test_vehicle_kyv_queue_rejects_invalid_status() -> None:
+    service = DriverService(driver_repo=FakeDriverRepo(), vehicle_repo=FakeVehicleRepo())
+
+    with pytest.raises(ApiError) as exc_info:
+        await service.list_vehicle_kyv_queue(status="unknown")
+
+    assert exc_info.value.code == "INVALID_VEHICLE_STATUS"
+    assert exc_info.value.details["allowed"] == [
+        "pending_verification",
+        "active",
+        "suspended",
+        "rejected",
+        "all",
+    ]
 
 
 def full_kyc_documents() -> dict:
