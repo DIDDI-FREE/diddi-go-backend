@@ -109,11 +109,21 @@ async def register_vehicle(
         technical_inspection_document_file_id=payload.technical_inspection_document_file_id,
         transport_authorization_document_file_id=payload.transport_authorization_document_file_id,
         vehicle_photo_file_id=payload.vehicle_photo_file_id,
+        vehicle_front_photo_file_id=payload.vehicle_front_photo_file_id,
+        vehicle_back_photo_file_id=payload.vehicle_back_photo_file_id,
+        vehicle_left_photo_file_id=payload.vehicle_left_photo_file_id,
+        vehicle_right_photo_file_id=payload.vehicle_right_photo_file_id,
+        vehicle_interior_photo_file_id=payload.vehicle_interior_photo_file_id,
         registration_document_url=payload.registration_document_url,
         insurance_document_url=payload.insurance_document_url,
         technical_inspection_document_url=payload.technical_inspection_document_url,
         transport_authorization_document_url=payload.transport_authorization_document_url,
         vehicle_photo_url=payload.vehicle_photo_url,
+        vehicle_front_photo_url=payload.vehicle_front_photo_url,
+        vehicle_back_photo_url=payload.vehicle_back_photo_url,
+        vehicle_left_photo_url=payload.vehicle_left_photo_url,
+        vehicle_right_photo_url=payload.vehicle_right_photo_url,
+        vehicle_interior_photo_url=payload.vehicle_interior_photo_url,
     )
 
 

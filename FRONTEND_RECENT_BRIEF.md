@@ -231,7 +231,11 @@ Pour le vehicule, `POST /v1/drivers/vehicle` accepte aussi :
   "insurance_document_file_id": "file-id",
   "technical_inspection_document_file_id": "file-id",
   "transport_authorization_document_file_id": "file-id",
-  "vehicle_photo_file_id": "file-id"
+  "vehicle_front_photo_file_id": "file-id",
+  "vehicle_back_photo_file_id": "file-id",
+  "vehicle_left_photo_file_id": "file-id",
+  "vehicle_right_photo_file_id": "file-id",
+  "vehicle_interior_photo_file_id": "file-id"
 }
 ```
 
@@ -241,7 +245,7 @@ Ce fichier doit etre cree dans DiddiFiles avec le purpose
 KYV vehicule :
 
 ```text
-obligatoire: carte grise, assurance, visite technique, photo vehicule
+obligatoire: carte grise, assurance, visite technique, 5 photos vehicule
 optionnel: autorisation transport
 ```
 
@@ -252,7 +256,11 @@ diddigo_vehicle_registration
 diddigo_vehicle_insurance
 diddigo_vehicle_technical_inspection
 diddigo_vehicle_transport_authorization
-diddigo_vehicle_photo
+diddigo_vehicle_photo_front
+diddigo_vehicle_photo_back
+diddigo_vehicle_photo_left
+diddigo_vehicle_photo_right
+diddigo_vehicle_photo_interior
 ```
 
 Nouvelles routes KYV :
