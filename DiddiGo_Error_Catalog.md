@@ -107,6 +107,7 @@ Ces routes restent utiles en local/dev si l'auth locale est active.
 | `409` | `DRIVER_NOT_AFFILIATED` | Chauffeur non affilie au partenaire requis |
 | `409` | `VEHICLE_ALREADY_ASSIGNED` | Vehicule deja assigne a un chauffeur actif |
 | `409` | `VEHICLE_NOT_PARTNER_OWNED` | Vehicule non reconnu comme vehicule partenaire |
+| `500` | `PARTNER_VEHICLE_REPOSITORY_MISSING` | Configuration backend incomplete pour creation vehicule partenaire |
 | `422` | `INVALID_PARTNER_TYPE` | Type partenaire invalide |
 | `422` | `INVALID_PARTNER_STATUS` | Statut partenaire invalide |
 | `422` | `INVALID_PARTNER_ROLE` | Role partenaire invalide |

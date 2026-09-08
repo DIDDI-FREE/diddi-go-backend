@@ -1411,6 +1411,67 @@ chauffeur doit etre affilie au partenaire
 vehicule ne doit pas avoir une assignation active
 ```
 
+### `POST /admin/partners/{partner_id}/vehicles`
+
+Route admin. Cree directement un vehicule appartenant au partenaire et
+l'assigne au chauffeur cible.
+
+Requete :
+
+```json
+{
+  "driver_id": "driver-profile-id",
+  "plate_number": "CE-987-AA",
+  "make": "Toyota",
+  "model": "Corolla",
+  "color": "noir",
+  "category": "standard",
+  "comfort_level": "comfort",
+  "registration_document_file_id": "file-id",
+  "insurance_document_file_id": "file-id",
+  "technical_inspection_document_file_id": "file-id",
+  "transport_authorization_document_file_id": "file-id",
+  "vehicle_front_photo_file_id": "file-id",
+  "vehicle_back_photo_file_id": "file-id",
+  "vehicle_left_photo_file_id": "file-id",
+  "vehicle_right_photo_file_id": "file-id",
+  "vehicle_interior_photo_file_id": "file-id"
+}
+```
+
+Reponse :
+
+```json
+{
+  "vehicle": {
+    "id": "vehicle-id",
+    "driver_id": "driver-profile-id",
+    "owner_type": "partner",
+    "partner_id": "partner-id",
+    "verification_status": "pending_verification"
+  },
+  "assignment": {
+    "id": "assignment-id",
+    "partner_id": "partner-id",
+    "vehicle_id": "vehicle-id",
+    "driver_id": "driver-profile-id",
+    "active": true
+  }
+}
+```
+
+Regles :
+
+```text
+partenaire doit etre active
+chauffeur doit exister dans driver_profiles
+si chauffeur non affilie, DiddiGo cree l'affiliation automatiquement
+si chauffeur deja affilie ailleurs, 409 DRIVER_ALREADY_AFFILIATED
+vehicule cree avec owner_type=partner, partner_id=partner_id
+vehicule cree avec verification_status=pending_verification
+le chauffeur ne peut pas passer en ligne tant que le KYV vehicule n'est pas approuve
+```
+
 ### `POST /admin/partners/{partner_id}/vehicles/{vehicle_id}/unassign`
 
 Route admin. Termine l'assignation active du vehicule.
@@ -1428,11 +1489,15 @@ Route admin. Termine l'assignation active du vehicule.
 | `409` | `DRIVER_ALREADY_AFFILIATED` | Chauffeur deja affilie a un partenaire actif |
 | `409` | `DRIVER_NOT_AFFILIATED` | Chauffeur non affilie au partenaire requis |
 | `409` | `VEHICLE_ALREADY_ASSIGNED` | Vehicule deja assigne a un chauffeur actif |
+| `409` | `PLATE_ALREADY_REGISTERED` | Plaque vehicule deja enregistree |
 | `422` | `INVALID_PARTNER_TYPE` | Type partenaire invalide |
 | `422` | `INVALID_PARTNER_STATUS` | Statut partenaire invalide |
 | `422` | `INVALID_PARTNER_ROLE` | Role partenaire invalide |
 | `422` | `INVALID_PARTNER_COMMISSION` | Commission partenaire invalide |
 | `422` | `INVALID_PARTNER_KYC_DOCUMENTS` | Dossier KYC partenaire incomplet |
+| `422` | `INVALID_VEHICLE_CATEGORY` | Categorie vehicule invalide |
+| `422` | `INVALID_COMFORT_LEVEL` | Niveau de confort invalide |
+| `500` | `PARTNER_VEHICLE_REPOSITORY_MISSING` | Configuration backend incomplete pour creation vehicule partenaire |
 
 ---
 

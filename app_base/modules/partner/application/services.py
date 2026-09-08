@@ -21,11 +21,20 @@ from app_base.modules.partner.domain.entities import (
     VehicleAssignment,
 )
 from app_base.modules.partner.domain.interfaces import PartnerRepository
+from app_base.modules.ride.domain.entities import (
+    ComfortLevel,
+    Vehicle,
+    VehicleCategory,
+    VehicleVerificationStatus,
+)
+from app_base.modules.ride.domain.interfaces import DriverProfileRepository, VehicleRepository
 
 
 @dataclass
 class PartnerService:
     partner_repo: PartnerRepository
+    vehicle_repo: VehicleRepository | None = None
+    driver_repo: DriverProfileRepository | None = None
 
     async def create_partner(
         self,
@@ -357,6 +366,107 @@ class PartnerService:
         log_event("partner.vehicle.assigned", partner_id=partner_id, vehicle_id=vehicle_id, driver_id=driver_id)
         return _vehicle_assignment_payload(assignment)
 
+    async def create_vehicle(
+        self,
+        partner_id: UUID,
+        *,
+        driver_id: UUID,
+        plate_number: str,
+        make: str | None = None,
+        model: str | None = None,
+        color: str | None = None,
+        category: str = "standard",
+        comfort_level: str = "standard",
+        registration_document_file_id: UUID | None = None,
+        insurance_document_file_id: UUID | None = None,
+        technical_inspection_document_file_id: UUID | None = None,
+        transport_authorization_document_file_id: UUID | None = None,
+        vehicle_photo_file_id: UUID | None = None,
+        vehicle_front_photo_file_id: UUID | None = None,
+        vehicle_back_photo_file_id: UUID | None = None,
+        vehicle_left_photo_file_id: UUID | None = None,
+        vehicle_right_photo_file_id: UUID | None = None,
+        vehicle_interior_photo_file_id: UUID | None = None,
+        registration_document_url: str | None = None,
+        insurance_document_url: str | None = None,
+        technical_inspection_document_url: str | None = None,
+        transport_authorization_document_url: str | None = None,
+        vehicle_photo_url: str | None = None,
+        vehicle_front_photo_url: str | None = None,
+        vehicle_back_photo_url: str | None = None,
+        vehicle_left_photo_url: str | None = None,
+        vehicle_right_photo_url: str | None = None,
+        vehicle_interior_photo_url: str | None = None,
+    ) -> dict:
+        if self.vehicle_repo is None or self.driver_repo is None:
+            raise ApiError(
+                500,
+                ErrorCode.PARTNER_VEHICLE_REPOSITORY_MISSING,
+                "Creation vehicule partenaire non configuree.",
+            )
+        await self._require_active_partner(partner_id)
+        if await self.driver_repo.find_by_id(driver_id) is None:
+            raise ApiError(404, ErrorCode.DRIVER_PROFILE_NOT_FOUND, "Profil chauffeur introuvable.")
+        await self._ensure_driver_affiliated_to_partner(partner_id, driver_id)
+        vehicle = Vehicle(
+            id=Vehicle.new_id(),
+            driver_id=driver_id,
+            plate_number=_required_text(plate_number, "plate_number").upper(),
+            make=_blank_to_none(make),
+            model=_blank_to_none(model),
+            color=_blank_to_none(color),
+            registration_document_file_id=registration_document_file_id,
+            insurance_document_file_id=insurance_document_file_id,
+            technical_inspection_document_file_id=technical_inspection_document_file_id,
+            transport_authorization_document_file_id=transport_authorization_document_file_id,
+            vehicle_photo_file_id=vehicle_photo_file_id,
+            vehicle_front_photo_file_id=vehicle_front_photo_file_id,
+            vehicle_back_photo_file_id=vehicle_back_photo_file_id,
+            vehicle_left_photo_file_id=vehicle_left_photo_file_id,
+            vehicle_right_photo_file_id=vehicle_right_photo_file_id,
+            vehicle_interior_photo_file_id=vehicle_interior_photo_file_id,
+            registration_document_url=_blank_to_none(registration_document_url),
+            insurance_document_url=_blank_to_none(insurance_document_url),
+            technical_inspection_document_url=_blank_to_none(technical_inspection_document_url),
+            transport_authorization_document_url=_blank_to_none(transport_authorization_document_url),
+            vehicle_photo_url=_blank_to_none(vehicle_photo_url),
+            vehicle_front_photo_url=_blank_to_none(vehicle_front_photo_url),
+            vehicle_back_photo_url=_blank_to_none(vehicle_back_photo_url),
+            vehicle_left_photo_url=_blank_to_none(vehicle_left_photo_url),
+            vehicle_right_photo_url=_blank_to_none(vehicle_right_photo_url),
+            vehicle_interior_photo_url=_blank_to_none(vehicle_interior_photo_url),
+            verification_status=VehicleVerificationStatus.PENDING_VERIFICATION,
+            owner_type="partner",
+            partner_id=partner_id,
+            category=_vehicle_category(category),
+            comfort_level=_comfort_level(comfort_level),
+            active=True,
+            created_at=datetime.now(UTC),
+        )
+        try:
+            await self.vehicle_repo.save(vehicle)
+        except Exception as exc:
+            if "plate_number" in str(exc):
+                raise ApiError(409, ErrorCode.PLATE_ALREADY_REGISTERED, "Cette plaque est deja enregistree.") from exc
+            raise
+        assignment = VehicleAssignment(
+            id=VehicleAssignment.new_id(),
+            partner_id=partner_id,
+            vehicle_id=vehicle.id,
+            driver_id=driver_id,
+        )
+        await self.partner_repo.save_vehicle_assignment(assignment)
+        log_event(
+            "partner.vehicle.created",
+            partner_id=partner_id,
+            vehicle_id=vehicle.id,
+            driver_id=driver_id,
+            category=vehicle.category.value,
+            comfort_level=vehicle.comfort_level.value,
+            verification_status=vehicle.verification_status.value,
+        )
+        return {"vehicle": _vehicle_payload(vehicle), "assignment": _vehicle_assignment_payload(assignment)}
+
     async def unassign_vehicle(self, partner_id: UUID, vehicle_id: UUID) -> dict:
         await self._require_partner(partner_id)
         removed = await self.partner_repo.end_vehicle_assignment(vehicle_id)
@@ -390,6 +500,23 @@ class PartnerService:
                 {"status": partner.status.value},
             )
         return partner
+
+    async def _ensure_driver_affiliated_to_partner(self, partner_id: UUID, driver_id: UUID) -> None:
+        driver_link = await self.partner_repo.find_active_driver_link(driver_id)
+        if driver_link is not None:
+            existing_partner, _link = driver_link
+            if existing_partner.id != partner_id:
+                raise ApiError(
+                    409,
+                    ErrorCode.DRIVER_ALREADY_AFFILIATED,
+                    "Ce chauffeur est deja affilie a un autre partenaire actif.",
+                    {"partner_id": str(existing_partner.id)},
+                )
+            return
+        await self.partner_repo.save_driver_link(
+            PartnerDriverLink(id=PartnerDriverLink.new_id(), partner_id=partner_id, driver_id=driver_id)
+        )
+        log_event("partner.driver.affiliated", partner_id=partner_id, driver_id=driver_id, source="vehicle_creation")
 
 
 def _partner_payload(partner: Partner) -> dict:
@@ -463,6 +590,65 @@ def _vehicle_assignment_payload(assignment: VehicleAssignment) -> dict:
     }
 
 
+def _vehicle_payload(vehicle: Vehicle) -> dict:
+    return {
+        "id": str(vehicle.id),
+        "driver_id": str(vehicle.driver_id),
+        "plate_number": vehicle.plate_number,
+        "make": vehicle.make,
+        "model": vehicle.model,
+        "color": vehicle.color,
+        "category": vehicle.category.value,
+        "comfort_level": vehicle.comfort_level.value,
+        "registration_document_file_id": str(vehicle.registration_document_file_id)
+        if vehicle.registration_document_file_id
+        else None,
+        "insurance_document_file_id": str(vehicle.insurance_document_file_id)
+        if vehicle.insurance_document_file_id
+        else None,
+        "technical_inspection_document_file_id": str(vehicle.technical_inspection_document_file_id)
+        if vehicle.technical_inspection_document_file_id
+        else None,
+        "transport_authorization_document_file_id": str(vehicle.transport_authorization_document_file_id)
+        if vehicle.transport_authorization_document_file_id
+        else None,
+        "vehicle_photo_file_id": str(vehicle.vehicle_photo_file_id) if vehicle.vehicle_photo_file_id else None,
+        "vehicle_front_photo_file_id": str(vehicle.vehicle_front_photo_file_id)
+        if vehicle.vehicle_front_photo_file_id
+        else None,
+        "vehicle_back_photo_file_id": str(vehicle.vehicle_back_photo_file_id)
+        if vehicle.vehicle_back_photo_file_id
+        else None,
+        "vehicle_left_photo_file_id": str(vehicle.vehicle_left_photo_file_id)
+        if vehicle.vehicle_left_photo_file_id
+        else None,
+        "vehicle_right_photo_file_id": str(vehicle.vehicle_right_photo_file_id)
+        if vehicle.vehicle_right_photo_file_id
+        else None,
+        "vehicle_interior_photo_file_id": str(vehicle.vehicle_interior_photo_file_id)
+        if vehicle.vehicle_interior_photo_file_id
+        else None,
+        "registration_document_url": vehicle.registration_document_url,
+        "insurance_document_url": vehicle.insurance_document_url,
+        "technical_inspection_document_url": vehicle.technical_inspection_document_url,
+        "transport_authorization_document_url": vehicle.transport_authorization_document_url,
+        "vehicle_photo_url": vehicle.vehicle_photo_url,
+        "vehicle_front_photo_url": vehicle.vehicle_front_photo_url,
+        "vehicle_back_photo_url": vehicle.vehicle_back_photo_url,
+        "vehicle_left_photo_url": vehicle.vehicle_left_photo_url,
+        "vehicle_right_photo_url": vehicle.vehicle_right_photo_url,
+        "vehicle_interior_photo_url": vehicle.vehicle_interior_photo_url,
+        "verification_status": vehicle.verification_status.value,
+        "verified_at": vehicle.verified_at.isoformat() if vehicle.verified_at else None,
+        "reviewed_at": vehicle.reviewed_at.isoformat() if vehicle.reviewed_at else None,
+        "review_notes": vehicle.review_notes,
+        "owner_type": vehicle.owner_type,
+        "partner_id": str(vehicle.partner_id) if vehicle.partner_id else None,
+        "active": vehicle.active,
+        "created_at": vehicle.created_at.isoformat() if vehicle.created_at else None,
+    }
+
+
 def _partner_type(value: str) -> PartnerType:
     try:
         return PartnerType(value)
@@ -502,6 +688,30 @@ def _member_role(value: str) -> PartnerMemberRole:
             ErrorCode.INVALID_PARTNER_ROLE,
             "Role partenaire invalide.",
             {"field": "role", "allowed": [item.value for item in PartnerMemberRole]},
+        ) from exc
+
+
+def _vehicle_category(value: str) -> VehicleCategory:
+    try:
+        return VehicleCategory(value)
+    except ValueError as exc:
+        raise ApiError(
+            422,
+            ErrorCode.INVALID_VEHICLE_CATEGORY,
+            "Categorie de vehicule invalide.",
+            {"field": "category", "allowed": [item.value for item in VehicleCategory]},
+        ) from exc
+
+
+def _comfort_level(value: str) -> ComfortLevel:
+    try:
+        return ComfortLevel(value)
+    except ValueError as exc:
+        raise ApiError(
+            422,
+            ErrorCode.INVALID_COMFORT_LEVEL,
+            "Niveau de confort invalide.",
+            {"field": "comfort_level", "allowed": [item.value for item in ComfortLevel]},
         ) from exc
 
 
