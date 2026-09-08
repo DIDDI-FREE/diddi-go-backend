@@ -270,6 +270,7 @@ POST /v1/drivers/vehicles/{vehicle_id}/kyv/resubmit
 POST /v1/drivers/vehicles/{vehicle_id}/kyv/approve
 POST /v1/drivers/vehicles/{vehicle_id}/kyv/reject
 GET  /v1/admin/vehicles/kyv?status=pending_verification&page=1&page_size=20
+GET  /v1/admin/vehicles/{vehicle_id}/kyv
 ```
 
 `approve` et `reject` exigent un token admin. La route `resubmit` est pour le
@@ -277,7 +278,8 @@ chauffeur proprietaire du vehicule.
 
 Backoffice KYV : utiliser `GET /v1/admin/vehicles/kyv` pour recuperer la file
 des vehicules a valider. Les statuts acceptes sont
-`pending_verification`, `active`, `suspended`, `rejected`, `all`.
+`pending_verification`, `active`, `suspended`, `rejected`, `all`. Utiliser
+ensuite `GET /v1/admin/vehicles/{vehicle_id}/kyv` pour ouvrir un dossier précis.
 
 La creation vehicule retourne maintenant `verification_status=pending_verification`.
 Tant que le vehicule n'est pas approuve, `POST /v1/drivers/online` retourne

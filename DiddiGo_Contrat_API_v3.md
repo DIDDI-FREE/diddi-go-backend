@@ -450,6 +450,13 @@ Reponse :
 Usage backoffice : l'admin liste `pending_verification`, ouvre le dossier
 vehicule, verifie les documents et appelle ensuite `approve` ou `reject`.
 
+### `GET /admin/vehicles/{vehicle_id}/kyv`
+
+Route admin. Ouvre le dossier KYV complet d'un vehicule.
+
+Reponse : meme structure qu'un item de `GET /admin/vehicles/kyv`, avec tous les
+champs documentaires du vehicule.
+
 ### `POST /drivers/vehicles/{vehicle_id}/kyv/reject`
 
 Route admin. Rejette le KYV vehicule et desactive le vehicule.

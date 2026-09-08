@@ -466,6 +466,10 @@ class DriverService:
             "pagination": {"page": page, "page_size": page_size, "total": total},
         }
 
+    async def get_vehicle_kyv_detail(self, vehicle_id: UUID) -> dict:
+        vehicle = await self._require_vehicle(vehicle_id)
+        return _vehicle_payload(vehicle)
+
     async def resolve_driver(self, user_id: UUID) -> tuple[DriverProfile, Vehicle]:
         """Profile + active vehicle for a driver about to go online or take a
         ride. Raises if either is missing — matching must never hand a ride to

@@ -348,6 +348,38 @@ async def test_admin_lists_vehicle_kyv_queue() -> None:
 
 
 @pytest.mark.asyncio
+async def test_admin_gets_vehicle_kyv_detail() -> None:
+    driver_repo = FakeDriverRepo()
+    vehicle_repo = FakeVehicleRepo()
+    service = DriverService(driver_repo=driver_repo, vehicle_repo=vehicle_repo)
+    user_id = uuid4()
+
+    await service.create_profile(user_id=user_id, license_number="CI-123456")
+    vehicle = await service.register_vehicle(
+        user_id=user_id,
+        plate_number="CE-124-AA",
+        make="Toyota",
+        model="Yaris",
+        color="gris",
+        category="standard",
+        registration_document_file_id=uuid4(),
+        insurance_document_file_id=uuid4(),
+        technical_inspection_document_file_id=uuid4(),
+        vehicle_front_photo_file_id=uuid4(),
+        vehicle_back_photo_file_id=uuid4(),
+        vehicle_left_photo_file_id=uuid4(),
+        vehicle_right_photo_file_id=uuid4(),
+        vehicle_interior_photo_file_id=uuid4(),
+    )
+
+    detail = await service.get_vehicle_kyv_detail(UUID(vehicle["id"]))
+
+    assert detail["id"] == vehicle["id"]
+    assert detail["plate_number"] == "CE-124-AA"
+    assert detail["vehicle_front_photo_file_id"] is not None
+
+
+@pytest.mark.asyncio
 async def test_vehicle_kyv_queue_rejects_invalid_status() -> None:
     service = DriverService(driver_repo=FakeDriverRepo(), vehicle_repo=FakeVehicleRepo())
 
