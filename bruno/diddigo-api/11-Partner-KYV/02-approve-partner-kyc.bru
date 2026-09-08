@@ -1,0 +1,34 @@
+meta {
+  name: 02 Approve Partner KYC
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/admin/partners/{{partner_id}}/kyc/approve
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{admin_access_token}}
+}
+
+body:json {
+  {
+    "notes": "QA partner KYC approved"
+  }
+}
+
+tests {
+  test("partner KYC is approved", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("partner is active", function () {
+    expect(res.body.status).to.equal("active");
+  });
+}
+
+docs {
+  Run after "01 Create Partner"; uses runtime `partner_id`.
+}

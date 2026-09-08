@@ -493,6 +493,25 @@ class SqlAlchemyVehicleRepository:
             return None
         return self._vehicle_to_domain(row)
 
+    async def list_by_verification_status(
+        self,
+        statuses: list[str],
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[Vehicle], int]:
+        q = select(orm.VehicleModel).where(orm.VehicleModel.verification_status.in_(statuses))
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self._session.execute(count_q)).scalar() or 0
+
+        q = (
+            q.order_by(orm.VehicleModel.reviewed_at.asc().nullsfirst(), orm.VehicleModel.created_at.asc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        result = await self._session.execute(q)
+        return [self._vehicle_to_domain(row) for row in result.scalars().all()], int(total)
+
     @staticmethod
     def _vehicle_to_domain(row: orm.VehicleModel) -> Vehicle:
         return Vehicle(

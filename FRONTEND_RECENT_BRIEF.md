@@ -269,10 +269,15 @@ Nouvelles routes KYV :
 POST /v1/drivers/vehicles/{vehicle_id}/kyv/resubmit
 POST /v1/drivers/vehicles/{vehicle_id}/kyv/approve
 POST /v1/drivers/vehicles/{vehicle_id}/kyv/reject
+GET  /v1/admin/vehicles/kyv?status=pending_verification&page=1&page_size=20
 ```
 
 `approve` et `reject` exigent un token admin. La route `resubmit` est pour le
 chauffeur proprietaire du vehicule.
+
+Backoffice KYV : utiliser `GET /v1/admin/vehicles/kyv` pour recuperer la file
+des vehicules a valider. Les statuts acceptes sont
+`pending_verification`, `active`, `suspended`, `rejected`, `all`.
 
 La creation vehicule retourne maintenant `verification_status=pending_verification`.
 Tant que le vehicule n'est pas approuve, `POST /v1/drivers/online` retourne

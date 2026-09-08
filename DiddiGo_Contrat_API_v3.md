@@ -408,6 +408,48 @@ Requete :
 }
 ```
 
+### `GET /admin/vehicles/kyv`
+
+Route admin. Liste les vehicules a revoir cote KYV.
+
+Query params :
+
+```text
+status=pending_verification | active | suspended | rejected | all
+page=1
+page_size=20
+```
+
+Reponse :
+
+```json
+{
+  "data": [
+    {
+      "id": "vehicle-id",
+      "driver_id": "driver-profile-id",
+      "plate_number": "CE-123-AA",
+      "owner_type": "driver",
+      "partner_id": null,
+      "verification_status": "pending_verification",
+      "vehicle_front_photo_file_id": "file-id",
+      "vehicle_back_photo_file_id": "file-id",
+      "vehicle_left_photo_file_id": "file-id",
+      "vehicle_right_photo_file_id": "file-id",
+      "vehicle_interior_photo_file_id": "file-id"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "page_size": 20,
+    "total": 1
+  }
+}
+```
+
+Usage backoffice : l'admin liste `pending_verification`, ouvre le dossier
+vehicule, verifie les documents et appelle ensuite `approve` ou `reject`.
+
 ### `POST /drivers/vehicles/{vehicle_id}/kyv/reject`
 
 Route admin. Rejette le KYV vehicule et desactive le vehicule.

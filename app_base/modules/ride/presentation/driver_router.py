@@ -37,6 +37,7 @@ from app_base.modules.ride.presentation.driver_schemas import (
 from app_base.shared_kernel.types import GeoPoint
 
 router = APIRouter(prefix="/drivers", tags=["driver"])
+admin_vehicle_router = APIRouter(prefix="/admin/vehicles", tags=["admin-vehicles"])
 logger = logging.getLogger("uvicorn.error")
 
 
@@ -216,6 +217,17 @@ async def reject_vehicle_kyv(
     current_user: UserModel = Depends(require_role("admin")),
 ) -> dict:
     return await service.reject_vehicle_kyv(vehicle_id, reviewed_by_user_id=current_user.id, notes=payload.notes)
+
+
+@admin_vehicle_router.get("/kyv")
+async def list_vehicle_kyv_queue(
+    status: str = Query(default="pending_verification"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    service: DriverService = Depends(driver_service),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.list_vehicle_kyv_queue(status=status, page=page, page_size=page_size)
 
 
 @router.post("/online")

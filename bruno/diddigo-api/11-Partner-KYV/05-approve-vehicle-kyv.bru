@@ -1,0 +1,35 @@
+meta {
+  name: 05 Approve Vehicle KYV
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/drivers/vehicles/{{partner_vehicle_id}}/kyv/approve
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{admin_access_token}}
+}
+
+body:json {
+  {
+    "notes": "QA vehicle KYV approved"
+  }
+}
+
+tests {
+  test("vehicle KYV is approved", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("vehicle is active", function () {
+    expect(res.body.verification_status).to.equal("active");
+    expect(res.body.active).to.equal(true);
+  });
+}
+
+docs {
+  This validates the partner vehicle created in step 03.
+}
