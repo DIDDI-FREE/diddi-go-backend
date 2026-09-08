@@ -51,6 +51,26 @@ Then run DiddiGo integration:
 10-MVP-Field-Test/03 DiddiGo Route Dependent Ride Create
 ```
 
+For partner/fleet onboarding and vehicle KYV:
+
+```text
+11-Partner-KYV/01 Create Partner
+11-Partner-KYV/02 Approve Partner KYC
+11-Partner-KYV/03 Create Partner Vehicle
+11-Partner-KYV/04 List Vehicle KYV Queue
+11-Partner-KYV/04b Get Vehicle KYV Detail
+11-Partner-KYV/05 Approve Vehicle KYV
+11-Partner-KYV/06 Go Online After KYV
+```
+
+Required variables:
+
+```text
+admin_access_token
+driver_access_token
+driver_profile_id
+```
+
 ## 3. Full DiddiGo Happy Path
 
 Follow the existing collection order:

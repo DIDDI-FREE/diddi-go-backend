@@ -31,6 +31,7 @@ cash payment.
 | GO-002 | DiddiGo | Pricing via DiddiMap distance | 10-MVP-Field-Test/02 | HTTP 200, fare + commission fields |
 | GO-003 | DiddiGo | Route-dependent ride creation | 10-MVP-Field-Test/03 | HTTP 201 or explicit business error |
 | GO-004 | DiddiGo | Full happy path | 01..08 existing folders | ride completed + cash collected |
+| GO-005 | DiddiGo | Partner + vehicle KYV flow | 11-Partner-KYV/01..06 | partner active, vehicle KYV approved, driver online |
 
 ## Human QA Tests
 
@@ -46,6 +47,10 @@ cash payment.
 | QA-008 | Passenger | Share ride link | Public page opens without login and shows safe data |
 | QA-009 | Passenger/Driver | Trigger emergency | Ride emergency status becomes open and backend log is visible |
 | QA-010 | Driver | Complete ride and confirm cash | Payment becomes collected |
+| QA-011 | Admin | Create partner and approve partner KYC | Partner becomes active |
+| QA-012 | Admin | Create partner vehicle with 5 photos | Vehicle enters KYV queue |
+| QA-013 | Admin | Approve partner vehicle KYV | Driver can go online unless another explicit rule blocks |
+| QA-014 | Driver | Partner is suspended | Driver cannot go online with `PARTNER_SUSPENDED` |
 
 ## Pass/Fail Rules
 
@@ -57,6 +62,8 @@ Critical blockers:
 - KYC-approved driver cannot go online.
 - Nearby eligible driver never receives a ride offer.
 - Cash completion path cannot be completed.
+- Partner vehicle cannot be listed/reviewed by admin.
+- Suspended partner driver can still go online.
 
 Warnings:
 
