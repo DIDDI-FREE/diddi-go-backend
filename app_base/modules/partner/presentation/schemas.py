@@ -72,3 +72,33 @@ class PartnerDriverAffiliateRequest(BaseModel):
 
 class PartnerVehicleAssignRequest(BaseModel):
     driver_id: UUID
+
+
+class PartnerVehicleCreateRequest(BaseModel):
+    driver_id: UUID
+    plate_number: str = Field(min_length=1, max_length=20)
+    make: str | None = Field(default=None, max_length=50)
+    model: str | None = Field(default=None, max_length=50)
+    color: str | None = Field(default=None, max_length=30)
+    category: str = Field(default="standard")
+    comfort_level: str = Field(default="standard")
+    registration_document_file_id: UUID | None = None
+    insurance_document_file_id: UUID | None = None
+    technical_inspection_document_file_id: UUID | None = None
+    transport_authorization_document_file_id: UUID | None = None
+    vehicle_photo_file_id: UUID | None = None
+    vehicle_front_photo_file_id: UUID | None = None
+    vehicle_back_photo_file_id: UUID | None = None
+    vehicle_left_photo_file_id: UUID | None = None
+    vehicle_right_photo_file_id: UUID | None = None
+    vehicle_interior_photo_file_id: UUID | None = None
+    registration_document_url: str | None = Field(default=None, max_length=1000)
+    insurance_document_url: str | None = Field(default=None, max_length=1000)
+    technical_inspection_document_url: str | None = Field(default=None, max_length=1000)
+    transport_authorization_document_url: str | None = Field(default=None, max_length=1000)
+    vehicle_photo_url: str | None = Field(default=None, max_length=1000)
+    vehicle_front_photo_url: str | None = Field(default=None, max_length=1000)
+    vehicle_back_photo_url: str | None = Field(default=None, max_length=1000)
+    vehicle_left_photo_url: str | None = Field(default=None, max_length=1000)
+    vehicle_right_photo_url: str | None = Field(default=None, max_length=1000)
+    vehicle_interior_photo_url: str | None = Field(default=None, max_length=1000)

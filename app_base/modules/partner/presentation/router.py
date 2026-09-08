@@ -18,6 +18,7 @@ from app_base.modules.partner.presentation.schemas import (
     PartnerMemberCreateRequest,
     PartnerUpdateRequest,
     PartnerVehicleAssignRequest,
+    PartnerVehicleCreateRequest,
 )
 
 admin_router = APIRouter(prefix="/admin/partners", tags=["admin-partners"])
@@ -188,6 +189,16 @@ async def assign_vehicle(
     _current_user: UserModel = Depends(require_role("admin")),
 ) -> dict:
     return await service.assign_vehicle(partner_id, vehicle_id=vehicle_id, driver_id=payload.driver_id)
+
+
+@admin_router.post("/{partner_id}/vehicles", status_code=201)
+async def create_partner_vehicle(
+    partner_id: UUID,
+    payload: PartnerVehicleCreateRequest,
+    service: PartnerService = Depends(partner_service),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.create_vehicle(partner_id, **payload.model_dump())
 
 
 @admin_router.post("/{partner_id}/vehicles/{vehicle_id}/unassign")

@@ -123,13 +123,23 @@ class FakeDriverRepo:
     async def find_by_user_id(self, user_id):
         return self.profile if self.profile.user_id == user_id else None
 
+    async def find_by_id(self, profile_id):
+        return self.profile if self.profile.id == profile_id else None
+
 
 class FakeVehicleRepo:
-    def __init__(self, vehicle: Vehicle) -> None:
+    def __init__(self, vehicle: Vehicle | None = None) -> None:
         self.vehicle = vehicle
 
+    async def save(self, vehicle):
+        self.vehicle = vehicle
+        return vehicle
+
+    async def find_by_id(self, vehicle_id):
+        return self.vehicle if self.vehicle and self.vehicle.id == vehicle_id else None
+
     async def find_active_for_driver(self, driver_id):
-        return self.vehicle if self.vehicle.driver_id == driver_id and self.vehicle.active else None
+        return self.vehicle if self.vehicle and self.vehicle.driver_id == driver_id and self.vehicle.active else None
 
 
 @pytest.mark.asyncio
@@ -204,6 +214,61 @@ async def test_partner_kyc_approval_activates_partner() -> None:
 
     assert approved["status"] == "active"
     assert approved["kyc"]["reviewed_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_admin_creates_partner_vehicle_and_assigns_driver() -> None:
+    repo = FakePartnerRepo()
+    driver_id = uuid4()
+    service = PartnerService(
+        partner_repo=repo,
+        vehicle_repo=FakeVehicleRepo(),
+        driver_repo=FakeDriverRepo(
+            DriverProfile(
+                id=driver_id,
+                user_id=uuid4(),
+                license_number="CI-123",
+                status=DriverStatus.ACTIVE,
+            )
+        ),
+    )
+    partner = await service.create_partner(
+        name="Fleet",
+        partner_type="fleet_owner",
+        registration_document_file_id=uuid4(),
+        tax_document_file_id=uuid4(),
+        representative_id_document_file_id=uuid4(),
+    )
+    partner_id = UUID(partner["id"])
+    await service.activate_partner(partner_id)
+
+    payload = await service.create_vehicle(
+        partner_id,
+        driver_id=driver_id,
+        plate_number="ce-987-aa",
+        make="Toyota",
+        model="Corolla",
+        color="noir",
+        category="standard",
+        comfort_level="comfort",
+        registration_document_file_id=uuid4(),
+        insurance_document_file_id=uuid4(),
+        technical_inspection_document_file_id=uuid4(),
+        vehicle_front_photo_file_id=uuid4(),
+        vehicle_back_photo_file_id=uuid4(),
+        vehicle_left_photo_file_id=uuid4(),
+        vehicle_right_photo_file_id=uuid4(),
+        vehicle_interior_photo_file_id=uuid4(),
+    )
+
+    assert payload["vehicle"]["plate_number"] == "CE-987-AA"
+    assert payload["vehicle"]["owner_type"] == "partner"
+    assert payload["vehicle"]["partner_id"] == str(partner_id)
+    assert payload["vehicle"]["driver_id"] == str(driver_id)
+    assert payload["vehicle"]["verification_status"] == "pending_verification"
+    assert payload["vehicle"]["comfort_level"] == "comfort"
+    assert payload["assignment"]["driver_id"] == str(driver_id)
+    assert (await repo.find_active_driver_link(driver_id)) is not None
 
 
 @pytest.mark.asyncio

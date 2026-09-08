@@ -198,8 +198,14 @@ async def push_notification_service(
 
 async def partner_service(
     partner_repo_dep: SqlAlchemyPartnerRepository = Depends(partner_repo),
+    vehicle_repo_dep: SqlAlchemyVehicleRepository = Depends(vehicle_repo),
+    driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
 ) -> PartnerService:
-    return PartnerService(partner_repo=partner_repo_dep)
+    return PartnerService(
+        partner_repo=partner_repo_dep,
+        vehicle_repo=vehicle_repo_dep,
+        driver_repo=driver_repo_dep,
+    )
 
 
 def get_offer_store(redis: Redis = Depends(get_redis)) -> RedisOfferStore:

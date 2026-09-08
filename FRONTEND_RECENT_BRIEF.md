@@ -795,9 +795,42 @@ DELETE /v1/admin/partners/{partner_id}/members/{member_id}
 POST   /v1/admin/partners/{partner_id}/drivers
 GET    /v1/admin/partners/{partner_id}/drivers
 DELETE /v1/admin/partners/{partner_id}/drivers/{driver_id}
+POST   /v1/admin/partners/{partner_id}/vehicles
 POST   /v1/admin/partners/{partner_id}/vehicles/{vehicle_id}/assign
 POST   /v1/admin/partners/{partner_id}/vehicles/{vehicle_id}/unassign
 ```
+
+Creation vehicule partenaire admin :
+
+```http
+POST /v1/admin/partners/{partner_id}/vehicles
+```
+
+```json
+{
+  "driver_id": "driver-profile-id",
+  "plate_number": "CE-987-AA",
+  "make": "Toyota",
+  "model": "Corolla",
+  "color": "noir",
+  "category": "standard",
+  "comfort_level": "comfort",
+  "registration_document_file_id": "file-id",
+  "insurance_document_file_id": "file-id",
+  "technical_inspection_document_file_id": "file-id",
+  "transport_authorization_document_file_id": "file-id",
+  "vehicle_front_photo_file_id": "file-id",
+  "vehicle_back_photo_file_id": "file-id",
+  "vehicle_left_photo_file_id": "file-id",
+  "vehicle_right_photo_file_id": "file-id",
+  "vehicle_interior_photo_file_id": "file-id"
+}
+```
+
+Important UX admin : cette route cree le vehicule en `owner_type=partner`,
+l'assigne au chauffeur et cree l'affiliation chauffeur si elle n'existe pas
+encore. Si le chauffeur est deja affilie a un autre partenaire, afficher
+`DRIVER_ALREADY_AFFILIATED`.
 
 Route membre partenaire :
 
