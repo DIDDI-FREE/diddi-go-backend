@@ -491,6 +491,42 @@ En V1, les metrics sont en memoire par process. Elles servent au diagnostic
 terrain et au scraping Prometheus simple. Pour une production multi-replicas,
 prevoir Prometheus/Grafana ou un collecteur centralise.
 
+## Observabilite locale avec Grafana
+
+Un overlay optionnel lance Prometheus et Grafana pour les tests terrain :
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml -f docker-compose.observability.yml up --build
+```
+
+Ports par defaut :
+
+```text
+DiddiGo     http://localhost:18000
+Prometheus  http://localhost:19090
+Grafana     http://localhost:13000
+```
+
+Identifiants Grafana par defaut en local :
+
+```text
+admin / admin
+```
+
+En Portainer, ajouter `docker-compose.observability.yml` a la stack seulement
+si l'on veut exposer Prometheus/Grafana sur le VPS. Surcharger au besoin :
+
+```env
+PROMETHEUS_PORT=19090
+GRAFANA_PORT=13000
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=<strong-password>
+```
+
+Le dashboard provisionne s'appelle `DiddiGo Terrain`. Il scrape l'API interne
+`app:8000/metrics`, donc il doit etre lance dans la meme stack Compose que
+l'application DiddiGo.
+
 ---
 
 ## Architecture

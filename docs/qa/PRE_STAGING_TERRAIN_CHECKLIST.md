@@ -79,6 +79,15 @@ PAYMENT_RECONCILIATION_MIN_AGE_SECONDS=120
 PAYMENT_RECONCILIATION_MAX_AGE_SECONDS=259200
 ```
 
+Si l'overlay observabilite est active:
+
+```env
+PROMETHEUS_PORT=19090
+GRAFANA_PORT=13000
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=<strong-password>
+```
+
 Ne pas renseigner `DATABASE_URL` ni `REDIS_URL` si la stack utilise les services
 internes `db` et `redis`. Dans ce cas, Compose les construit depuis
 `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` et le service Redis interne.
@@ -123,6 +132,8 @@ Attendus:
 - `/docs` charge Swagger.
 - `/v1/ws` en HTTP simple retourne `426 WEBSOCKET_UPGRADE_REQUIRED`, pas `404`.
 - `/payments/return` et `/wallet/return` ne retournent pas `404`.
+- Si l'overlay observabilite est lance, Prometheus scrape `app:8000/metrics` et
+  Grafana affiche le dashboard `DiddiGo Terrain`.
 
 ## Bruno
 
@@ -209,4 +220,3 @@ La vague est stable seulement si:
 - le callback DiddiPay et la reconciliation mettent a jour paiement/wallet;
 - les liens de partage ride fonctionnent sans login;
 - les logs permettent de retrouver `ride_id`, `driver_id`, `user_id` et `request_id`.
-
