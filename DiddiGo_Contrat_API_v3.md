@@ -23,11 +23,19 @@ DiddiFiles = fournisseur unique des fichiers/documents
 DiddiGo ne doit pas inventer de fallback geographique silencieux. Si DiddiMap
 echoue, DiddiGo retourne une erreur documentee.
 
+Regle d'identite partagee : une personne garde une seule identite DiddiFreeID.
+DiddiGo active ensuite des capacites metier locales, par exemple le profil
+chauffeur. Il ne faut pas creer un compte passager et un compte chauffeur
+separes pour la meme personne.
+
 Le token DiddiFreeID ne porte pas le role chauffeur. Le role chauffeur est une
 qualification metier DiddiGo via `driver_profiles` + `vehicles`.
 
 Les roles partenaires sont locaux a DiddiGo. DiddiFreeID continue a porter
 seulement les roles globaux `user` et `admin`.
+
+La regle complete "identite unique + capacites metier par module" est documentee
+dans `docs/architecture/IDENTITY_AND_CAPABILITIES_RULES.md`.
 
 Les erreurs DiddiGo suivent toujours le format `{"error":{"code","message","details"}}`.
 Le catalogue complet des codes est maintenu dans `DiddiGo_Error_Catalog.md`.

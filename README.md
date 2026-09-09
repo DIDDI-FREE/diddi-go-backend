@@ -8,6 +8,7 @@ Backend VTC de DiddiFree : monolithe modulaire FastAPI (modules `auth`, `ride`,
 - [DiddiFree_Architecture_Modulaire_DiddiGo.md](DiddiFree_Architecture_Modulaire_DiddiGo.md)
 - [DiddiGo_Contrat_API.md](DiddiGo_Contrat_API.md)
 - [DiddiGo_Contrat_API_v2.md](DiddiGo_Contrat_API_v2.md)
+- [docs/architecture/IDENTITY_AND_CAPABILITIES_RULES.md](docs/architecture/IDENTITY_AND_CAPABILITIES_RULES.md)
 - [BRANCHING.md](BRANCHING.md)
 
 ---

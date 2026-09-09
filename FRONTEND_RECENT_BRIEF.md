@@ -49,6 +49,22 @@ admin
 Ne pas attendre `role=driver` dans le JWT pour afficher le parcours chauffeur.
 DiddiGo decide les droits chauffeur avec son profil metier local.
 
+Regle produit partagee :
+
+```text
+Une personne = une identite DiddiFreeID unique.
+Les usages pro = des capacites metier activees dans chaque module.
+```
+
+Donc le frontend ne doit pas creer ou demander un deuxieme compte pour devenir
+chauffeur. Le meme utilisateur DiddiFreeID peut etre passager DiddiGo,
+chauffeur DiddiGo, puis plus tard livreur DiddiSend si le module concerne valide
+sa capacite.
+
+Pour afficher les modes disponibles, le frontend doit appeler les APIs metier
+des modules concernes. Il ne doit pas deduire `chauffeur` ou `livreur` seulement
+depuis le JWT global.
+
 DiddiFreeID v2.0 supporte aussi l'OTP par e-mail. Cote frontend, le login peut
 demander explicitement le canal :
 

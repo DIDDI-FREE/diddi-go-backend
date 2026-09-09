@@ -341,6 +341,11 @@ Position recommandeee :
   paiement, notification;
 - DiddiGo ne doit pas devenir le backend colis;
 - les modules communiquent via contrats API/evenements.
+- une personne garde un seul `user_id` DiddiFreeID;
+- DiddiGo expose la capacite chauffeur localement;
+- DiddiSend expose la capacite livreur localement;
+- une future app `DiddiFree Pro` orchestre ces capacites sans fusionner les
+  backends metier.
 
 Use cases de preparation :
 
@@ -349,12 +354,27 @@ Use cases de preparation :
 - UC-1003 L'identite reste dans DiddiFreeID.
 - UC-1004 Les paiements restent dans DiddiPay.
 - UC-1005 Les routes restent dans DiddiMap.
+- UC-1006 Le frontend peut savoir si l'utilisateur a une capacite chauffeur
+  DiddiGo active, en attente ou bloquee.
+- UC-1007 Le frontend peut savoir si l'utilisateur a une capacite livreur
+  DiddiSend active, en attente ou bloquee.
+
+Sous-plan recommande :
+
+```text
+3.0.1 Documenter la regle identite unique + capacites metier
+3.0.2 Ajouter un endpoint de capacites DiddiGo
+3.0.3 Aligner DiddiSend sur le meme modele
+3.0.4 Preparer DiddiFree Pro comme orchestration frontend/API, pas fusion backend
+```
 
 Critere de sortie :
 
 - aucun code DiddiSend dur dans le coeur ride;
 - seulement des hooks d'integration si necessaire;
 - contrat API DiddiSend separe.
+- les capacites metier ne dependent pas d'un `role=driver` ou `role=courier`
+  dans le JWT global.
 
 ## Ordre recommande
 
