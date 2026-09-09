@@ -68,6 +68,39 @@ diddigo_http_request_duration_ms_sum
 diddigo_business_events_total
 ```
 
+## Dashboard Grafana optionnel
+
+Pour les tests terrain, DiddiGo livre aussi un overlay Compose optionnel :
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml -f docker-compose.observability.yml up --build
+```
+
+Acces local :
+
+```text
+Prometheus  http://localhost:19090
+Grafana     http://localhost:13000
+```
+
+Le dashboard Grafana provisionne est :
+
+```text
+DiddiGo / DiddiGo Terrain
+```
+
+Il permet de suivre rapidement :
+
+- trafic HTTP;
+- erreurs `5xx`;
+- matching et courses;
+- blocages chauffeur;
+- WebSocket et push;
+- erreurs DiddiMap et paiement.
+
+En Portainer, cet overlay doit rester optionnel. Ne pas exposer Grafana avec
+`admin/admin`; definir `GRAFANA_ADMIN_PASSWORD` dans les variables de stack.
+
 ## Checklist pendant un test ride
 
 1. Avant la course, verifier que le chauffeur passe online.
@@ -150,7 +183,6 @@ diddigo_business_events_total{event="ws.driver_location.received"}
 
 - metrics en memoire par process;
 - reset au redemarrage du conteneur;
-- pas encore de dashboard Grafana livre dans ce repo;
 - pas de traces distribuees OpenTelemetry;
 - logs JSON restent la source de verite pour les IDs precis.
 
