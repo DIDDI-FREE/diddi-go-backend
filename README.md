@@ -104,6 +104,8 @@ Important :
   connectivité au démarrage via le lifespan.
 - Redis ne publie pas de port hôte dans Portainer, pour limiter les collisions
   sur un VPS déjà chargé.
+- Avant une relance staging terrain, suivre la checklist
+  `docs/qa/PRE_STAGING_TERRAIN_CHECKLIST.md`.
 
 ---
 
@@ -223,6 +225,16 @@ La suite s'exécute contre le vrai PostGIS et le vrai Redis.
 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d db redis
 uv run pytest
 uv run ruff check .
+```
+
+Pour les tests terrain DiddiGo + DiddiMap + paiement, utiliser aussi :
+
+```text
+docs/qa/PRE_STAGING_TERRAIN_CHECKLIST.md
+docs/qa/BRUNO_MVP_TEST_RUNBOOK.md
+docs/qa/FRONTEND_DRIVER_HUMAN_TEST_PROTOCOL.md
+docs/qa/PARTNER_DRIVER_FIELD_TEST_PROTOCOL.md
+docs/qa/OBSERVABILITY_V1_RUNBOOK.md
 ```
 
 ---
