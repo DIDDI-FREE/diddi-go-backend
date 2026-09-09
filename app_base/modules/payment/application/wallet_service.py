@@ -69,7 +69,7 @@ class DriverWalletService:
         if wallet.balance < min_balance:
             raise ApiError(
                 403,
-                "DRIVER_BALANCE_TOO_LOW",
+                ErrorCode.DRIVER_BALANCE_TOO_LOW,
                 "Solde chauffeur insuffisant pour passer en ligne.",
                 {"balance": int(wallet.balance), "min_balance": int(min_balance), "currency": wallet.currency},
             )
@@ -86,7 +86,7 @@ class DriverWalletService:
     ) -> dict:
         driver_id = await self._driver_id_for_user(driver_user_id)
         if amount <= 0:
-            raise ApiError(422, "INVALID_TOPUP_AMOUNT", "Le montant de recharge doit etre positif.")
+            raise ApiError(422, ErrorCode.INVALID_TOPUP_AMOUNT, "Le montant de recharge doit etre positif.")
         try:
             payment_method = PaymentMethod(method)
         except ValueError as exc:

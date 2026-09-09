@@ -132,9 +132,12 @@ silencieux.
 | HTTP | Code | Sens |
 |---|---|---|
 | `403` | `DRIVER_PROFILE_REQUIRED` | Seul un chauffeur metier peut encaisser |
+| `403` | `DRIVER_BALANCE_TOO_LOW` | Solde chauffeur insuffisant pour passer en ligne |
 | `404` | `RIDE_NOT_FOUND` | Course introuvable |
 | `409` | `RIDE_NOT_COMPLETED` | Encaissement impossible avant fin de course |
+| `422` | `AMOUNT_MISMATCH` | Montant encaisse different du montant attendu |
 | `422` | `INVALID_PAYMENT_METHOD` | Methode inconnue ou non supportee |
+| `422` | `INVALID_TOPUP_AMOUNT` | Montant de recharge chauffeur invalide |
 | `422` | `PAYMENT_EMAIL_REQUIRED` | Email client requis pour initialiser DiddiPay/Paystack |
 | `503` | `PAYMENT_CONFIGURATION_MISSING` | Configuration DiddiPay manquante cote DiddiGo |
 | `503` | `PAYMENT_PROVIDER_UNAVAILABLE` | DiddiPay indisponible |
