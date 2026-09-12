@@ -145,6 +145,28 @@ Format recommande:
 Pour DiddiSend, le meme principe s'applique avec `type=delivery_driver` ou
 `courier` selon le vocabulaire retenu.
 
+## Scores metier
+
+Les scores ne doivent pas etre centralises dans DiddiFreeID.
+
+Chaque module garde ses scores parce que les criteres metier sont differents:
+
+```text
+DiddiGo  -> DriverScore, PassengerScore, TripScore
+DiddiSend -> CourierScore, SenderScore, DeliveryScore
+DiddiPay -> score risque/paiement si necessaire
+```
+
+Une app commune peut afficher une vue agregee, mais elle ne devient pas la
+source de verite. Elle lit les scores depuis les services metier concernes.
+
+Regle:
+
+- score chauffeur DiddiGo != score livreur DiddiSend;
+- score passager DiddiGo != score expediteur DiddiSend;
+- suspension globale = DiddiFreeID;
+- restriction metier locale = module concerne.
+
 ## Regle pour les frontends
 
 Les frontends ne doivent pas deduire une capacite metier uniquement depuis le
@@ -281,4 +303,3 @@ DiddiGo est deja aligne avec cette strategie si:
 Le prochain ajustement recommande est d'ajouter un endpoint explicite de
 capacites DiddiGo, pour eviter que le frontend assemble lui-meme l'etat a partir
 de plusieurs routes.
-

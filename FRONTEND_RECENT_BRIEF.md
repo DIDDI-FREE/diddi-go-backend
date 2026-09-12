@@ -1,8 +1,8 @@
 # DiddiGo - Brief frontend ajouts recents
 
-**Version brief :** `v3.2`
-**Date :** `2026-09-07`
-**Perimetre :** application mobile/frontend DiddiGo consommant DiddiGo API v3.2
+**Version brief :** `v3.3`
+**Date :** `2026-09-12`
+**Perimetre :** application mobile/frontend DiddiGo consommant DiddiGo API v3.3
 
 Ce brief resume les changements recents a consommer cote mobile/frontend.
 
@@ -30,6 +30,7 @@ Ajouts majeurs :
 - endpoint urgence course.
 - module partenaires/flottes: administration, membres, affiliation chauffeur,
   assignation vehicule et commission partenaire configurable.
+- scoring DiddiGo local: score passager, score chauffeur et score course.
 
 ## 1. Auth DiddiFreeID
 
@@ -78,7 +79,7 @@ passenger enabled/blocked
 driver profile not_created/pending_verification/active/suspended
 driver blocking_reasons
 vehicle status
-score null pour le moment
+score resume nullable; detail via GET /v1/me/scores
 ```
 
 Pour afficher le bouton "Mode chauffeur", utiliser :
@@ -93,6 +94,53 @@ Pour afficher l'onboarding ou les ecrans d'attente, utiliser :
 professional_profiles[type=driver].status
 professional_profiles[type=driver].blocking_reasons
 ```
+
+## 1.0.1 Scores DiddiGo
+
+DiddiGo expose maintenant des scores metier locaux.
+
+Routes a utiliser :
+
+```http
+GET /v1/me/scores
+GET /v1/rides/{ride_id}/score
+```
+
+`GET /v1/me/scores` retourne :
+
+```text
+passenger_score
+driver_score ou null si pas de profil chauffeur
+```
+
+Chaque score suit cette forme :
+
+```json
+{
+  "subject_type": "passenger",
+  "subject_id": "identity-user-id",
+  "score_value": 4.72,
+  "score_level": "good",
+  "score_status": "stable",
+  "reason_codes": ["good_ratings", "low_cancellation"],
+  "last_calculated_at": "2026-09-12T10:00:00Z",
+  "sample_size": 18,
+  "metrics": {}
+}
+```
+
+Regles frontend V1 :
+
+- afficher `score_value` et `score_level` comme information ou badge;
+- afficher `new` si `score_status=insufficient_data`;
+- ne pas bloquer seul un utilisateur sur ce score en V1;
+- ne pas calculer le score cote frontend;
+- utiliser `reason_codes` pour expliquer simplement le score si besoin.
+
+`GET /v1/rides/{ride_id}/score` sert au detail d'une course. Il est accessible
+au passager, au chauffeur assigne ou a un admin. Si le frontend recoit
+`403 RIDE_NOT_OWNED_BY_USER`, l'utilisateur n'a pas le droit de voir cette
+course.
 
 DiddiFreeID v2.0 supporte aussi l'OTP par e-mail. Cote frontend, le login peut
 demander explicitement le canal :

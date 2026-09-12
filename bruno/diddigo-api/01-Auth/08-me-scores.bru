@@ -1,0 +1,37 @@
+meta {
+  name: 08 Me Scores
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{base_url}}/me/scores
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("returns diddigo scores", function () {
+    expect(res.body.service).to.equal("diddigo");
+    expect(res.body.passenger_score).to.be.an("object");
+  });
+  test("passenger score has standard shape", function () {
+    expect(res.body.passenger_score).to.have.property("score_value");
+    expect(res.body.passenger_score).to.have.property("score_level");
+    expect(res.body.passenger_score).to.have.property("score_status");
+    expect(res.body.passenger_score.reason_codes).to.be.an("array");
+  });
+}
+
+docs {
+  Returns the DiddiGo-local passenger score and, if the same DiddiFreeID user has
+  a driver profile, the DiddiGo-local driver score. A user without driver profile
+  correctly receives `driver_score: null`.
+}

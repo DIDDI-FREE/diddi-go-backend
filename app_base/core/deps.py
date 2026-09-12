@@ -46,6 +46,7 @@ from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentRepository
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.application.matching_service import MatchingService
+from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.application.services import RideService
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.infra.offer_store import RedisOfferStore
@@ -184,6 +185,13 @@ async def driver_service(
     return DriverService(driver_repo=driver_repo_dep, vehicle_repo=vehicle_repo_dep)
 
 
+async def scoring_service(
+    ride_repo_dep: SqlAlchemyRideRepository = Depends(ride_repo),
+    driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
+) -> ScoringService:
+    return ScoringService(ride_repo=ride_repo_dep, driver_repo=driver_repo_dep)
+
+
 async def device_service(
     user_device_repo_dep: SqlAlchemyUserDeviceRepository = Depends(user_device_repo),
 ) -> DeviceService:
@@ -243,6 +251,7 @@ __all__ = [
     "payment_service",
     "driver_wallet_service",
     "driver_service",
+    "scoring_service",
     "device_service",
     "push_notification_service",
     "matching_service",

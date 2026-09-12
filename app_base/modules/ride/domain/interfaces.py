@@ -66,6 +66,18 @@ class RideRepository(Protocol):
 
     async def list_route_points(self, ride_id: UUID) -> list[RideRoutePoint]: ...
 
+    async def driver_scoring_stats(self, driver_id: UUID) -> dict:
+        """Aggregate ride/rating stats for a DiddiGo driver score."""
+        ...
+
+    async def passenger_scoring_stats(self, passenger_user_id: UUID) -> dict:
+        """Aggregate ride/rating stats for a DiddiGo passenger score."""
+        ...
+
+    async def ride_rating_summary(self, ride_id: UUID) -> dict:
+        """Aggregate ratings attached to one ride for the trip score."""
+        ...
+
 
 class DriverProfileRepository(Protocol):
     async def save(self, profile: DriverProfile) -> DriverProfile: ...

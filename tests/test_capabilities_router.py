@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app_base.core.auth_deps import get_current_active_user
-from app_base.core.deps import driver_service
+from app_base.core.deps import driver_service, scoring_service
 from app_base.main import app
 
 pytestmark = pytest.mark.unit
@@ -52,6 +52,26 @@ class FakeDriverCapabilitiesService:
         }
 
 
+class FakeScoringService:
+    async def get_my_scores(self, user_id) -> dict:
+        return {
+            "user_id": str(user_id),
+            "service": "diddigo",
+            "passenger_score": {
+                "subject_type": "passenger",
+                "subject_id": str(user_id),
+                "score_value": 4.8,
+                "score_level": "new",
+                "score_status": "insufficient_data",
+                "reason_codes": ["insufficient_data"],
+                "last_calculated_at": "2026-09-12T00:00:00Z",
+                "sample_size": 1,
+                "metrics": {},
+            },
+            "driver_score": None,
+        }
+
+
 def test_me_capabilities_route_returns_service_payload() -> None:
     user_id = uuid4()
 
@@ -75,3 +95,27 @@ def test_me_capabilities_route_returns_service_payload() -> None:
     assert body["service"] == "diddigo"
     assert body["capabilities"][0]["type"] == "passenger"
     assert body["capabilities"][1]["blocking_reasons"] == ["driver_profile_not_created"]
+
+
+def test_me_scores_route_returns_service_payload() -> None:
+    user_id = uuid4()
+
+    async def fake_current_user():
+        return SimpleNamespace(id=user_id, role="user", status="active")
+
+    async def fake_scoring_service():
+        return FakeScoringService()
+
+    app.dependency_overrides[get_current_active_user] = fake_current_user
+    app.dependency_overrides[scoring_service] = fake_scoring_service
+    try:
+        response = TestClient(app).get("/v1/me/scores")
+    finally:
+        app.dependency_overrides.pop(get_current_active_user, None)
+        app.dependency_overrides.pop(scoring_service, None)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["user_id"] == str(user_id)
+    assert body["passenger_score"]["subject_type"] == "passenger"
+    assert body["driver_score"] is None
