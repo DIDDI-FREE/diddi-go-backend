@@ -1,0 +1,36 @@
+meta {
+  name: 13 Get Ride Score
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{base_url}}/rides/{{ride_id}}/score
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("returns trip score", function () {
+    expect(res.body.subject_type).to.equal("trip");
+    expect(res.body.ride_id).to.equal(bru.getVar("ride_id") || bru.getEnvVar("ride_id"));
+  });
+  test("score shape is standard", function () {
+    expect(res.body).to.have.property("score_value");
+    expect(res.body).to.have.property("score_level");
+    expect(res.body).to.have.property("score_status");
+    expect(res.body.reason_codes).to.be.an("array");
+  });
+}
+
+docs {
+  Run after the main ride lifecycle creates `ride_id`. The endpoint can be read by
+  the passenger, the assigned driver, or an admin.
+}

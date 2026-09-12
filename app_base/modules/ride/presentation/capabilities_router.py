@@ -3,9 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from app_base.core.auth_deps import get_current_active_user
-from app_base.core.deps import driver_service
+from app_base.core.deps import driver_service, scoring_service
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.ride.application.driver_service import DriverService
+from app_base.modules.ride.application.scoring_service import ScoringService
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -20,3 +21,11 @@ async def get_my_capabilities(
         identity_role=current_user.role,
         identity_status=current_user.status,
     )
+
+
+@router.get("/scores")
+async def get_my_scores(
+    service: ScoringService = Depends(scoring_service),
+    current_user: UserModel = Depends(get_current_active_user),
+) -> dict:
+    return await service.get_my_scores(current_user.id)

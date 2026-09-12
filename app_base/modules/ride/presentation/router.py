@@ -2,7 +2,7 @@
 
 All handlers are async (DB/Redis backed) and receive their service deps via
 FastAPI `Depends`. Protected endpoints require `get_current_user`; driver-
-only routes additionally gate on `current_user.role == "driver"`.
+only routes additionally gate on the local DiddiGo driver profile.
 
 The matching engine is deferred (architecture doc §7 step 3), so today a
 ride is driven forward explicitly rather than by automatic assignment:
@@ -19,11 +19,18 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from app_base.core.auth_deps import get_current_user, require_business_driver
-from app_base.core.deps import get_diddimap, matching_service, push_notification_service, ride_service
+from app_base.core.deps import (
+    get_diddimap,
+    matching_service,
+    push_notification_service,
+    ride_service,
+    scoring_service,
+)
 from app_base.core.errors import ApiError
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.notification.application import PushNotificationService
 from app_base.modules.ride.application.matching_service import MatchingService
+from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.application.services import RideService, iso_utc, ride_creation_payload
 from app_base.modules.ride.domain.entities import DriverProfile, RideStatus
 from app_base.modules.ride.infra.offer_store import OFFER_TTL_SECONDS
@@ -193,6 +200,19 @@ async def decline_ride(
 @router.get("/shared/{token}")
 async def get_shared_ride(token: str, service: RideService = Depends(ride_service)) -> dict:
     return await service.get_shared_ride(token)
+
+
+@router.get("/{ride_id}/score")
+async def get_ride_score(
+    ride_id: UUID,
+    service: ScoringService = Depends(scoring_service),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    return await service.get_ride_score(
+        ride_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
 
 
 @router.get("/{ride_id}")

@@ -14,7 +14,7 @@ from uuid import UUID
 
 from geoalchemy2.shape import from_shape, to_shape
 from shapely.geometry import Point
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app_base.modules.ride.domain.entities import (
@@ -219,6 +219,99 @@ class SqlAlchemyRideRepository:
             )
             for row in result.scalars().all()
         ]
+
+    async def driver_scoring_stats(self, driver_id: UUID) -> dict:
+        ride_stats = await self._session.execute(
+            select(
+                func.count(orm.RideModel.id),
+                func.coalesce(
+                    func.sum(case((orm.RideModel.status == RideStatus.COMPLETED.value, 1), else_=0)),
+                    0,
+                ),
+                func.coalesce(
+                    func.sum(case((orm.RideModel.status == RideStatus.CANCELLED_BY_DRIVER.value, 1), else_=0)),
+                    0,
+                ),
+                func.coalesce(
+                    func.sum(case((orm.RideModel.emergency_status.is_not(None), 1), else_=0)),
+                    0,
+                ),
+            ).where(orm.RideModel.driver_id == driver_id),
+        )
+        rating_stats = await self._session.execute(
+            select(
+                func.count(orm.RideRatingModel.id),
+                func.avg(orm.RideRatingModel.rating),
+            )
+            .join(orm.RideModel, orm.RideRatingModel.ride_id == orm.RideModel.id)
+            .where(
+                orm.RideModel.driver_id == driver_id,
+                orm.RideRatingModel.rater_role == "passenger",
+            ),
+        )
+        total, completed, cancelled, emergencies = ride_stats.one()
+        rating_count, rating_avg = rating_stats.one()
+        return {
+            "total_rides": int(total or 0),
+            "completed_rides": int(completed or 0),
+            "cancelled_rides": int(cancelled or 0),
+            "emergency_reports": int(emergencies or 0),
+            "rating_count": int(rating_count or 0),
+            "rating_avg": Decimal(str(rating_avg)) if rating_avg is not None else None,
+        }
+
+    async def passenger_scoring_stats(self, passenger_user_id: UUID) -> dict:
+        ride_stats = await self._session.execute(
+            select(
+                func.count(orm.RideModel.id),
+                func.coalesce(
+                    func.sum(case((orm.RideModel.status == RideStatus.COMPLETED.value, 1), else_=0)),
+                    0,
+                ),
+                func.coalesce(
+                    func.sum(case((orm.RideModel.status == RideStatus.CANCELLED_BY_PASSENGER.value, 1), else_=0)),
+                    0,
+                ),
+                func.coalesce(
+                    func.sum(case((orm.RideModel.emergency_status.is_not(None), 1), else_=0)),
+                    0,
+                ),
+            ).where(orm.RideModel.passenger_user_id == passenger_user_id),
+        )
+        rating_stats = await self._session.execute(
+            select(
+                func.count(orm.RideRatingModel.id),
+                func.avg(orm.RideRatingModel.rating),
+            )
+            .join(orm.RideModel, orm.RideRatingModel.ride_id == orm.RideModel.id)
+            .where(
+                orm.RideModel.passenger_user_id == passenger_user_id,
+                orm.RideRatingModel.rater_role == "driver",
+            ),
+        )
+        total, completed, cancelled, emergencies = ride_stats.one()
+        rating_count, rating_avg = rating_stats.one()
+        return {
+            "total_rides": int(total or 0),
+            "completed_rides": int(completed or 0),
+            "cancelled_rides": int(cancelled or 0),
+            "emergency_reports": int(emergencies or 0),
+            "rating_count": int(rating_count or 0),
+            "rating_avg": Decimal(str(rating_avg)) if rating_avg is not None else None,
+        }
+
+    async def ride_rating_summary(self, ride_id: UUID) -> dict:
+        result = await self._session.execute(
+            select(
+                func.count(orm.RideRatingModel.id),
+                func.avg(orm.RideRatingModel.rating),
+            ).where(orm.RideRatingModel.ride_id == ride_id),
+        )
+        rating_count, rating_avg = result.one()
+        return {
+            "rating_count": int(rating_count or 0),
+            "rating_avg": Decimal(str(rating_avg)) if rating_avg is not None else None,
+        }
 
     # -- mapping helpers -----------------------------------------------------
 

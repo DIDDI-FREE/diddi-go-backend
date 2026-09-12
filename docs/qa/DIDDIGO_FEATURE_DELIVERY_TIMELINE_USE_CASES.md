@@ -286,6 +286,29 @@ Critere de sortie :
 - raison de non matching observable;
 - pas de course bloquee sans statut final.
 
+## Version 1.8 - Scoring metier DiddiGo
+
+Objectif :
+Donner une premiere lecture qualite cote DiddiGo sans centraliser les scores
+dans DiddiFreeID.
+
+Use cases inclus :
+
+- UC-751 Passager voit son score DiddiGo si l'app decide de l'afficher.
+- UC-752 Chauffeur voit son score DiddiGo si son profil chauffeur existe.
+- UC-753 Admin/support peut consulter le score d'une course.
+- UC-754 Le frontend voit clairement si le score est nouveau, stable ou
+  provisoire.
+- UC-755 Les raisons principales du score sont renvoyees sous forme de
+  `reason_codes`.
+
+Critere de sortie :
+
+- scoring lu via API, pas calcule par le frontend;
+- score DiddiGo local, non stocke dans DiddiFreeID;
+- pas de blocage automatique base uniquement sur le score V1;
+- endpoint Bruno disponible pour verifier le contrat.
+
 ## Version 2.0 - Production minimale
 
 Objectif :
@@ -387,6 +410,7 @@ Critere de sortie :
 1.5 Paiements cash, DiddiPay, Wave et recharge
 1.6 Securite/partage
 1.7 Matching qualite
+1.8 Scoring metier DiddiGo
 2.0 Production minimale
 2.1 Experience chauffeur avancee
 3.0 Preparation DiddiSend

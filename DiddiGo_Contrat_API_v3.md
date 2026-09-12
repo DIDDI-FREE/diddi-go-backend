@@ -1,4 +1,4 @@
-# DiddiGo - Contrat API v3.2
+# DiddiGo - Contrat API v3.3
 
 **Destine a :** equipes Frontend / Mobile / Backend DiddiGo
 **Base URL staging :** `https://go-staging.diddifree.com/v1`
@@ -6,7 +6,7 @@
 **DiddiFiles :** `https://diddifiles.diddifree.com/v1`
 **DiddiMap staging :** `http://abidjanmaps-backend-staging.diddifree.com`
 
-Important : le prefixe HTTP reste `/v1`. Le terme `v3.2` designe la version du
+Important : le prefixe HTTP reste `/v1`. Le terme `v3.3` designe la version du
 contrat fonctionnel.
 
 ---
@@ -61,6 +61,8 @@ Le catalogue complet des codes est maintenu dans `DiddiGo_Error_Catalog.md`.
 | `partner.member_role` | `partner_manager`, `partner_operator`, `partner_viewer` |
 | `partner.commission_mode` | `percentage`, `fixed` |
 | `vehicle.verification_status` | `pending_verification`, `active`, `suspended`, `rejected` |
+| `score.level` | `new`, `excellent`, `good`, `fair`, `risk` |
+| `score.status` | `insufficient_data`, `stable`, `provisional` |
 
 Note produit : on garde les categories vehicule existantes cote backend.
 Pour reduire la friction MVP, le frontend passager peut omettre
@@ -85,8 +87,8 @@ Regles :
 - `passenger` est disponible si l'identite globale est active;
 - `driver` depend du profil chauffeur DiddiGo, du KYC, du vehicule actif et du
   KYV;
-- `score` est reserve pour le futur `DriverScore` et vaut `null` tant que le
-  scoring DiddiGo n'est pas implemente.
+- `score` dans `/me/capabilities` reste un resume nullable; pour le detail,
+  utiliser `/me/scores`.
 
 Requete :
 
@@ -184,6 +186,119 @@ Reponse chauffeur actif :
 | `vehicle_not_verified` | Afficher KYV vehicule en attente |
 
 ---
+
+## 2.2 Scoring DiddiGo
+
+Les scores sont des scores metier locaux a DiddiGo. DiddiFreeID ne les stocke
+pas et le JWT ne les porte pas.
+
+En V1 scoring, les scores sont calcules a la demande depuis les donnees DiddiGo
+existantes : courses, statuts, annulations, urgences et notes. Ils servent a
+l'affichage, au support et aux futures regles metier. Ils ne doivent pas encore
+etre utilises seuls pour bloquer un utilisateur.
+
+### `GET /me/scores`
+
+Retourne le score passager et, si le meme utilisateur possede un profil
+chauffeur DiddiGo, le score chauffeur.
+
+Requete :
+
+```http
+GET /v1/me/scores
+Authorization: Bearer <access_token>
+```
+
+Reponse :
+
+```json
+{
+  "user_id": "identity-user-id",
+  "service": "diddigo",
+  "passenger_score": {
+    "subject_type": "passenger",
+    "subject_id": "identity-user-id",
+    "score_value": 4.72,
+    "score_level": "good",
+    "score_status": "stable",
+    "reason_codes": ["good_ratings", "low_cancellation", "reliable_completion"],
+    "last_calculated_at": "2026-09-12T10:00:00Z",
+    "sample_size": 18,
+    "metrics": {
+      "total_rides": 14,
+      "completed_rides": 13,
+      "cancelled_rides": 1,
+      "emergency_reports": 0,
+      "rating_count": 4,
+      "rating_avg": 4.75
+    }
+  },
+  "driver_score": null
+}
+```
+
+Si l'utilisateur a un profil chauffeur, `driver_score` suit le meme format avec
+`subject_type=driver` et `subject_id=<driver_profile_id>`.
+
+### `GET /rides/{ride_id}/score`
+
+Retourne le score d'une course. Accessible au passager de la course, au
+chauffeur assigne ou a un admin.
+
+Requete :
+
+```http
+GET /v1/rides/{ride_id}/score
+Authorization: Bearer <access_token>
+```
+
+Reponse :
+
+```json
+{
+  "ride_id": "ride-id",
+  "subject_type": "trip",
+  "score_value": 4.8,
+  "score_level": "new",
+  "score_status": "stable",
+  "reason_codes": ["status_completed", "good_ratings"],
+  "last_calculated_at": "2026-09-12T10:00:00Z",
+  "sample_size": 2,
+  "metrics": {
+    "ride_status": "completed",
+    "rating_count": 2,
+    "rating_avg": 5.0,
+    "emergency_status": null,
+    "cancellation_reason": null
+  }
+}
+```
+
+Codes utiles :
+
+| HTTP | Code | Cas |
+|---|---|---|
+| 401 | `TOKEN_MISSING`, `TOKEN_INVALID`, `TOKEN_EXPIRED` | token absent ou invalide |
+| 403 | `RIDE_NOT_OWNED_BY_USER` | utilisateur non lie a la course |
+| 404 | `RIDE_NOT_FOUND` | course inconnue |
+
+Reason codes possibles en V1 :
+
+```text
+no_activity
+insufficient_data
+good_ratings
+low_ratings
+high_cancellation
+low_cancellation
+reliable_completion
+low_completion
+emergency_reports
+status_<ride_status>
+no_ratings
+emergency_reported
+cancel_reason_<reason>
+```
 
 ## 3. Driver KYC
 
