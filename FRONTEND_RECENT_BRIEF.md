@@ -65,6 +65,35 @@ Pour afficher les modes disponibles, le frontend doit appeler les APIs metier
 des modules concernes. Il ne doit pas deduire `chauffeur` ou `livreur` seulement
 depuis le JWT global.
 
+Endpoint DiddiGo a utiliser :
+
+```http
+GET /v1/me/capabilities
+```
+
+Cette route retourne :
+
+```text
+passenger enabled/blocked
+driver profile not_created/pending_verification/active/suspended
+driver blocking_reasons
+vehicle status
+score null pour le moment
+```
+
+Pour afficher le bouton "Mode chauffeur", utiliser :
+
+```text
+professional_profiles[type=driver].can_go_online
+```
+
+Pour afficher l'onboarding ou les ecrans d'attente, utiliser :
+
+```text
+professional_profiles[type=driver].status
+professional_profiles[type=driver].blocking_reasons
+```
+
 DiddiFreeID v2.0 supporte aussi l'OTP par e-mail. Cote frontend, le login peut
 demander explicitement le canal :
 

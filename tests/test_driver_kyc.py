@@ -198,6 +198,90 @@ async def test_admin_can_list_kyc_queue() -> None:
 
 
 @pytest.mark.asyncio
+async def test_capabilities_explain_missing_driver_profile() -> None:
+    service = DriverService(driver_repo=FakeDriverRepo(), vehicle_repo=FakeVehicleRepo())
+    user_id = uuid4()
+
+    payload = await service.get_capabilities(user_id, identity_role="user", identity_status="active")
+
+    assert payload["user_id"] == str(user_id)
+    assert payload["identity"] == {"role": "user", "status": "active"}
+    assert payload["consumer"]["enabled"] is True
+    assert payload["capabilities"][0]["type"] == "passenger"
+    assert payload["capabilities"][0]["enabled"] is True
+    driver = payload["professional_profiles"][0]
+    assert driver["type"] == "driver"
+    assert driver["exists"] is False
+    assert driver["status"] == "not_created"
+    assert driver["can_go_online"] is False
+    assert driver["blocking_reasons"] == ["driver_profile_not_created"]
+    assert payload["capabilities"][1]["enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_capabilities_explain_pending_driver_profile() -> None:
+    driver_repo = FakeDriverRepo()
+    service = DriverService(driver_repo=driver_repo, vehicle_repo=FakeVehicleRepo())
+    user_id = uuid4()
+    created = await service.create_profile(user_id=user_id, license_number="CI-123456")
+
+    payload = await service.get_capabilities(user_id, identity_role="user", identity_status="active")
+
+    driver = payload["professional_profiles"][0]
+    assert driver["exists"] is True
+    assert driver["driver_profile_id"] == created["id"]
+    assert driver["status"] == "pending_verification"
+    assert driver["vehicle"] is None
+    assert driver["can_go_online"] is False
+    assert driver["blocking_reasons"] == ["driver_not_verified", "no_active_vehicle"]
+
+
+@pytest.mark.asyncio
+async def test_capabilities_allow_active_driver_with_verified_vehicle() -> None:
+    driver_repo = FakeDriverRepo()
+    vehicle_repo = FakeVehicleRepo()
+    service = DriverService(driver_repo=driver_repo, vehicle_repo=vehicle_repo)
+    user_id = uuid4()
+    admin_id = uuid4()
+
+    profile = await service.create_profile(user_id=user_id, license_number="CI-123456", **full_kyc_documents())
+    await service.approve_kyc(UUID(profile["id"]), reviewed_by_user_id=admin_id)
+    vehicle = await service.register_vehicle(
+        user_id=user_id,
+        plate_number="CE-123-AA",
+        make="Toyota",
+        model="Yaris",
+        color="gris",
+        category="standard",
+        registration_document_file_id=uuid4(),
+        insurance_document_file_id=uuid4(),
+        technical_inspection_document_file_id=uuid4(),
+        vehicle_front_photo_file_id=uuid4(),
+        vehicle_back_photo_file_id=uuid4(),
+        vehicle_left_photo_file_id=uuid4(),
+        vehicle_right_photo_file_id=uuid4(),
+        vehicle_interior_photo_file_id=uuid4(),
+    )
+    await service.approve_vehicle_kyv(UUID(vehicle["id"]), reviewed_by_user_id=admin_id)
+
+    payload = await service.get_capabilities(user_id, identity_role="user", identity_status="active")
+
+    driver = payload["professional_profiles"][0]
+    assert driver["status"] == "active"
+    assert driver["can_go_online"] is True
+    assert driver["blocking_reasons"] == []
+    assert driver["vehicle"]["id"] == vehicle["id"]
+    assert driver["vehicle"]["status"] == "active"
+    assert payload["capabilities"][1] == {
+        "service": "diddigo",
+        "type": "driver",
+        "status": "active",
+        "enabled": True,
+        "blocking_reasons": [],
+    }
+
+
+@pytest.mark.asyncio
 async def test_register_vehicle_stores_registration_file_id() -> None:
     driver_repo = FakeDriverRepo()
     vehicle_repo = FakeVehicleRepo()
