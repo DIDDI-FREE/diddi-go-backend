@@ -1,0 +1,42 @@
+meta {
+  name: 07 Me Capabilities
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{base_url}}/me/capabilities
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("returns diddigo capabilities", function () {
+    expect(res.body.service).to.equal("diddigo");
+    expect(res.body.capabilities).to.be.an("array");
+  });
+  test("passenger capability is explicit", function () {
+    const passenger = res.body.capabilities.find((item) => item.type === "passenger");
+    expect(passenger).to.exist;
+    expect(passenger.service).to.equal("diddigo");
+  });
+  test("driver capability is explicit", function () {
+    const driver = res.body.capabilities.find((item) => item.type === "driver");
+    expect(driver).to.exist;
+    expect(driver.service).to.equal("diddigo");
+    expect(driver.blocking_reasons).to.be.an("array");
+  });
+}
+
+docs {
+  Uses `passenger_access_token` by default because every authenticated user can
+  inspect their DiddiGo capabilities. A user without driver onboarding should
+  receive `driver_profile_not_created` for the driver capability.
+}

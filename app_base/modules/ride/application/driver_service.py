@@ -391,6 +391,45 @@ class DriverService:
         payload["vehicle"] = _vehicle_payload(vehicle) if vehicle else None
         return payload
 
+    async def get_capabilities(self, user_id: UUID, *, identity_role: str, identity_status: str) -> dict:
+        profile = await self.driver_repo.find_by_user_id(user_id)
+        driver_capability = _driver_capability_payload(profile, vehicle=None)
+        if profile is not None:
+            vehicle = await self.vehicle_repo.find_active_for_driver(profile.id)
+            driver_capability = _driver_capability_payload(profile, vehicle=vehicle)
+
+        return {
+            "user_id": str(user_id),
+            "identity": {
+                "role": identity_role,
+                "status": identity_status,
+            },
+            "service": "diddigo",
+            "consumer": {
+                "type": "passenger",
+                "enabled": identity_status == "active",
+                "status": "active" if identity_status == "active" else "blocked",
+                "blocking_reasons": [] if identity_status == "active" else ["identity_not_active"],
+            },
+            "professional_profiles": [driver_capability],
+            "capabilities": [
+                {
+                    "service": "diddigo",
+                    "type": "passenger",
+                    "status": "active" if identity_status == "active" else "blocked",
+                    "enabled": identity_status == "active",
+                    "blocking_reasons": [] if identity_status == "active" else ["identity_not_active"],
+                },
+                {
+                    "service": "diddigo",
+                    "type": "driver",
+                    "status": driver_capability["status"],
+                    "enabled": driver_capability["can_go_online"],
+                    "blocking_reasons": driver_capability["blocking_reasons"],
+                },
+            ],
+        }
+
     async def get_kyc_detail(self, driver_id: UUID) -> dict:
         profile = await self.driver_repo.find_by_id(driver_id)
         if profile is None:
@@ -697,6 +736,55 @@ def _vehicle_payload(vehicle: Vehicle) -> dict:
         "owner_type": vehicle.owner_type,
         "partner_id": str(vehicle.partner_id) if vehicle.partner_id else None,
         "active": vehicle.active,
+    }
+
+
+def _driver_capability_payload(profile: DriverProfile | None, *, vehicle: Vehicle | None) -> dict:
+    if profile is None:
+        return {
+            "type": "driver",
+            "exists": False,
+            "status": "not_created",
+            "verification_status": "not_created",
+            "can_go_online": False,
+            "blocking_reasons": ["driver_profile_not_created"],
+            "driver_profile_id": None,
+            "vehicle": None,
+            "score": None,
+        }
+
+    blocking_reasons: list[str] = []
+    if profile.status != DriverStatus.ACTIVE:
+        blocking_reasons.append("driver_not_verified")
+    if vehicle is None:
+        blocking_reasons.append("no_active_vehicle")
+    elif vehicle.verification_status != VehicleVerificationStatus.ACTIVE:
+        blocking_reasons.append("vehicle_not_verified")
+
+    return {
+        "type": "driver",
+        "exists": True,
+        "status": profile.status.value,
+        "verification_status": profile.status.value,
+        "can_go_online": not blocking_reasons,
+        "blocking_reasons": blocking_reasons,
+        "driver_profile_id": str(profile.id),
+        "vehicle": _vehicle_capability_payload(vehicle),
+        "score": None,
+    }
+
+
+def _vehicle_capability_payload(vehicle: Vehicle | None) -> dict | None:
+    if vehicle is None:
+        return None
+    return {
+        "id": str(vehicle.id),
+        "status": vehicle.verification_status.value,
+        "active": vehicle.active,
+        "category": vehicle.category.value,
+        "comfort_level": vehicle.comfort_level.value,
+        "owner_type": vehicle.owner_type,
+        "partner_id": str(vehicle.partner_id) if vehicle.partner_id else None,
     }
 
 

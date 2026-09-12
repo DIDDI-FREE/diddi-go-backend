@@ -69,6 +69,122 @@ le seul choix commercial visible au passager.
 
 ---
 
+## 2.1 Capacites utilisateur DiddiGo
+
+### `GET /me/capabilities`
+
+Retourne ce que l'utilisateur authentifie peut faire dans DiddiGo avec son
+identite DiddiFreeID actuelle.
+
+Cette route est le point d'entree recommande pour afficher les modes disponibles
+dans une app commune ou future app `DiddiFree Pro`.
+
+Regles :
+
+- ne pas deduire le mode chauffeur depuis `role=driver` dans le JWT;
+- `passenger` est disponible si l'identite globale est active;
+- `driver` depend du profil chauffeur DiddiGo, du KYC, du vehicule actif et du
+  KYV;
+- `score` est reserve pour le futur `DriverScore` et vaut `null` tant que le
+  scoring DiddiGo n'est pas implemente.
+
+Requete :
+
+```http
+GET /v1/me/capabilities
+Authorization: Bearer <access_token>
+```
+
+Reponse sans profil chauffeur :
+
+```json
+{
+  "user_id": "identity-user-id",
+  "identity": {
+    "role": "user",
+    "status": "active"
+  },
+  "service": "diddigo",
+  "consumer": {
+    "type": "passenger",
+    "enabled": true,
+    "status": "active",
+    "blocking_reasons": []
+  },
+  "professional_profiles": [
+    {
+      "type": "driver",
+      "exists": false,
+      "status": "not_created",
+      "verification_status": "not_created",
+      "can_go_online": false,
+      "blocking_reasons": ["driver_profile_not_created"],
+      "driver_profile_id": null,
+      "vehicle": null,
+      "score": null
+    }
+  ],
+  "capabilities": [
+    {
+      "service": "diddigo",
+      "type": "passenger",
+      "status": "active",
+      "enabled": true,
+      "blocking_reasons": []
+    },
+    {
+      "service": "diddigo",
+      "type": "driver",
+      "status": "not_created",
+      "enabled": false,
+      "blocking_reasons": ["driver_profile_not_created"]
+    }
+  ]
+}
+```
+
+Reponse chauffeur actif :
+
+```json
+{
+  "user_id": "identity-user-id",
+  "service": "diddigo",
+  "professional_profiles": [
+    {
+      "type": "driver",
+      "exists": true,
+      "status": "active",
+      "verification_status": "active",
+      "can_go_online": true,
+      "blocking_reasons": [],
+      "driver_profile_id": "driver-profile-id",
+      "vehicle": {
+        "id": "vehicle-id",
+        "status": "active",
+        "active": true,
+        "category": "standard",
+        "comfort_level": "standard",
+        "owner_type": "driver",
+        "partner_id": null
+      },
+      "score": null
+    }
+  ]
+}
+```
+
+`blocking_reasons` possibles en V1 :
+
+| Reason | Sens frontend |
+|---|---|
+| `identity_not_active` | Compte global non actif |
+| `driver_profile_not_created` | Proposer l'onboarding chauffeur |
+| `driver_not_verified` | Afficher KYC en attente ou bloque |
+| `no_active_vehicle` | Demander ajout/activation vehicule |
+| `vehicle_not_verified` | Afficher KYV vehicule en attente |
+
+---
+
 ## 3. Driver KYC
 
 ### `POST /drivers/profile`
