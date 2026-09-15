@@ -252,7 +252,7 @@ async def test_business_driver_with_user_role_can_find_assigned_rides(
     assert payload["data"][0]["id"] == ride_id
 
 
-async def test_offer_goes_to_the_nearest_driver_first(
+async def test_offer_wave_includes_nearby_eligible_drivers(
     client, passenger, driver_factory,
 ) -> None:
     nearest = await driver_factory(NEAR)
@@ -260,12 +260,14 @@ async def test_offer_goes_to_the_nearest_driver_first(
 
     ride_id = await create_ride(client, passenger)
 
-    # The further driver was never offered this ride, so cannot take it.
+    # Matching V2 sends a wave to up to five eligible nearby drivers, so both
+    # can accept. The first accept wins.
     r = await client.post(f"/v1/rides/{ride_id}/accept", headers=further)
-    assert r.status_code == 403
-    assert r.json()["error"]["code"] == "OFFER_NOT_YOURS"
+    assert r.status_code == 200, r.text
 
-    assert (await client.post(f"/v1/rides/{ride_id}/accept", headers=nearest)).status_code == 200
+    second = await client.post(f"/v1/rides/{ride_id}/accept", headers=nearest)
+    assert second.status_code == 409
+    assert second.json()["error"]["code"] == "RIDE_ALREADY_MATCHED"
 
 
 async def test_drivers_outside_the_radius_are_not_offered(
@@ -322,19 +324,24 @@ async def test_expired_offer_cannot_be_accepted(client, passenger, online_driver
 async def test_timed_out_offer_moves_to_the_next_driver(
     client, passenger, driver_factory,
 ) -> None:
-    """Nobody answers the first driver; the window lapses and the ride is
-    offered onward the next time matching runs."""
-    first = await driver_factory(NEAR)
-    second = await driver_factory(SLIGHTLY_FURTHER)
+    """Nobody answers the first wave; the window lapses and the ride is
+    offered onward to the next untried candidate."""
+    first_wave = [await driver_factory(NEAR) for _ in range(5)]
+    next_wave_driver = await driver_factory(SLIGHTLY_FURTHER)
 
     ride_id = await create_ride(client, passenger)
+
+    not_yet = await client.post(f"/v1/rides/{ride_id}/accept", headers=next_wave_driver)
+    assert not_yet.status_code == 403
+    assert not_yet.json()["error"]["code"] == "OFFER_NOT_YOURS"
+
     await expire_offer(ride_id)
 
-    # A decline from the timed-out holder re-drives matching; the engine finds
-    # the next untried candidate.
-    r = await client.post(f"/v1/rides/{ride_id}/decline", headers=first)
+    # A decline from a timed-out holder re-drives matching; the engine skips the
+    # already-tried first wave and opens the next one.
+    r = await client.post(f"/v1/rides/{ride_id}/decline", headers=first_wave[0])
     assert r.json()["reoffered"] is True
-    assert (await client.post(f"/v1/rides/{ride_id}/accept", headers=second)).status_code == 200
+    assert (await client.post(f"/v1/rides/{ride_id}/accept", headers=next_wave_driver)).status_code == 200
 
 
 # --- races and guards ------------------------------------------------------

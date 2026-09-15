@@ -1,8 +1,9 @@
 """Ride matching engine.
 
-Model: sequential offers. A ride is offered to the nearest available driver,
-then to the next one on decline/timeout. If no eligible candidate remains, the
-ride becomes `no_driver_found`.
+Model: offer waves. A ride is offered to up to five nearby eligible drivers at
+the same time. The first accept wins; declines remove one driver from the wave;
+when the wave is exhausted or expires, matching advances to the next wave. If no
+eligible candidate remains, the ride becomes `no_driver_found`.
 
 Redis and the JWT both key drivers by auth user_id. `ride.rides.driver_id`
 stores the local `ride.driver_profiles.id`, so the engine resolves user_id to
@@ -36,7 +37,15 @@ from app_base.modules.ride.domain.interfaces import (
 logger = logging.getLogger("uvicorn.error")
 
 SEARCH_RADIUS_KM = 5.0
-MAX_CANDIDATES = 10
+MAX_CANDIDATES = 25
+OFFER_WAVE_SIZE = 5
+
+
+@dataclass(frozen=True)
+class MatchingDispatch:
+    driver_user_ids: list[UUID]
+    new_wave: bool
+    no_driver_found: bool = False
 
 
 @dataclass
@@ -48,11 +57,11 @@ class MatchingService:
     offers: OfferStore
     partner_service: object | None = None
 
-    async def try_match(self, ride: Ride) -> UUID | None:
-        """Offer `ride` to the next suitable driver.
+    async def try_match(self, ride: Ride) -> MatchingDispatch:
+        """Offer `ride` to the next suitable wave of drivers.
 
-        Returns the driver auth user_id holding the offer, or None if the ride
-        has moved to `no_driver_found`.
+        Returns the driver auth user_ids holding the active wave. `new_wave`
+        tells the presentation layer whether notifications must be sent.
         """
         logger.info(
             "matching_start ride_id=%s status=%s pickup_lat=%s pickup_lng=%s",
@@ -75,30 +84,49 @@ class MatchingService:
 
         if ride.status != RideStatus.REQUESTED:
             logger.info("matching_skip ride_id=%s reason=status_not_requested status=%s", ride.id, ride.status.value)
-            return None
+            return MatchingDispatch([], new_wave=False)
 
-        outstanding = await self.offers.current_offer(ride.id)
-        if outstanding is not None:
-            logger.info("matching_existing_offer ride_id=%s driver_user_id=%s", ride.id, outstanding)
-            log_event("ride.matching.existing_offer", ride_id=ride.id, driver_user_id=outstanding)
-            return outstanding
+        outstanding = await self.offers.current_offers(ride.id)
+        if outstanding:
+            logger.info(
+                "matching_existing_offer_wave ride_id=%s driver_user_ids=%s",
+                ride.id,
+                [str(driver_user_id) for driver_user_id in outstanding],
+            )
+            log_event(
+                "ride.matching.existing_offer_wave",
+                ride_id=ride.id,
+                driver_user_ids=[str(driver_user_id) for driver_user_id in outstanding],
+                wave_size=len(outstanding),
+            )
+            return MatchingDispatch(list(outstanding), new_wave=False)
 
-        candidate = await self._next_candidate(ride)
-        if candidate is None:
+        candidates = await self._next_candidates(ride)
+        if not candidates:
             await self._give_up(ride)
-            return None
+            return MatchingDispatch([], new_wave=True, no_driver_found=True)
 
-        await self.offers.open_offer(ride.id, candidate)
-        logger.info("matching_offer_opened ride_id=%s driver_user_id=%s", ride.id, candidate)
-        log_event("ride.matching.offer_sent", ride_id=ride.id, driver_user_id=candidate)
-        return candidate
+        await self.offers.open_offers(ride.id, candidates)
+        logger.info(
+            "matching_offer_wave_opened ride_id=%s driver_user_ids=%s wave_size=%s",
+            ride.id,
+            [str(candidate) for candidate in candidates],
+            len(candidates),
+        )
+        log_event(
+            "ride.matching.offer_wave_sent",
+            ride_id=ride.id,
+            driver_user_ids=[str(candidate) for candidate in candidates],
+            wave_size=len(candidates),
+        )
+        return MatchingDispatch(candidates, new_wave=True)
 
     async def accept(self, ride_id: UUID, driver_user_id: UUID) -> Ride:
         """A driver accepts the ride they were offered."""
         ride = await self._load_active_ride(ride_id)
 
-        holder = await self.offers.current_offer(ride_id)
-        if holder is None:
+        holders = await self.offers.current_offers(ride_id)
+        if not holders:
             logger.info(
                 "matching_accept_rejected ride_id=%s driver_user_id=%s reason=offer_expired",
                 ride_id,
@@ -111,19 +139,19 @@ class MatchingService:
                 reason="offer_expired",
             )
             raise ApiError(409, "OFFER_EXPIRED", "Cette demande n'est plus disponible.")
-        if holder != driver_user_id:
+        if driver_user_id not in holders:
             logger.info(
-                "matching_accept_rejected ride_id=%s driver_user_id=%s reason=offer_not_yours holder=%s",
+                "matching_accept_rejected ride_id=%s driver_user_id=%s reason=offer_not_yours holders=%s",
                 ride_id,
                 driver_user_id,
-                holder,
+                [str(holder) for holder in holders],
             )
             log_event(
                 "ride.matching.accept_rejected",
                 ride_id=ride_id,
                 driver_user_id=driver_user_id,
                 reason="offer_not_yours",
-                holder=holder,
+                holders=[str(holder) for holder in holders],
             )
             raise ApiError(403, "OFFER_NOT_YOURS", "Cette demande a ete proposee a un autre chauffeur.")
 
@@ -184,22 +212,61 @@ class MatchingService:
         )
         return ride
 
-    async def decline(self, ride_id: UUID, driver_user_id: UUID) -> UUID | None:
-        """A driver declines. The offer moves on to the next candidate."""
+    async def decline(self, ride_id: UUID, driver_user_id: UUID) -> MatchingDispatch:
+        """A driver declines.
+
+        If other drivers still hold the same wave, matching does not advance.
+        If the wave is exhausted, matching opens the next wave.
+        """
         ride = await self._load_active_ride(ride_id)
 
-        holder = await self.offers.current_offer(ride_id)
-        if holder is not None and holder != driver_user_id:
+        holders = await self.offers.current_offers(ride_id)
+        if holders and driver_user_id not in holders:
             logger.info(
-                "matching_decline_rejected ride_id=%s driver_user_id=%s reason=offer_not_yours holder=%s",
+                "matching_decline_rejected ride_id=%s driver_user_id=%s reason=offer_not_yours holders=%s",
                 ride_id,
                 driver_user_id,
-                holder,
+                [str(holder) for holder in holders],
             )
             raise ApiError(403, "OFFER_NOT_YOURS", "Cette demande a ete proposee a un autre chauffeur.")
 
-        await self.offers.close_offer(ride_id)
-        logger.info("matching_decline ride_id=%s driver_user_id=%s", ride_id, driver_user_id)
+        wave_still_active = await self.offers.decline_offer(ride_id, driver_user_id)
+        logger.info(
+            "matching_decline ride_id=%s driver_user_id=%s wave_still_active=%s",
+            ride_id,
+            driver_user_id,
+            wave_still_active,
+        )
+        if wave_still_active:
+            remaining = await self.offers.current_offers(ride_id)
+            return MatchingDispatch(list(remaining), new_wave=False)
+        return await self.try_match(ride)
+
+    async def advance_expired_offer(self, ride_id: UUID) -> MatchingDispatch:
+        """Advance matching after the active offer wave TTL has elapsed.
+
+        The caller schedules this after `OFFER_TTL_SECONDS`. If any offer still
+        exists, the wave is still active and no action is needed. If the ride has
+        already been accepted/cancelled, no action is needed either.
+        """
+        outstanding = await self.offers.current_offers(ride_id)
+        if outstanding:
+            logger.info(
+                "matching_expiry_skip ride_id=%s reason=offer_still_active wave_size=%s",
+                ride_id,
+                len(outstanding),
+            )
+            return MatchingDispatch(list(outstanding), new_wave=False)
+        ride = await self.ride_repo.find_by_id(ride_id)
+        if ride is None or ride.status != RideStatus.REQUESTED:
+            logger.info(
+                "matching_expiry_skip ride_id=%s reason=ride_not_requested status=%s",
+                ride_id,
+                ride.status.value if ride else None,
+            )
+            return MatchingDispatch([], new_wave=False)
+        logger.info("matching_expiry_advance ride_id=%s", ride_id)
+        log_event("ride.matching.offer_wave_expired", ride_id=ride_id)
         return await self.try_match(ride)
 
     async def release_driver(self, ride: Ride) -> None:
@@ -218,10 +285,10 @@ class MatchingService:
                 profile.user_id,
             )
 
-    async def _next_candidate(self, ride: Ride) -> UUID | None:
+    async def _next_candidates(self, ride: Ride) -> list[UUID]:
         if ride.pickup_location is None:
             logger.info("matching_no_candidate ride_id=%s reason=no_pickup_location", ride.id)
-            return None
+            return []
 
         nearby = await self.locations.find_available_nearby(
             ride.pickup_location,
@@ -242,9 +309,10 @@ class MatchingService:
         )
         if not nearby:
             logger.info("matching_no_candidate ride_id=%s reason=no_available_nearby", ride.id)
-            return None
+            return []
 
         tried = await self.offers.already_tried(ride.id)
+        selected: list[UUID] = []
         for user_id in nearby:
             if user_id in tried:
                 logger.info(
@@ -257,8 +325,10 @@ class MatchingService:
             can_take, reason = await self._can_take_ride(user_id, ride)
             if can_take:
                 logger.info("matching_candidate_selected ride_id=%s driver_user_id=%s", ride.id, user_id)
-                log_event("ride.matching.driver_candidate_selected", ride_id=ride.id, driver_user_id=user_id)
-                return user_id
+                selected.append(user_id)
+                if len(selected) >= OFFER_WAVE_SIZE:
+                    break
+                continue
 
             logger.info(
                 "matching_candidate_rejected ride_id=%s driver_user_id=%s reason=%s",
@@ -273,8 +343,15 @@ class MatchingService:
                 reason=reason,
             )
 
-        logger.info("matching_no_candidate ride_id=%s reason=all_candidates_rejected", ride.id)
-        return None
+        if not selected:
+            logger.info("matching_no_candidate ride_id=%s reason=all_candidates_rejected", ride.id)
+        log_event(
+            "ride.matching.driver_candidates_selected",
+            ride_id=ride.id,
+            driver_user_ids=[str(driver_user_id) for driver_user_id in selected],
+            wave_size=len(selected),
+        )
+        return selected
 
     async def _can_take_ride(self, user_id: UUID, ride: Ride) -> tuple[bool, str | None]:
         profile = await self.driver_repo.find_by_user_id(user_id)

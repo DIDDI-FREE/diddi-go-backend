@@ -486,6 +486,10 @@ Le matching exige maintenant :
 
 ```text
 vehicle.category == ride.vehicle_category
+chauffeur actif/en ligne
+vehicule actif/verifie
+partenaire actif si applicable
+solde chauffeur suffisant si la regle wallet est active
 ```
 
 `comfort_level` est un filtre de matching hierarchique :
@@ -498,6 +502,19 @@ premium  -> premium uniquement
 
 Donc si le passager choisit `premium`, DiddiGo ne doit pas envoyer une voiture
 `standard`.
+
+Matching V2 :
+
+- DiddiGo envoie une meme course a une vague de maximum 5 chauffeurs eligibles.
+- Le delai d'offre reste `15 secondes`.
+- Le premier chauffeur qui accepte gagne.
+- Les autres chauffeurs de la vague recevront `409 RIDE_ALREADY_MATCHED` s'ils
+  acceptent trop tard.
+- Si toute la vague refuse ou expire, DiddiGo relance automatiquement la vague
+  suivante.
+- Le frontend n'a pas besoin de relancer le matching lui-meme.
+- Le critere "zone chauffeur" est valide produit, mais pas encore actif tant
+  que DiddiGo n'a pas le modele de zones chauffeur.
 
 La reponse contient maintenant :
 
@@ -590,6 +607,14 @@ Impact frontend actuel :
 Ne pas afficher de prix chauffeur avant `in_progress`. Quand le chauffeur
 demarre la course, relire `GET /v1/rides/{ride_id}` : le backend affichera alors
 le montant de la course au chauffeur.
+
+Important Matching V2 :
+
+- Plusieurs chauffeurs peuvent recevoir `ride.new_request` pour la meme course.
+- L'app chauffeur doit traiter `409 RIDE_ALREADY_MATCHED` comme un cas normal :
+  "course deja prise".
+- L'app ne doit pas afficher cela comme une erreur technique.
+- Le compteur d'expiration cote UI reste base sur `expires_in_seconds`.
 
 ## 4.5 Partage de course
 
