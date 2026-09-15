@@ -24,7 +24,8 @@ tests {
 }
 
 docs {
-  Only the driver actually holding the offer can accept — a second driver (or the same
-  driver retried after the 15s offer TTL, `OFFER_TTL_SECONDS`) gets
-  `409 RIDE_ALREADY_MATCHED` / `409 OFFER_EXPIRED`.
+  Matching V2 opens an offer wave of up to five eligible drivers. The first driver in
+  the wave who accepts wins. Other drivers from the same wave get
+  `409 RIDE_ALREADY_MATCHED`; a driver answering after the 15s TTL gets
+  `409 OFFER_EXPIRED`.
 }

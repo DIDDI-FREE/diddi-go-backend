@@ -5,8 +5,9 @@ The matching engine offers a ride to one driver at a time (architecture doc
 tracked between HTTP requests, and neither belongs in PostgreSQL — both are
 short-lived and read on every driver action:
 
-    rides:offer:{ride_id}          which driver currently holds the offer,
-                                   with a TTL equal to the response window
+    rides:offer:{ride_id}          Redis set of drivers currently holding the
+                                   active offer wave, with a TTL equal to the
+                                   response window
     rides:offer:tried:{ride_id}    drivers already offered this ride, so a
                                    decline never loops back to them
 
@@ -44,34 +45,65 @@ class RedisOfferStore:
     offer_ttl_seconds: int = OFFER_TTL_SECONDS
     tried_ttl_seconds: int = TRIED_TTL_SECONDS
 
-    async def open_offer(self, ride_id: UUID, driver_user_id: UUID) -> None:
-        """Record that `driver_user_id` now holds the offer for `ride_id`,
-        and mark them as tried so they are not offered it again."""
+    async def open_offers(self, ride_id: UUID, driver_user_ids: list[UUID]) -> None:
+        """Record the active offer wave for `ride_id`.
+
+        Every driver in the wave is marked as tried immediately, so a later
+        wave never loops back to them after decline or timeout.
+        """
+        if not driver_user_ids:
+            return
+        members = [str(driver_user_id) for driver_user_id in driver_user_ids]
+        offer_key = f"{OFFER_KEY_PREFIX}{ride_id}"
+        tried_key = f"{TRIED_KEY_PREFIX}{ride_id}"
         pipe = self.redis.pipeline()
-        pipe.set(
-            f"{OFFER_KEY_PREFIX}{ride_id}",
-            str(driver_user_id),
-            ex=self.offer_ttl_seconds,
-        )
-        pipe.sadd(f"{TRIED_KEY_PREFIX}{ride_id}", str(driver_user_id))
-        pipe.expire(f"{TRIED_KEY_PREFIX}{ride_id}", self.tried_ttl_seconds)
+        pipe.delete(offer_key)
+        pipe.sadd(offer_key, *members)
+        pipe.expire(offer_key, self.offer_ttl_seconds)
+        pipe.sadd(tried_key, *members)
+        pipe.expire(tried_key, self.tried_ttl_seconds)
         await pipe.execute()
 
-    async def current_offer(self, ride_id: UUID) -> UUID | None:
-        """Driver currently holding the offer, or None if nobody does —
-        either it was never opened, it was answered, or it expired."""
-        value = await self.redis.get(f"{OFFER_KEY_PREFIX}{ride_id}")
-        if value is None:
-            return None
-        raw = value if isinstance(value, str) else value.decode()
-        try:
-            return UUID(raw)
-        except ValueError:
-            return None
+    async def current_offers(self, ride_id: UUID) -> set[UUID]:
+        """Drivers currently holding the active offer wave.
+
+        Backward compatibility: older deployments stored this key as a single
+        string value. If such a key still exists, read it as a one-driver wave.
+        """
+        key = f"{OFFER_KEY_PREFIX}{ride_id}"
+        key_type = await self.redis.type(key)
+        raw_type = key_type if isinstance(key_type, str) else key_type.decode()
+        if raw_type == "none":
+            return set()
+        if raw_type == "string":
+            value = await self.redis.get(key)
+            return _uuid_set_from_raw_values([value])
+        if raw_type == "set":
+            return _uuid_set_from_raw_values(await self.redis.smembers(key))
+        return set()
 
     async def close_offer(self, ride_id: UUID) -> None:
-        """Withdraw the outstanding offer (declined, accepted, or cancelled)."""
+        """Withdraw the active offer wave (accepted, cancelled, or exhausted)."""
         await self.redis.delete(f"{OFFER_KEY_PREFIX}{ride_id}")
+
+    async def decline_offer(self, ride_id: UUID, driver_user_id: UUID) -> bool:
+        """Withdraw one driver from the active wave.
+
+        Returns True when at least one other driver can still answer this same
+        wave; False means the wave is exhausted and matching may advance.
+        """
+        key = f"{OFFER_KEY_PREFIX}{ride_id}"
+        key_type = await self.redis.type(key)
+        raw_type = key_type if isinstance(key_type, str) else key_type.decode()
+        if raw_type == "set":
+            await self.redis.srem(key, str(driver_user_id))
+            remaining = await self.redis.scard(key)
+            if not remaining:
+                await self.redis.delete(key)
+            return bool(remaining)
+        if raw_type == "string":
+            await self.redis.delete(key)
+        return False
 
     async def already_tried(self, ride_id: UUID) -> set[UUID]:
         members = await self.redis.smembers(f"{TRIED_KEY_PREFIX}{ride_id}")
@@ -111,3 +143,16 @@ class RedisOfferStore:
         pipe.delete(f"{TRIED_KEY_PREFIX}{ride_id}")
         pipe.delete(f"{CLAIM_KEY_PREFIX}{ride_id}")
         await pipe.execute()
+
+
+def _uuid_set_from_raw_values(values: object) -> set[UUID]:
+    parsed: set[UUID] = set()
+    for value in values or ():
+        if value is None:
+            continue
+        raw = value if isinstance(value, str) else value.decode()
+        try:
+            parsed.add(UUID(raw))
+        except ValueError:
+            continue
+    return parsed

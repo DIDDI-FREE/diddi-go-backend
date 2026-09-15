@@ -167,15 +167,22 @@ class OfferStore(Protocol):
     driver's response window.
     """
 
-    async def open_offer(self, ride_id: UUID, driver_user_id: UUID) -> None:
-        """Record the offer holder and mark them tried."""
+    async def open_offers(self, ride_id: UUID, driver_user_ids: list[UUID]) -> None:
+        """Record the active offer wave and mark every driver as tried."""
         ...
 
-    async def current_offer(self, ride_id: UUID) -> UUID | None:
-        """Holder of the outstanding offer, or None if none/expired/answered."""
+    async def current_offers(self, ride_id: UUID) -> set[UUID]:
+        """Drivers currently holding the active offer wave."""
         ...
 
     async def close_offer(self, ride_id: UUID) -> None: ...
+
+    async def decline_offer(self, ride_id: UUID, driver_user_id: UUID) -> bool:
+        """Remove one driver from the active wave.
+
+        Returns True if other drivers still hold the offer.
+        """
+        ...
 
     async def already_tried(self, ride_id: UUID) -> set[UUID]:
         """Drivers this ride has been offered to, so none is asked twice."""

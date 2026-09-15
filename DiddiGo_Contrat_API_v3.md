@@ -895,7 +895,27 @@ chauffeur actif
 vehicule actif
 vehicle.category == ride.vehicle_category
 position dans le rayon de matching
+partenaire actif si chauffeur affilie
+solde chauffeur suffisant si la regle wallet est activee
+zone chauffeur compatible quand le modele de zones sera active
 ```
+
+Matching V2 :
+
+```text
+1. DiddiGo classe les chauffeurs eligibles par proximite.
+2. DiddiGo ouvre une vague de maximum 5 chauffeurs.
+3. Chaque offre expire apres 15 secondes.
+4. Le premier chauffeur qui accepte gagne la course.
+5. Les autres acceptations recoivent RIDE_ALREADY_MATCHED.
+6. Si toute la vague refuse ou expire, DiddiGo ouvre automatiquement la vague suivante.
+7. Si aucun chauffeur eligible ne reste, la course passe a no_driver_found.
+```
+
+Note zone : le critere "est dans sa zone" est une regle produit retenue, mais
+il n'est applique que lorsque les zones chauffeur seront modelees dans DiddiGo.
+En v3.3, le matching journalise deja les raisons d'exclusion disponibles et
+reste extensible pour ce filtre.
 
 `comfort_level` est maintenant un filtre de matching hierarchique :
 

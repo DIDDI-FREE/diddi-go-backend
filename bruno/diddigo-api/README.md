@@ -146,8 +146,10 @@ That run caught two real bugs — both in this collection, not in DiddiGo — si
 
 Two more things the live run surfaced that are just realistic timing, not bugs:
 - **The 15s offer TTL is tight.** Any manual pause between "Create Ride" and "Accept
-  Ride" (debugging, reading logs, editing files) can expire the offer
-  (`409 OFFER_EXPIRED`). Run those two back-to-back.
+  Ride" (debugging, reading logs, editing files) can expire the current offer wave.
+  Matching V2 relaunches the next wave automatically when the first one expires, but
+  a driver from the expired wave still gets `409 OFFER_EXPIRED`. Run those two
+  back-to-back in the single-driver Bruno happy path.
 - **One active ride per passenger.** `POST /rides` returns `409
   ACTIVE_RIDE_ALREADY_EXISTS` if the passenger's previous ride was created but never
   reached a terminal state (accepted-and-completed, or cancelled) — an expired offer
@@ -159,9 +161,9 @@ Two more things the live run surfaced that are just realistic timing, not bugs:
 - **Phone numbers and plate numbers are generated per run** (pre-request scripts using
   `Date.now()`), so re-running the whole collection never hits `409
   PHONE_ALREADY_REGISTERED` / `409 PLATE_ALREADY_REGISTERED`.
-- **Matching runs synchronously** inside `POST /rides` — no polling or WebSocket is
-  needed to test the core matching/accept/complete/pay flow. See
-  `06-Ride-Lifecycle/01-create-ride.bru` docs for the code reference.
+- **Matching opens offer waves synchronously** inside `POST /rides`. DiddiGo now
+  sends one ride to up to five eligible drivers at a time; the first accept wins.
+  Bruno's happy path still uses one driver, so it observes the same REST flow.
 - **`POST /drivers/online` alone is enough presence** to be matched — it seeds both the
   Redis `seen` and `available` markers in one REST call
   (`driver_location.py:56-84`). The 30s presence TTL means "Go Online" must run

@@ -275,10 +275,15 @@ Use cases inclus :
 - UC-702 Chauffeur offline ne recoit plus d'offre.
 - UC-703 Matching respecte distance pickup.
 - UC-704 Matching respecte la categorie vehicule et la hierarchie `comfort_level`.
-- UC-705 Offre expire proprement.
-- UC-706 Offre refusee passe au chauffeur suivant.
+- UC-705 Offre expire proprement et declenche automatiquement la vague suivante.
+- UC-706 Offre refusee retire le chauffeur de la vague sans bloquer les autres.
 - UC-707 Course sans chauffeur passe en no_driver_found avec raison observable.
 - UC-708 Logs matching expliquent pourquoi chaque chauffeur a ete exclu.
+- UC-709 Matching ouvre une vague de maximum 5 chauffeurs eligibles.
+- UC-710 Le premier chauffeur qui accepte gagne; les autres recoivent
+  RIDE_ALREADY_MATCHED.
+- UC-711 Le critere zone chauffeur est reserve pour le sprint zones, faute de
+  modele de zones actif en V1.7.
 
 Critere de sortie :
 

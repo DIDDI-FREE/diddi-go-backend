@@ -13,12 +13,14 @@ ride is driven forward explicitly rather than by automatic assignment:
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from app_base.core.auth_deps import get_current_user, require_business_driver
+from app_base.core.database import async_session_factory
 from app_base.core.deps import (
     get_diddimap,
     matching_service,
@@ -27,13 +29,23 @@ from app_base.core.deps import (
     scoring_service,
 )
 from app_base.core.errors import ApiError
+from app_base.core.observability import log_event
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.notification.application import PushNotificationService
+from app_base.modules.notification.infra.fcm import build_push_gateway
+from app_base.modules.notification.infra.repositories import SqlAlchemyUserDeviceRepository
+from app_base.modules.partner.application.services import PartnerService
+from app_base.modules.partner.infra.repositories import SqlAlchemyPartnerRepository
 from app_base.modules.ride.application.matching_service import MatchingService
 from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.application.services import RideService, iso_utc, ride_creation_payload
-from app_base.modules.ride.domain.entities import DriverProfile, RideStatus
-from app_base.modules.ride.infra.offer_store import OFFER_TTL_SECONDS
+from app_base.modules.ride.domain.entities import DriverProfile, Ride, RideStatus
+from app_base.modules.ride.infra.offer_store import OFFER_TTL_SECONDS, RedisOfferStore
+from app_base.modules.ride.infra.repositories import (
+    SqlAlchemyDriverProfileRepository,
+    SqlAlchemyRideRepository,
+    SqlAlchemyVehicleRepository,
+)
 from app_base.modules.ride.infra.routing_client import DiddiMapRoutingClient
 from app_base.modules.ride.presentation.schemas import (
     PlaceSearchResponseItem,
@@ -50,6 +62,74 @@ from app_base.shared_kernel.types import GeoPoint
 
 router = APIRouter(prefix="/rides", tags=["ride"])
 places_router = APIRouter(prefix="/places", tags=["places"])
+
+
+def _offer_payload(ride: Ride) -> dict:
+    return {
+        "ride_id": str(ride.id),
+        "pickup": {
+            "lat": ride.pickup_location.lat if ride.pickup_location else None,
+            "lng": ride.pickup_location.lng if ride.pickup_location else None,
+            "address": ride.pickup_address,
+        },
+        "dropoff_address": ride.dropoff_address,
+        "vehicle_category": ride.vehicle_category.value,
+        "comfort_level": ride.comfort_level.value,
+        "payment_method": ride.payment_method.value,
+        "expires_in_seconds": OFFER_TTL_SECONDS,
+    }
+
+
+async def _send_offer_wave(
+    ride: Ride,
+    driver_user_ids: list[UUID],
+    push_notifications: PushNotificationService,
+) -> None:
+    payload = _offer_payload(ride)
+    for driver_user_id in driver_user_ids:
+        await manager.send_new_request(driver_user_id, payload)
+        await push_notifications.send_ride_offer(driver_user_id=driver_user_id, payload=payload)
+
+
+def _schedule_offer_wave_expiry(request: Request, ride_id: UUID) -> None:
+    asyncio.create_task(_advance_offer_wave_after_timeout(request.app, ride_id))
+
+
+async def _advance_offer_wave_after_timeout(app, ride_id: UUID) -> None:
+    await asyncio.sleep(OFFER_TTL_SECONDS + 0.25)
+    async with async_session_factory() as session:
+        try:
+            ride_repo = SqlAlchemyRideRepository(session)
+            driver_repo = SqlAlchemyDriverProfileRepository(session)
+            vehicle_repo = SqlAlchemyVehicleRepository(session)
+            partner_repo = SqlAlchemyPartnerRepository(session)
+            device_repo = SqlAlchemyUserDeviceRepository(session)
+            partner_service = PartnerService(
+                partner_repo=partner_repo,
+                vehicle_repo=vehicle_repo,
+                driver_repo=driver_repo,
+            )
+            matching = MatchingService(
+                ride_repo=ride_repo,
+                driver_repo=driver_repo,
+                vehicle_repo=vehicle_repo,
+                partner_service=partner_service,
+                locations=app.state.driver_locations,
+                offers=RedisOfferStore(redis=app.state.redis),
+            )
+            push_notifications = PushNotificationService(devices=device_repo, gateway=build_push_gateway())
+            dispatch = await matching.advance_expired_offer(ride_id)
+            ride = await ride_repo.find_by_id(ride_id)
+            await session.commit()
+            if dispatch.new_wave and dispatch.driver_user_ids and ride is not None:
+                await _send_offer_wave(ride, dispatch.driver_user_ids, push_notifications)
+                asyncio.create_task(_advance_offer_wave_after_timeout(app, ride_id))
+            elif dispatch.no_driver_found:
+                await manager.broadcast_no_driver_found(ride_id)
+        except Exception:
+            await session.rollback()
+            log_event("ride.matching.expiry_advance_failed", level="error", ride_id=ride_id)
+            raise
 
 
 @places_router.get("/search", response_model=list[PlaceSearchResponseItem])
@@ -85,6 +165,7 @@ async def estimate_pricing(
 
 @router.post("", status_code=201)
 async def create_ride(
+    request: Request,
     payload: RideCreateRequest,
     service: RideService = Depends(ride_service),
     matching: MatchingService = Depends(matching_service),
@@ -115,27 +196,11 @@ async def create_ride(
     )
     response = ride_creation_payload(ride)
 
-    offered_to = await matching.try_match(ride)
-    if offered_to is not None:
-        offer_payload = {
-            "ride_id": str(ride.id),
-            "pickup": {
-                "lat": pickup.lat,
-                "lng": pickup.lng,
-                "address": payload.pickup.address,
-            },
-            "dropoff_address": payload.dropoff.address,
-            "vehicle_category": ride.vehicle_category.value,
-            "comfort_level": ride.comfort_level.value,
-            "payment_method": ride.payment_method.value,
-            "expires_in_seconds": OFFER_TTL_SECONDS,
-        }
-        await manager.send_new_request(
-            offered_to,
-            offer_payload,
-        )
-        await push_notifications.send_ride_offer(driver_user_id=offered_to, payload=offer_payload)
-    elif ride.status is RideStatus.NO_DRIVER_FOUND:
+    dispatch = await matching.try_match(ride)
+    if dispatch.new_wave and dispatch.driver_user_ids:
+        await _send_offer_wave(ride, dispatch.driver_user_ids, push_notifications)
+        _schedule_offer_wave_expiry(request, ride.id)
+    elif dispatch.no_driver_found or ride.status is RideStatus.NO_DRIVER_FOUND:
         await manager.broadcast_no_driver_found(ride.id)
 
     return response
@@ -166,35 +231,28 @@ async def accept_ride(
 
 @router.post("/{ride_id}/decline")
 async def decline_ride(
+    request: Request,
     ride_id: UUID,
     matching: MatchingService = Depends(matching_service),
     service: RideService = Depends(ride_service),
+    push_notifications: PushNotificationService = Depends(push_notification_service),
     current_user: UserModel = Depends(get_current_user),
     _driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
     """Driver declines; the offer moves to the next-nearest candidate."""
-    next_driver = await matching.decline(ride_id, current_user.id)
-    if next_driver is not None:
+    dispatch = await matching.decline(ride_id, current_user.id)
+    if dispatch.new_wave and dispatch.driver_user_ids:
         ride = await service.load_ride(ride_id)
-        await manager.send_new_request(
-            next_driver,
-            {
-                "ride_id": str(ride_id),
-                "pickup": {
-                    "lat": ride.pickup_location.lat if ride.pickup_location else None,
-                    "lng": ride.pickup_location.lng if ride.pickup_location else None,
-                    "address": ride.pickup_address,
-                },
-                "dropoff_address": ride.dropoff_address,
-                "vehicle_category": ride.vehicle_category.value,
-                "comfort_level": ride.comfort_level.value,
-                "payment_method": ride.payment_method.value,
-                "expires_in_seconds": OFFER_TTL_SECONDS,
-            },
-        )
-    else:
+        await _send_offer_wave(ride, dispatch.driver_user_ids, push_notifications)
+        _schedule_offer_wave_expiry(request, ride_id)
+    elif dispatch.no_driver_found:
         await manager.broadcast_no_driver_found(ride_id)
-    return {"ride_id": str(ride_id), "reoffered": next_driver is not None}
+    return {
+        "ride_id": str(ride_id),
+        "reoffered": bool(dispatch.driver_user_ids),
+        "offered_driver_count": len(dispatch.driver_user_ids),
+        "new_wave": dispatch.new_wave,
+    }
 
 
 @router.get("/shared/{token}")
