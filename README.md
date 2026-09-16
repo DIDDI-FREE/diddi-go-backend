@@ -140,6 +140,7 @@ DIDDIPAY_CALLBACK_SECRET=<diddipay-callback-hmac-secret>
 DIDDIPAY_HTTP_TIMEOUT_SECONDS=15
 DIDDIGO_PAYMENT_CALLBACK_URL=https://go-staging.diddifree.com/payments/return
 DRIVER_MIN_BALANCE=0
+DRIVER_MAX_ESTIMATED_COMMISSION=0
 PAYMENT_RECONCILIATION_ENABLED=true
 PAYMENT_RECONCILIATION_INTERVAL_SECONDS=300
 EMERGENCY_SUPPORT_EMAIL=direction.generale@diddifree.com
@@ -163,6 +164,12 @@ envoyee au frontend. DiddiPay doit livrer les callbacks signes vers :
 ```http
 POST https://go-staging.diddifree.com/internal/webhooks/diddipay
 ```
+
+`DRIVER_MIN_BALANCE` est le solde minimum autorise pour passer en ligne et
+rester eligible au matching. `0` bloque un chauffeur negatif; une valeur
+negative autorise un decouvert borne. `DRIVER_MAX_ESTIMATED_COMMISSION=0`
+desactive le plafond global de commission estimee; une valeur positive bloque
+les courses dont la commission estimee depasse ce seuil.
 
 ### Reconciliation DiddiPay
 

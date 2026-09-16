@@ -1345,7 +1345,7 @@ Reponse :
   "balance": -248,
   "currency": "XOF",
   "min_balance": 0,
-  "can_go_online": true
+  "can_go_online": false
 }
 ```
 
@@ -1359,9 +1359,21 @@ chauffeur a partir de in_progress -> voit le montant de la course
 admin/support -> voit aussi actual_pricing_fare et pricing_delta
 ```
 
-`min_balance` vient de la configuration backend `DRIVER_MIN_BALANCE`. Si
-`min_balance > 0` et que `balance < min_balance`, `POST /drivers/online`
-retourne `403 DRIVER_BALANCE_TOO_LOW`.
+`min_balance` vient de la configuration backend `DRIVER_MIN_BALANCE`.
+
+Regle V1 :
+
+- si `balance < min_balance`, `POST /drivers/online` retourne
+  `403 DRIVER_BALANCE_TOO_LOW`;
+- la meme regle est reverifiee par le matching pour ne pas proposer de nouvelle
+  course a un chauffeur deja en ligne mais passe sous le seuil;
+- `DRIVER_MIN_BALANCE=0` bloque un chauffeur negatif;
+- une valeur negative autorise un decouvert borne;
+- `DRIVER_MAX_ESTIMATED_COMMISSION=0` desactive le plafond global de commission
+  estimee;
+- si `DRIVER_MAX_ESTIMATED_COMMISSION > 0` et que la commission estimee d'une
+  course depasse ce seuil, DiddiGo ne propose pas la course et la passe a
+  `no_driver_found`.
 
 ### `GET /drivers/me/wallet/ledger`
 

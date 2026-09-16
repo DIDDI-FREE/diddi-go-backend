@@ -242,6 +242,7 @@ async def matching_service(
     ride_repo_dep: SqlAlchemyRideRepository = Depends(ride_repo),
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
     vehicle_repo_dep: SqlAlchemyVehicleRepository = Depends(vehicle_repo),
+    payment_repo_dep: SqlAlchemyPaymentRepository = Depends(payment_repo),
     partner_service_dep: PartnerService = Depends(partner_service),
     locations: RedisDriverLocationService = Depends(get_driver_locations),
     offers: RedisOfferStore = Depends(get_offer_store),
@@ -253,6 +254,7 @@ async def matching_service(
         partner_service=partner_service_dep,
         locations=locations,
         offers=offers,
+        payment_repo=payment_repo_dep,
     )
 
 
