@@ -364,3 +364,19 @@ class RideStatusTransition:
     to_status: RideStatus
     changed_at: datetime
     metadata: dict | None = None
+
+
+@dataclass
+class EmergencyContact:
+    id: UUID
+    user_id: UUID
+    contact_name: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    relationship: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    @staticmethod
+    def new_id() -> UUID:
+        return uuid4()

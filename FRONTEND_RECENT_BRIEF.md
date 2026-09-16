@@ -645,6 +645,33 @@ Cette vue doit afficher la position du chauffeur, pas celle du passager.
 
 ## 4.6 Urgence
 
+Version : 2026-09-16 / DiddiGo V1 securite.
+
+Contact d'urgence local DiddiGo :
+
+```http
+GET /v1/me/emergency-contact
+PUT /v1/me/emergency-contact
+DELETE /v1/me/emergency-contact
+```
+
+Payload `PUT` :
+
+```json
+{
+  "contact_name": "Awa Kone",
+  "phone": "+2250700000000",
+  "email": "awa@example.com",
+  "relationship": "famille"
+}
+```
+
+Regle UX :
+
+- demander au moins un telephone WhatsApp ou un e-mail;
+- si `GET` retourne `404 EMERGENCY_CONTACT_NOT_FOUND`, afficher un etat vide;
+- stocker ce contact dans DiddiGo, pas dans DiddiFreeID pour cette V1.
+
 Nouveau endpoint :
 
 ```http
@@ -665,7 +692,16 @@ Reponse :
 {
   "ride_id": "ride-id",
   "status": "open",
-  "requested_at": "2026-08-05T10:25:00Z"
+  "requested_at": "2026-08-05T10:25:00Z",
+  "notifications": [
+    {
+      "target": "support",
+      "channel": "email",
+      "recipient": "direction.generale@diddifree.com",
+      "status": "sent",
+      "reason": null
+    }
+  ]
 }
 ```
 
@@ -679,6 +715,10 @@ Le detail course expose aussi :
   }
 }
 ```
+
+Le frontend ne doit pas tenter d'envoyer lui-meme WhatsApp/e-mail. Il appelle
+`POST /emergency`; DiddiGo ouvre le dossier d'urgence, logge l'incident et tente
+les notifications support/contact selon la configuration serveur.
 
 ## 5. Push notifications
 

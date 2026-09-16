@@ -327,3 +327,29 @@ class RideRatingModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()"),
     )
+
+
+class EmergencyContactModel(Base):
+    __tablename__ = "emergency_contacts"
+    __table_args__ = {"schema": "ride"}
+
+    id: Mapped[UUID] = mapped_column(
+        _PG_UUID, primary_key=True, server_default=text("uuid_generate_v4()"),
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        _PG_UUID,
+        ForeignKey("auth.users.id"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    contact_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(254), nullable=True)
+    relationship: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )

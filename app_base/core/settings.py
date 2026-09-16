@@ -65,6 +65,18 @@ class Settings(BaseSettings):
     diddigo_payment_callback_url: str | None = None
     driver_min_balance: int = 0
 
+    emergency_support_email: str = "direction.generale@diddifree.com"
+    emergency_support_whatsapp: str | None = None
+    emergency_whatsapp_webhook_url: str | None = None
+    emergency_whatsapp_api_key: str | None = None
+    emergency_email_from: str = "alerts@diddifree.com"
+    emergency_smtp_host: str | None = None
+    emergency_smtp_port: int = 587
+    emergency_smtp_username: str | None = None
+    emergency_smtp_password: str | None = None
+    emergency_smtp_use_tls: bool = True
+    emergency_notification_timeout_seconds: float = 10.0
+
     # Reconciliation re-reads GET /payment-intents/{id} for anything still
     # waiting on a DiddiPay callback, so a lost webhook self-heals instead of
     # stranding a payment in `requires_action` forever.

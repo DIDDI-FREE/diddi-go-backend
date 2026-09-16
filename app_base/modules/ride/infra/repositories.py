@@ -21,6 +21,7 @@ from app_base.modules.ride.domain.entities import (
     ComfortLevel,
     DriverProfile,
     DriverStatus,
+    EmergencyContact,
     PaymentMethod,
     PricingRule,
     Ride,
@@ -680,4 +681,63 @@ class SqlAlchemyPricingRuleRepository:
             surge_multiplier=row.surge_multiplier,
             active_from=row.active_from,
             active_to=row.active_to,
+        )
+
+
+class SqlAlchemyEmergencyContactRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def find_by_user_id(self, user_id: UUID) -> EmergencyContact | None:
+        result = await self._session.execute(
+            select(orm.EmergencyContactModel).where(orm.EmergencyContactModel.user_id == user_id),
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return self._to_domain(row)
+
+    async def save(self, contact: EmergencyContact) -> EmergencyContact:
+        row = await self._session.get(orm.EmergencyContactModel, contact.id)
+        if row is None:
+            existing = await self._session.execute(
+                select(orm.EmergencyContactModel).where(orm.EmergencyContactModel.user_id == contact.user_id),
+            )
+            row = existing.scalar_one_or_none()
+        if row is None:
+            row = orm.EmergencyContactModel(id=contact.id, user_id=contact.user_id)
+            self._session.add(row)
+        row.contact_name = contact.contact_name
+        row.phone = contact.phone
+        row.email = contact.email
+        row.relationship = contact.relationship
+        row.updated_at = datetime.now(UTC)
+        await self._session.flush()
+        contact.id = row.id
+        contact.created_at = row.created_at
+        contact.updated_at = row.updated_at
+        return contact
+
+    async def delete_for_user(self, user_id: UUID) -> bool:
+        result = await self._session.execute(
+            select(orm.EmergencyContactModel).where(orm.EmergencyContactModel.user_id == user_id),
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return False
+        await self._session.delete(row)
+        await self._session.flush()
+        return True
+
+    @staticmethod
+    def _to_domain(row: orm.EmergencyContactModel) -> EmergencyContact:
+        return EmergencyContact(
+            id=row.id,
+            user_id=row.user_id,
+            contact_name=row.contact_name,
+            phone=row.phone,
+            email=row.email,
+            relationship=row.relationship,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
         )

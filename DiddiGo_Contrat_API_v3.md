@@ -1111,6 +1111,64 @@ Reponse :
 
 ## 9. Urgence
 
+### `GET /me/emergency-contact`
+
+Retourne le contact d'urgence DiddiGo de l'utilisateur connecte.
+
+Reponse :
+
+```json
+{
+  "id": "contact-id",
+  "user_id": "user-id",
+  "contact_name": "Awa Kone",
+  "phone": "+2250700000000",
+  "email": "awa@example.com",
+  "relationship": "famille"
+}
+```
+
+Erreurs :
+
+- `404 EMERGENCY_CONTACT_NOT_FOUND` si aucun contact n'est configure.
+
+### `PUT /me/emergency-contact`
+
+Cree ou met a jour le contact d'urgence local DiddiGo.
+
+Requete :
+
+```json
+{
+  "contact_name": "Awa Kone",
+  "phone": "+2250700000000",
+  "email": "awa@example.com",
+  "relationship": "famille"
+}
+```
+
+Regle :
+
+- `phone` ou `email` est obligatoire.
+- `phone` sert au canal WhatsApp si `EMERGENCY_WHATSAPP_WEBHOOK_URL` est configure.
+- `email` sert au canal email si SMTP est configure.
+
+Erreurs :
+
+- `422 EMERGENCY_CONTACT_REQUIRED` si aucun telephone/e-mail n'est fourni.
+
+### `DELETE /me/emergency-contact`
+
+Supprime le contact d'urgence DiddiGo de l'utilisateur connecte.
+
+Reponse :
+
+```json
+{
+  "status": "deleted"
+}
+```
+
 ### `POST /rides/{ride_id}/emergency`
 
 Accessible au passager, au chauffeur assigne, ou admin.
@@ -1129,12 +1187,44 @@ Reponse :
 {
   "ride_id": "ride-id",
   "status": "open",
-  "requested_at": "2026-08-05T10:25:00Z"
+  "requested_at": "2026-08-05T10:25:00Z",
+  "notifications": [
+    {
+      "target": "support",
+      "channel": "email",
+      "recipient": "direction.generale@diddifree.com",
+      "status": "sent",
+      "reason": null
+    },
+    {
+      "target": "emergency_contact",
+      "channel": "whatsapp",
+      "recipient": "+2250700000000",
+      "status": "skipped",
+      "reason": "whatsapp_webhook_not_configured"
+    }
+  ]
 }
 ```
 
 DiddiGo ecrit aussi un log serveur `ride_emergency` avec `ride_id` et
-`actor_user_id`. La phase back-office/dispatch d'urgence sera separee.
+`actor_user_id`, puis des logs structures `ride.emergency.notification.*`.
+
+Configuration :
+
+- `EMERGENCY_SUPPORT_EMAIL`, defaut `direction.generale@diddifree.com`
+- `EMERGENCY_SUPPORT_WHATSAPP`, optionnel
+- `EMERGENCY_WHATSAPP_WEBHOOK_URL`, optionnel
+- `EMERGENCY_WHATSAPP_API_KEY`, optionnel
+- `EMERGENCY_SMTP_HOST`, optionnel
+- `EMERGENCY_SMTP_PORT`, defaut `587`
+- `EMERGENCY_SMTP_USERNAME`, optionnel
+- `EMERGENCY_SMTP_PASSWORD`, optionnel
+- `EMERGENCY_EMAIL_FROM`, defaut `alerts@diddifree.com`
+
+Si un provider n'est pas configure, DiddiGo ne fait pas de fallback silencieux :
+la notification retourne `status=skipped` avec une raison explicite, et l'urgence
+reste bien ouverte.
 
 ---
 
