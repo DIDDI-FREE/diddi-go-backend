@@ -12,6 +12,7 @@ from uuid import UUID
 from app_base.core.errors import ApiError
 from app_base.core.observability import log_event
 from app_base.modules.auth.domain.interfaces import UserRepository
+from app_base.modules.ride.application.emergency_notifications import EmergencyNotificationService
 from app_base.modules.ride.domain.entities import (
     VALID_CANCEL_REASONS,
     CancelReason,
@@ -26,6 +27,7 @@ from app_base.modules.ride.domain.entities import (
 )
 from app_base.modules.ride.domain.interfaces import (
     DriverProfileRepository,
+    EmergencyContactRepository,
     PricingRuleRepository,
     RideRepository,
     VehicleRepository,
@@ -60,6 +62,8 @@ class RideService:
     driver_repo: DriverProfileRepository | None = None
     vehicle_repo: VehicleRepository | None = None
     user_repo: UserRepository | None = None
+    emergency_contact_repo: EmergencyContactRepository | None = None
+    emergency_notifications: EmergencyNotificationService | None = None
 
     async def estimate_pricing(
         self,
@@ -417,7 +421,26 @@ class RideService:
             actor_user_id=actor_user_id,
             actor_role=actor_role,
         )
-        return {"ride_id": str(ride.id), "status": "open", "requested_at": iso_utc(ride.emergency_requested_at)}
+        notification_results: list[dict] = []
+        if self.emergency_notifications is not None:
+            contact = (
+                await self.emergency_contact_repo.find_by_user_id(actor_user_id)
+                if self.emergency_contact_repo is not None
+                else None
+            )
+            notification_results = await self.emergency_notifications.notify(
+                ride=ride,
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                contact=contact,
+                note=note,
+            )
+        return {
+            "ride_id": str(ride.id),
+            "status": "open",
+            "requested_at": iso_utc(ride.emergency_requested_at),
+            "notifications": notification_results,
+        }
 
     async def _driver_profile_id_for_user(self, user_id: UUID) -> UUID | None:
         if self.driver_repo is None:

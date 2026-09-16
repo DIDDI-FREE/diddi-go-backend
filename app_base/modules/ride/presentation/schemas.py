@@ -69,3 +69,10 @@ class RideLocationSamplesRequest(BaseModel):
 
 class RideEmergencyRequest(BaseModel):
     note: str | None = Field(default=None, max_length=500)
+
+
+class EmergencyContactUpsertRequest(BaseModel):
+    contact_name: str | None = Field(default=None, max_length=160)
+    phone: str | None = Field(default=None, max_length=32)
+    email: str | None = Field(default=None, max_length=254)
+    relationship: str | None = Field(default=None, max_length=80)

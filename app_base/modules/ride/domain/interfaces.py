@@ -16,6 +16,7 @@ from uuid import UUID
 from app_base.modules.ride.domain.entities import (
     DriverProfile,
     DriverStatus,
+    EmergencyContact,
     PricingRule,
     Ride,
     RideRating,
@@ -170,6 +171,14 @@ class OfferStore(Protocol):
     async def open_offers(self, ride_id: UUID, driver_user_ids: list[UUID]) -> None:
         """Record the active offer wave and mark every driver as tried."""
         ...
+
+
+class EmergencyContactRepository(Protocol):
+    async def find_by_user_id(self, user_id: UUID) -> EmergencyContact | None: ...
+
+    async def save(self, contact: EmergencyContact) -> EmergencyContact: ...
+
+    async def delete_for_user(self, user_id: UUID) -> bool: ...
 
     async def current_offers(self, ride_id: UUID) -> set[UUID]:
         """Drivers currently holding the active offer wave."""

@@ -45,6 +45,8 @@ from app_base.modules.payment.application.wallet_service import DriverWalletServ
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentRepository
 from app_base.modules.ride.application.driver_service import DriverService
+from app_base.modules.ride.application.emergency_contact_service import EmergencyContactService
+from app_base.modules.ride.application.emergency_notifications import EmergencyNotificationService
 from app_base.modules.ride.application.matching_service import MatchingService
 from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.application.services import RideService
@@ -52,6 +54,7 @@ from app_base.modules.ride.infra.driver_location import RedisDriverLocationServi
 from app_base.modules.ride.infra.offer_store import RedisOfferStore
 from app_base.modules.ride.infra.repositories import (
     SqlAlchemyDriverProfileRepository,
+    SqlAlchemyEmergencyContactRepository,
     SqlAlchemyPricingRuleRepository,
     SqlAlchemyRideRepository,
     SqlAlchemyVehicleRepository,
@@ -129,6 +132,12 @@ async def partner_repo(session: AsyncSession = Depends(session_dep)) -> SqlAlche
     return SqlAlchemyPartnerRepository(session)
 
 
+async def emergency_contact_repo(
+    session: AsyncSession = Depends(session_dep),
+) -> SqlAlchemyEmergencyContactRepository:
+    return SqlAlchemyEmergencyContactRepository(session)
+
+
 # --- services --------------------------------------------------------------
 
 async def auth_service(
@@ -145,6 +154,7 @@ async def ride_service(
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
     vehicle_repo_dep: SqlAlchemyVehicleRepository = Depends(vehicle_repo),
     user_repo_dep: SqlAlchemyUserRepository = Depends(user_repo),
+    emergency_contact_repo_dep: SqlAlchemyEmergencyContactRepository = Depends(emergency_contact_repo),
 ) -> RideService:
     return RideService(
         ride_repo=ride_repo_dep,
@@ -153,6 +163,8 @@ async def ride_service(
         driver_repo=driver_repo_dep,
         vehicle_repo=vehicle_repo_dep,
         user_repo=user_repo_dep,
+        emergency_contact_repo=emergency_contact_repo_dep,
+        emergency_notifications=EmergencyNotificationService(),
     )
 
 
@@ -190,6 +202,12 @@ async def scoring_service(
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
 ) -> ScoringService:
     return ScoringService(ride_repo=ride_repo_dep, driver_repo=driver_repo_dep)
+
+
+async def emergency_contact_service(
+    emergency_contact_repo_dep: SqlAlchemyEmergencyContactRepository = Depends(emergency_contact_repo),
+) -> EmergencyContactService:
+    return EmergencyContactService(contacts=emergency_contact_repo_dep)
 
 
 async def device_service(
@@ -264,5 +282,7 @@ __all__ = [
     "payment_repo",
     "user_device_repo",
     "partner_repo",
+    "emergency_contact_repo",
     "partner_service",
+    "emergency_contact_service",
 ]

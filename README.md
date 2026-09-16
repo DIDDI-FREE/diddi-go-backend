@@ -142,6 +142,15 @@ DIDDIGO_PAYMENT_CALLBACK_URL=https://go-staging.diddifree.com/payments/return
 DRIVER_MIN_BALANCE=0
 PAYMENT_RECONCILIATION_ENABLED=true
 PAYMENT_RECONCILIATION_INTERVAL_SECONDS=300
+EMERGENCY_SUPPORT_EMAIL=direction.generale@diddifree.com
+EMERGENCY_SUPPORT_WHATSAPP=<support-whatsapp-number-optional>
+EMERGENCY_WHATSAPP_WEBHOOK_URL=<whatsapp-provider-webhook-optional>
+EMERGENCY_WHATSAPP_API_KEY=<whatsapp-provider-api-key-optional>
+EMERGENCY_SMTP_HOST=<smtp-host-optional>
+EMERGENCY_SMTP_PORT=587
+EMERGENCY_SMTP_USERNAME=<smtp-username-optional>
+EMERGENCY_SMTP_PASSWORD=<smtp-password-optional>
+EMERGENCY_EMAIL_FROM=alerts@diddifree.com
 ```
 
 Ne pas renseigner `DATABASE_URL` ni `REDIS_URL` si la stack utilise les services
