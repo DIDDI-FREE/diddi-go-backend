@@ -678,6 +678,12 @@ Nouveau endpoint :
 POST /v1/rides/{ride_id}/emergency
 ```
 
+Comportement important :
+
+- le premier appel ouvre l'urgence;
+- un deuxieme appel sur la meme course retourne `409 EMERGENCY_ALREADY_OPEN`;
+- le frontend doit afficher que l'alerte est deja en cours, sans reessayer en boucle.
+
 Payload :
 
 ```json

@@ -139,3 +139,40 @@ async def test_ride_emergency_notifies_with_stored_contact() -> None:
     assert result["status"] == "open"
     assert result["notifications"][0]["target"] == "support"
     assert notifier.contact == contact
+
+
+@pytest.mark.asyncio
+async def test_ride_emergency_cannot_overwrite_existing_open_alert() -> None:
+    first_requested_at = datetime(2026, 9, 16, 10, 0, tzinfo=UTC)
+    ride = Ride(
+        id=RIDE_ID,
+        passenger_user_id=USER_ID,
+        emergency_status="open",
+        emergency_requested_at=first_requested_at,
+        emergency_note="Premiere alerte",
+        pickup_location=GeoPoint(lat=5.35, lng=-4.0),
+        dropoff_location=GeoPoint(lat=5.36, lng=-3.99),
+        requested_at=datetime.now(UTC),
+    )
+    repo = FakeRideRepo(ride)
+    service = RideService(
+        ride_repo=repo,
+        routing=FakeRouting(),
+        pricing_rules=FakePricingRules(),
+        emergency_contact_repo=FakeEmergencyContactRepo(),
+        emergency_notifications=FakeNotifier(),
+    )
+
+    with pytest.raises(ApiError) as exc_info:
+        await service.request_emergency(
+            RIDE_ID,
+            actor_user_id=USER_ID,
+            actor_role="user",
+            note="Deuxieme alerte",
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.code == "EMERGENCY_ALREADY_OPEN"
+    assert repo.saved is False
+    assert ride.emergency_requested_at == first_requested_at
+    assert ride.emergency_note == "Premiere alerte"

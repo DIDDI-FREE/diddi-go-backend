@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
+from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
 from app_base.core.observability import log_event
 from app_base.modules.auth.domain.interfaces import UserRepository
@@ -409,6 +410,13 @@ class RideService:
         is_participant = ride.passenger_user_id == actor_user_id or await self._is_assigned_driver(ride, actor_user_id)
         if not is_participant and actor_role != "admin":
             raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Cette course ne vous appartient pas.")
+        if ride.emergency_status == "open":
+            raise ApiError(
+                409,
+                ErrorCode.EMERGENCY_ALREADY_OPEN,
+                "Une urgence est deja ouverte pour cette course.",
+                {"ride_id": str(ride.id), "requested_at": iso_utc(ride.emergency_requested_at)},
+            )
         ride.emergency_requested_at = datetime.now(UTC)
         ride.emergency_status = "open"
         ride.emergency_note = note

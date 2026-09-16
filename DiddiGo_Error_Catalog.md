@@ -87,6 +87,7 @@ Ces routes restent utiles en local/dev si l'auth locale est active.
 | `409` | `RIDE_NOT_CANCELLABLE` | Course non annulable dans son etat actuel |
 | `409` | `RIDE_NOT_COMPLETED` | Action impossible avant fin de course |
 | `409` | `RIDE_NOT_OFFERABLE` | Course pas dans un etat pouvant etre propose au matching |
+| `409` | `EMERGENCY_ALREADY_OPEN` | Une urgence est deja ouverte; le second clic ne doit pas ecraser la premiere alerte |
 | `404` | `EMERGENCY_CONTACT_NOT_FOUND` | Aucun contact d'urgence DiddiGo configure pour l'utilisateur |
 | `422` | `INVALID_CANCEL_REASON` | Motif d'annulation invalide |
 | `422` | `EMERGENCY_CONTACT_REQUIRED` | Contact d'urgence incomplet, telephone WhatsApp ou e-mail requis |

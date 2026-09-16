@@ -1173,6 +1173,12 @@ Reponse :
 
 Accessible au passager, au chauffeur assigne, ou admin.
 
+Regle d'audit :
+
+- une course ne peut avoir qu'une urgence ouverte;
+- un deuxieme appel ne doit pas ecraser la premiere heure/note;
+- DiddiGo retourne `409 EMERGENCY_ALREADY_OPEN` si l'urgence est deja ouverte.
+
 Requete :
 
 ```json
