@@ -2,6 +2,7 @@ from uuid import uuid4
 
 import pytest
 
+from app_base.modules.payment.domain.entities import DriverWallet
 from app_base.modules.ride.application.matching_service import MatchingService
 from app_base.modules.ride.domain.entities import (
     ComfortLevel,
@@ -107,6 +108,14 @@ class FakeRideRepo:
 
     async def record_status_transition(self, transition) -> None:
         return None
+
+
+class FakePaymentRepo:
+    def __init__(self, balances: dict | None = None) -> None:
+        self.balances = balances or {}
+
+    async def get_or_create_wallet(self, driver_id, *, currency: str = "XOF"):
+        return DriverWallet(id=uuid4(), driver_id=driver_id, balance=self.balances.get(driver_id, 0), currency=currency)
 
 
 def _wave_service(candidate_count: int = 6) -> tuple[MatchingService, Ride, list]:
@@ -246,3 +255,54 @@ async def test_expired_wave_advances_to_next_untried_driver() -> None:
 
     assert dispatch.new_wave is True
     assert dispatch.driver_user_ids == [user_ids[5]]
+
+
+@pytest.mark.asyncio
+async def test_matching_filters_driver_below_minimum_wallet_balance(monkeypatch) -> None:
+    monkeypatch.setattr("app_base.modules.ride.application.matching_service.settings.driver_min_balance", 0)
+    driver_user_id = uuid4()
+    driver_id = uuid4()
+    service = MatchingService(
+        ride_repo=None,
+        driver_repo=FakeDriverRepo(
+            DriverProfile(id=driver_id, user_id=driver_user_id, license_number="CI-123", status=DriverStatus.ACTIVE)
+        ),
+        vehicle_repo=FakeVehicleRepo(
+            Vehicle(
+                id=uuid4(),
+                driver_id=driver_id,
+                plate_number="CI-123-AA",
+                category=VehicleCategory.STANDARD,
+                comfort_level=ComfortLevel.STANDARD,
+            )
+        ),
+        locations=None,
+        offers=None,
+        payment_repo=FakePaymentRepo({driver_id: -1}),
+    )
+    ride = Ride(
+        id=uuid4(),
+        passenger_user_id=uuid4(),
+        vehicle_category=VehicleCategory.STANDARD,
+        comfort_level=ComfortLevel.STANDARD,
+    )
+
+    can_take, reason = await service._can_take_ride(driver_user_id, ride)
+
+    assert can_take is False
+    assert reason == "driver_balance_too_low:-1<0"
+
+
+@pytest.mark.asyncio
+async def test_matching_gives_up_when_estimated_commission_exceeds_threshold(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app_base.modules.ride.application.matching_service.settings.driver_max_estimated_commission",
+        100,
+    )
+    service, ride, _user_ids = _wave_service(candidate_count=1)
+    ride.platform_commission = 150
+
+    dispatch = await service.try_match(ride)
+
+    assert dispatch.no_driver_found is True
+    assert ride.status is RideStatus.NO_DRIVER_FOUND

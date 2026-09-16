@@ -910,6 +910,16 @@ DRIVER_BALANCE_TOO_LOW
 
 Afficher un message simple et proposer la recharge.
 
+Regle wallet V1 :
+
+- `DRIVER_MIN_BALANCE=0` bloque un chauffeur avec solde negatif;
+- une valeur negative autorise un decouvert borne;
+- le matching reverifie le solde, donc un chauffeur deja en ligne peut ne plus
+  recevoir d'offres si son solde passe sous le seuil;
+- si `DRIVER_MAX_ESTIMATED_COMMISSION` est configure cote backend et que la
+  commission estimee d'une course depasse ce plafond, le passager verra le flux
+  habituel `no_driver_found` plutot qu'une offre envoyee a un chauffeur.
+
 Endpoints admin/support :
 
 ```http

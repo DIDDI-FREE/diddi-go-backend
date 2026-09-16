@@ -15,10 +15,13 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from app_base.core.errors import ApiError
 from app_base.core.observability import log_event
+from app_base.core.settings import settings
+from app_base.modules.payment.domain.interfaces import PaymentRepository
 from app_base.modules.ride.domain.entities import (
     ComfortLevel,
     DriverStatus,
@@ -56,6 +59,7 @@ class MatchingService:
     locations: DriverLocationService
     offers: OfferStore
     partner_service: object | None = None
+    payment_repo: PaymentRepository | None = None
 
     async def try_match(self, ride: Ride) -> MatchingDispatch:
         """Offer `ride` to the next suitable wave of drivers.
@@ -85,6 +89,24 @@ class MatchingService:
         if ride.status != RideStatus.REQUESTED:
             logger.info("matching_skip ride_id=%s reason=status_not_requested status=%s", ride.id, ride.status.value)
             return MatchingDispatch([], new_wave=False)
+        max_commission = Decimal(settings.driver_max_estimated_commission)
+        if max_commission > 0 and ride.platform_commission is not None and ride.platform_commission > max_commission:
+            logger.warning(
+                "matching_skip ride_id=%s reason=estimated_commission_above_threshold commission=%s threshold=%s",
+                ride.id,
+                ride.platform_commission,
+                max_commission,
+            )
+            log_event(
+                "ride.matching.skipped",
+                level="warning",
+                ride_id=ride.id,
+                reason="estimated_commission_above_threshold",
+                platform_commission=ride.platform_commission,
+                max_commission=max_commission,
+            )
+            await self._give_up(ride)
+            return MatchingDispatch([], new_wave=True, no_driver_found=True)
 
         outstanding = await self.offers.current_offers(ride.id)
         if outstanding:
@@ -366,6 +388,11 @@ class MatchingService:
             blocked, partner_reason = await self.partner_service.driver_is_blocked_by_partner(profile.id)
             if blocked:
                 return False, partner_reason or "partner_not_active"
+        if self.payment_repo is not None:
+            wallet = await self.payment_repo.get_or_create_wallet(profile.id)
+            min_balance = Decimal(settings.driver_min_balance)
+            if wallet.balance < min_balance:
+                return False, f"driver_balance_too_low:{wallet.balance}<{min_balance}"
         if vehicle.category != ride.vehicle_category:
             return False, f"vehicle_category_mismatch:{vehicle.category.value}!={ride.vehicle_category.value}"
         if not _comfort_can_serve(vehicle.comfort_level, ride.comfort_level):

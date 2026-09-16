@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     diddipay_http_timeout_seconds: float = 15.0
     diddigo_payment_callback_url: str | None = None
     driver_min_balance: int = 0
+    driver_max_estimated_commission: int = 0
 
     emergency_support_email: str = "direction.generale@diddifree.com"
     emergency_support_whatsapp: str | None = None

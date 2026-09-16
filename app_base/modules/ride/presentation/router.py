@@ -36,6 +36,7 @@ from app_base.modules.notification.infra.fcm import build_push_gateway
 from app_base.modules.notification.infra.repositories import SqlAlchemyUserDeviceRepository
 from app_base.modules.partner.application.services import PartnerService
 from app_base.modules.partner.infra.repositories import SqlAlchemyPartnerRepository
+from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentRepository
 from app_base.modules.ride.application.matching_service import MatchingService
 from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.application.services import RideService, iso_utc, ride_creation_payload
@@ -102,6 +103,7 @@ async def _advance_offer_wave_after_timeout(app, ride_id: UUID) -> None:
             ride_repo = SqlAlchemyRideRepository(session)
             driver_repo = SqlAlchemyDriverProfileRepository(session)
             vehicle_repo = SqlAlchemyVehicleRepository(session)
+            payment_repo = SqlAlchemyPaymentRepository(session)
             partner_repo = SqlAlchemyPartnerRepository(session)
             device_repo = SqlAlchemyUserDeviceRepository(session)
             partner_service = PartnerService(
@@ -113,6 +115,7 @@ async def _advance_offer_wave_after_timeout(app, ride_id: UUID) -> None:
                 ride_repo=ride_repo,
                 driver_repo=driver_repo,
                 vehicle_repo=vehicle_repo,
+                payment_repo=payment_repo,
                 partner_service=partner_service,
                 locations=app.state.driver_locations,
                 offers=RedisOfferStore(redis=app.state.redis),

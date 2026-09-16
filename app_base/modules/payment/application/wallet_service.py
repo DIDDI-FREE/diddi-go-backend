@@ -63,8 +63,6 @@ class DriverWalletService:
 
     async def ensure_driver_can_go_online(self, driver_id: UUID) -> None:
         min_balance = Decimal(settings.driver_min_balance)
-        if min_balance <= 0:
-            return
         wallet = await self.payment_repo.get_or_create_wallet(driver_id)
         if wallet.balance < min_balance:
             raise ApiError(

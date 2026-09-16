@@ -335,6 +335,26 @@ async def test_cash_confirmation_debits_driver_commission_once() -> None:
 
 
 @pytest.mark.asyncio
+async def test_driver_wallet_blocks_online_when_balance_is_below_minimum(monkeypatch) -> None:
+    user_id = uuid4()
+    driver_id = uuid4()
+    repo = FakePaymentRepo()
+    wallet = await repo.get_or_create_wallet(driver_id)
+    wallet.balance = Decimal("-1")
+    service = DriverWalletService(
+        payment_repo=repo,
+        driver_repo=FakeDriverRepo(driver_id=driver_id, user_id=user_id),
+    )
+    monkeypatch.setattr("app_base.modules.payment.application.wallet_service.settings.driver_min_balance", 0)
+
+    with pytest.raises(ApiError) as exc_info:
+        await service.ensure_driver_can_go_online(driver_id)
+
+    assert exc_info.value.code == "DRIVER_BALANCE_TOO_LOW"
+    assert exc_info.value.details == {"balance": -1, "min_balance": 0, "currency": "XOF"}
+
+
+@pytest.mark.asyncio
 async def test_digital_payment_webhook_credits_driver_payout_once(monkeypatch) -> None:
     ride = make_completed_ride()
     intent_id = uuid4()
