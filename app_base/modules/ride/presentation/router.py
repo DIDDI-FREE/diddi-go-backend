@@ -296,11 +296,11 @@ async def list_rides(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> dict:
-    active_role = role or current_user.role
     status_enum = RideStatus(status) if status else None
     return await service.list_rides(
         actor_user_id=current_user.id,
-        actor_role=active_role,
+        actor_role=current_user.role,
+        view_role=role,
         passenger_user_id=None,  # admin-only scope expansion not implemented
         driver_id=None,
         status=status_enum,

@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
+from fastapi import FastAPI
 
-from app_base.core.errors import ApiError
+from app_base.core.auth_deps import get_current_user
+from app_base.core.deps import ride_service
+from app_base.core.errors import ApiError, api_error_handler
 from app_base.modules.ride.application.services import RideService
 from app_base.modules.ride.domain.entities import DriverProfile, DriverStatus, Ride, RideStatus
+from app_base.modules.ride.presentation.router import router as ride_router
 
 pytestmark = pytest.mark.unit
 
@@ -114,3 +120,107 @@ async def test_business_driver_user_role_lists_assigned_driver_rides() -> None:
     assert result["pagination"]["total_items"] == 1
     assert result["data"][0]["id"] == str(RIDE_ID)
     assert service.ride_repo.last_list_filters["driver_id"] == DRIVER_PROFILE_ID
+
+
+@pytest.mark.asyncio
+async def test_user_cannot_select_admin_ride_view() -> None:
+    service = service_with(matched_ride())
+
+    with pytest.raises(ApiError) as exc_info:
+        await service.list_rides(
+            actor_user_id=OTHER_USER_ID,
+            actor_role="user",
+            view_role="admin",
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.code == "FORBIDDEN_ROLE"
+    assert service.ride_repo.last_list_filters is None
+
+
+@pytest.mark.asyncio
+async def test_user_can_select_own_driver_ride_view() -> None:
+    service = service_with(matched_ride())
+
+    result = await service.list_rides(
+        actor_user_id=DRIVER_USER_ID,
+        actor_role="user",
+        view_role="driver",
+    )
+
+    assert result["pagination"]["total_items"] == 1
+    assert service.ride_repo.last_list_filters["driver_id"] == DRIVER_PROFILE_ID
+    assert service.ride_repo.last_list_filters["passenger_user_id"] is None
+
+
+def ride_list_app(service: RideService, *, user_id: UUID, role: str) -> FastAPI:
+    app = FastAPI()
+    app.include_router(ride_router, prefix="/v1")
+    app.add_exception_handler(ApiError, api_error_handler)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=user_id, role=role)
+    app.dependency_overrides[ride_service] = lambda: service
+    return app
+
+
+@pytest.mark.asyncio
+async def test_verified_admin_can_list_all_rides() -> None:
+    service = service_with(matched_ride())
+
+    await service.list_rides(actor_user_id=OTHER_USER_ID, actor_role="admin")
+
+    assert service.ride_repo.last_list_filters["driver_id"] is None
+    assert service.ride_repo.last_list_filters["passenger_user_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_user_cannot_select_another_driver_by_id() -> None:
+    service = service_with(matched_ride())
+
+    result = await service.list_rides(
+        actor_user_id=OTHER_USER_ID,
+        actor_role="user",
+        view_role="driver",
+        driver_id=DRIVER_PROFILE_ID,
+    )
+
+    assert result["pagination"]["total_items"] == 0
+    assert service.ride_repo.last_list_filters is None
+
+
+@pytest.mark.asyncio
+async def test_http_user_cannot_escalate_ride_list_with_role_query() -> None:
+    service = service_with(matched_ride())
+    app = ride_list_app(service, user_id=OTHER_USER_ID, role="user")
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/v1/rides?role=admin")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "FORBIDDEN_ROLE"
+    assert service.ride_repo.last_list_filters is None
+
+
+@pytest.mark.asyncio
+async def test_http_user_can_list_own_driver_rides() -> None:
+    service = service_with(matched_ride())
+    app = ride_list_app(service, user_id=DRIVER_USER_ID, role="user")
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/v1/rides?role=driver")
+
+    assert response.status_code == 200
+    assert response.json()["pagination"]["total_items"] == 1
+    assert service.ride_repo.last_list_filters["driver_id"] == DRIVER_PROFILE_ID
+
+
+@pytest.mark.asyncio
+async def test_http_verified_admin_can_list_all_rides() -> None:
+    service = service_with(matched_ride())
+    app = ride_list_app(service, user_id=OTHER_USER_ID, role="admin")
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/v1/rides?role=admin")
+
+    assert response.status_code == 200
+    assert service.ride_repo.last_list_filters["driver_id"] is None
+    assert service.ride_repo.last_list_filters["passenger_user_id"] is None

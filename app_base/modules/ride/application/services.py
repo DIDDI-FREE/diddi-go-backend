@@ -222,6 +222,7 @@ class RideService:
         *,
         actor_user_id: UUID,
         actor_role: str,
+        view_role: str | None = None,
         passenger_user_id: UUID | None = None,
         driver_id: UUID | None = None,
         status: RideStatus | None = None,
@@ -230,12 +231,18 @@ class RideService:
         page: int = 1,
         page_size: int = 20,
     ) -> dict:
-        actor_role = _normalise_actor_role(actor_role)
-        if actor_role == "driver" and driver_id is None:
-            driver_id = await self._driver_profile_id_for_user(actor_user_id)
+        identity_role = _normalise_actor_role(actor_role)
+        selected_role = view_role or identity_role
+        if selected_role not in {"admin", "passenger", "driver"}:
+            raise ApiError(422, "INVALID_ROLE", "Vue de courses inconnue.")
+        if selected_role == "admin" and identity_role != "admin":
+            raise ApiError(403, "FORBIDDEN_ROLE", "Rôle insuffisant pour cette action.")
+        if selected_role == "driver":
+            if identity_role != "admin" or driver_id is None:
+                driver_id = await self._driver_profile_id_for_user(actor_user_id)
             if driver_id is None:
                 return _paginated_rides([], 0, page=page, page_size=page_size)
-        elif actor_role != "admin":
+        elif selected_role == "passenger":
             passenger_user_id = actor_user_id
             driver_id = None
         rides, total = await self.ride_repo.list_by(
