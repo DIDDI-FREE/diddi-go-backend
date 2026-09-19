@@ -8,6 +8,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import SQLAlchemyError
 
 from app_base.core.deps import ride_summary_service
 from app_base.core.errors import ApiError, api_error_handler
@@ -204,3 +205,25 @@ async def test_summary_route_returns_report_to_authorized_pilotage() -> None:
 
     assert response.status_code == 200
     assert response.json()["completed_fare_total_xof"] == 4500
+
+
+@pytest.mark.asyncio
+async def test_summary_route_reports_sql_failure_without_leaking_details(monkeypatch) -> None:
+    class FailingRepository:
+        async def summarize_period(self, start, end):
+            raise SQLAlchemyError("private database connection details")
+
+    events = []
+    monkeypatch.setattr(
+        "app_base.modules.ride.application.summary_service.log_event",
+        lambda *args, **kwargs: events.append((args, kwargs)),
+    )
+    app = summary_app(FailingRepository(), authorized=True)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/internal/v1/ride-summary?date=2026-09-19")
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "RIDE_SUMMARY_UNAVAILABLE"
+    assert "private database" not in response.text
+    assert events[0][0] == ("ride.summary.database_error",)

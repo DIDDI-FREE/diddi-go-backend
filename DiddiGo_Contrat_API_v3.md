@@ -1973,6 +1973,7 @@ agregats proviennent d'une seule requete SQL.
 | `422` | `SUMMARY_DATE_IN_FUTURE` | Date future |
 | `422` | `SUMMARY_DATE_OUT_OF_RANGE` | Date hors fenetre configuree |
 | `500` | `INVALID_RIDE_FARE` | Montant XOF non entier, sans troncature silencieuse |
+| `503` | `RIDE_SUMMARY_UNAVAILABLE` | Base de donnees momentanement indisponible |
 
 ## 14. Hors Scope v3.2
 
