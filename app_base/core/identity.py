@@ -12,6 +12,7 @@ from uuid import UUID
 import httpx
 import jwt
 from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
 
 from app_base.core.errors import ApiError
 from app_base.core.settings import settings
@@ -64,6 +65,12 @@ class IdentityTokenVerifier:
                     "require": ["exp", "iat", "sub", "iss", "aud", "scope", "token_type"],
                 },
             )
+        except PyJWKClientConnectionError as exc:
+            raise ApiError(
+                503, "SERVICE_JWKS_UNAVAILABLE", "Cles de verification temporairement indisponibles."
+            ) from exc
+        except PyJWKClientError as exc:
+            raise ApiError(401, "SERVICE_TOKEN_INVALID", "Cle de signature du token service inconnue.") from exc
         except jwt.ExpiredSignatureError as exc:
             raise ApiError(401, "SERVICE_TOKEN_EXPIRED", "Le token service a expire.") from exc
         except jwt.InvalidTokenError as exc:

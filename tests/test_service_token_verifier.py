@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
+from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
 
 from app_base.core.errors import ApiError
 from app_base.core.identity import IdentityTokenVerifier
@@ -82,4 +83,29 @@ def test_service_token_rejects_wrong_permissions(
             expected_subject=expected_subject,
         )
 
+    assert error.value.code == error_code
+
+
+@pytest.mark.parametrize(
+    ("failure", "status_code", "error_code"),
+    [
+        (PyJWKClientError("unknown kid"), 401, "SERVICE_TOKEN_INVALID"),
+        (PyJWKClientConnectionError("JWKS unreachable"), 503, "SERVICE_JWKS_UNAVAILABLE"),
+    ],
+)
+def test_service_token_handles_jwks_lookup_failure(
+    service_verifier, failure: Exception, status_code: int, error_code: str
+) -> None:
+    verifier, token = service_verifier
+
+    class FailingJwkClient:
+        def get_signing_key_from_jwt(self, _token):
+            raise failure
+
+    verifier._client = FailingJwkClient()
+
+    with pytest.raises(ApiError) as error:
+        verifier.decode_service_token(token, audience="diddigo", required_scopes={"ride-summary:read"})
+
+    assert error.value.status_code == status_code
     assert error.value.code == error_code
