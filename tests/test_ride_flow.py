@@ -119,8 +119,9 @@ async def test_create_ride_requires_authentication(client) -> None:
 
 
 async def test_create_ride_defaults_vehicle_category_for_simplified_frontend(
-    client, passenger, online_driver,
+    client, passenger, driver_factory,
 ) -> None:
+    premium_driver = await driver_factory(comfort_level="premium")
     payload = {key: value for key, value in RIDE_BODY.items() if key != "vehicle_category"}
     payload["comfort_level"] = "premium"
     payload["scheduled_at"] = None
@@ -129,7 +130,7 @@ async def test_create_ride_defaults_vehicle_category_for_simplified_frontend(
     assert r.status_code == 201, r.text
 
     ride_id = r.json()["ride_id"]
-    accepted = await client.post(f"/v1/rides/{ride_id}/accept", headers=online_driver)
+    accepted = await client.post(f"/v1/rides/{ride_id}/accept", headers=premium_driver)
     assert accepted.status_code == 200, accepted.text
 
     detail = (await client.get(f"/v1/rides/{ride_id}", headers=passenger)).json()

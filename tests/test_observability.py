@@ -17,18 +17,26 @@ from app_base.main import app
 pytestmark = pytest.mark.unit
 
 
-def test_log_event_emits_json_with_bound_request_id(caplog) -> None:
+def test_log_event_emits_json_with_bound_request_id(monkeypatch) -> None:
     reset_metrics()
     request_id = "req-test-123"
     user_id = uuid4()
     token = bind_request_id(request_id)
+    logger = logging.getLogger("uvicorn.error")
+    records = []
+    original_log = logger.log
+
+    def capture_log(level, message, *args, **kwargs):
+        records.append(message)
+        original_log(level, message, *args, **kwargs)
+
+    monkeypatch.setattr(logger, "log", capture_log)
     try:
-        with caplog.at_level(logging.INFO, logger="uvicorn.error"):
-            log_event("ride.test_event", user_id=user_id, nested={"ok": True})
+        log_event("ride.test_event", user_id=user_id, nested={"ok": True})
     finally:
         reset_request_id(token)
 
-    payload = json.loads(caplog.records[-1].message)
+    payload = json.loads(records[-1])
     assert payload["event"] == "ride.test_event"
     assert payload["request_id"] == request_id
     assert payload["user_id"] == str(user_id)
@@ -38,7 +46,7 @@ def test_log_event_emits_json_with_bound_request_id(caplog) -> None:
 
 
 @pytest.mark.asyncio
-async def test_request_logging_middleware_adds_request_id_header(caplog) -> None:
+async def test_request_logging_middleware_adds_request_id_header(monkeypatch) -> None:
     reset_metrics()
 
     async def app(request: Request) -> JSONResponse:
@@ -58,11 +66,19 @@ async def test_request_logging_middleware_adds_request_id_header(caplog) -> None
     }
     request = Request(scope, receive=_empty_receive)
 
-    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
-        response = await middleware.dispatch(request, app)
+    logger = logging.getLogger("uvicorn.error")
+    records = []
+    original_log = logger.log
+
+    def capture_log(level, message, *args, **kwargs):
+        records.append(message)
+        original_log(level, message, *args, **kwargs)
+
+    monkeypatch.setattr(logger, "log", capture_log)
+    response = await middleware.dispatch(request, app)
 
     assert response.headers["X-Request-ID"] == "req-client-1"
-    payload = json.loads(caplog.records[-1].message)
+    payload = json.loads(records[-1])
     assert payload["event"] == "http.request"
     assert payload["request_id"] == "req-client-1"
     assert payload["path"] == "/v1/test"

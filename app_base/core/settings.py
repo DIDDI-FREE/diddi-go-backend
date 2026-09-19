@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     diddimap_base_url: str = "http://localhost:4000"
     diddimap_access_token: str | None = None
 
+    # Internal Pilotage reports are intentionally bounded to a recent window
+    # so a service caller cannot turn a daily endpoint into an unbounded scan.
+    ride_summary_max_age_days: int = Field(default=31, ge=0, le=3660)
+
     identity_base_url: str | None = None
     identity_jwks_url: str | None = None
     identity_issuer: str = "diddifree-id"

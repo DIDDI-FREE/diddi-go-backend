@@ -14,7 +14,7 @@ from uuid import uuid4
 from app_base.core.redis import create_redis_pool
 from app_base.core.settings import settings
 from app_base.modules.ride.infra.offer_store import OFFER_KEY_PREFIX
-from tests.conftest import full_driver_kyc_documents
+from tests.conftest import full_driver_kyc_documents, full_vehicle_kyv_documents
 from tests.test_ride_flow import create_ride
 
 # Yopougon (the default pickup) and a point ~200 km away in Yamoussoukro,
@@ -229,10 +229,18 @@ async def test_business_driver_with_user_role_can_find_assigned_rides(
             "model": "Yaris",
             "color": "gris",
             "category": "standard",
+            **full_vehicle_kyv_documents(),
         },
         headers=business_driver,
     )
     assert r.status_code == 201, r.text
+    vehicle_id = r.json()["id"]
+    r = await client.post(
+        f"/v1/drivers/vehicles/{vehicle_id}/kyv/approve",
+        json={"notes": "business driver test approval"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 200, r.text
 
     r = await client.post("/v1/drivers/online", json=NEAR, headers=business_driver)
     assert r.status_code == 200, r.text
