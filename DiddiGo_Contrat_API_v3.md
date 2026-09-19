@@ -929,6 +929,15 @@ Un vehicule d'un niveau superieur peut servir une demande inferieure, mais pas
 l'inverse. Cela evite de faire payer `premium` au passager pour envoyer une
 voiture `standard`.
 
+### `GET /rides`
+
+La liste est toujours autorisee avec le role issu du token verifie. Le parametre
+optionnel `role=passenger|driver` choisit uniquement les courses du compte
+connecte : passager, ou chauffeur associe a son profil DiddiGo. Sans parametre,
+un `user` voit ses courses passager et un `admin` voit la liste globale.
+`role=admin` exige un vrai token admin ; un utilisateur ordinaire recoit
+`403 FORBIDDEN_ROLE`. Une valeur de role inconnue retourne `422 INVALID_ROLE`.
+
 ### `GET /rides/{ride_id}`
 
 Reponse partielle :
