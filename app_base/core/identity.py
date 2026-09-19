@@ -42,6 +42,47 @@ class IdentityTokenVerifier:
             raise ApiError(403, "USER_NOT_VERIFIED", "Compte non actif.")
         return payload
 
+    def decode_service_token(
+        self,
+        token: str,
+        *,
+        audience: str,
+        required_scopes: set[str] | frozenset[str] = frozenset(),
+        client_id: str | None = None,
+        expected_subject: str | None = None,
+    ) -> dict:
+        """Verify a DiddiFreeID client-credentials token for this service."""
+        try:
+            signing_key = self._client.get_signing_key_from_jwt(token)
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256"],
+                issuer=self._issuer,
+                audience=audience,
+                options={
+                    "require": ["exp", "iat", "sub", "iss", "aud", "scope", "token_type"],
+                },
+            )
+        except jwt.ExpiredSignatureError as exc:
+            raise ApiError(401, "SERVICE_TOKEN_EXPIRED", "Le token service a expire.") from exc
+        except jwt.InvalidTokenError as exc:
+            raise ApiError(401, "SERVICE_TOKEN_INVALID", f"Token service invalide: {exc}") from exc
+
+        if payload.get("role") != "service" or payload.get("token_type") != "service":
+            raise ApiError(401, "SERVICE_TOKEN_INVALID", "Le token n'est pas un token service.")
+        if expected_subject is not None and payload.get("sub") != expected_subject:
+            raise ApiError(403, "SERVICE_SUBJECT_INVALID", "Service appelant non autorisé.")
+        if payload.get("status") != "active":
+            raise ApiError(403, "SERVICE_TOKEN_INACTIVE", "Le client service n'est pas actif.")
+        if client_id is not None and payload.get("client_id") != client_id:
+            raise ApiError(401, "SERVICE_CLIENT_ID_INVALID", "X-Client-ID ne correspond pas au token.")
+
+        token_scopes = set(str(payload.get("scope", "")).split())
+        if not required_scopes.issubset(token_scopes):
+            raise ApiError(403, "SERVICE_SCOPE_INVALID", "Scopes insuffisants pour cette opération.")
+        return payload
+
 
 def identity_mode_enabled() -> bool:
     return bool(settings.effective_identity_jwks_url)
@@ -52,6 +93,26 @@ def decode_identity_access_token(token: str) -> dict:
     if not jwks_url:
         raise ApiError(500, "IDENTITY_NOT_CONFIGURED", "DiddiFreeID n'est pas configure.")
     return IdentityTokenVerifier(jwks_url, settings.identity_issuer).decode_access_token(token)
+
+
+def decode_identity_service_token(
+    token: str,
+    *,
+    audience: str,
+    required_scopes: set[str] | frozenset[str] = frozenset(),
+    client_id: str | None = None,
+    expected_subject: str | None = None,
+) -> dict:
+    jwks_url = settings.effective_identity_jwks_url
+    if not jwks_url:
+        raise ApiError(500, "IDENTITY_NOT_CONFIGURED", "DiddiFreeID n'est pas configure.")
+    return IdentityTokenVerifier(jwks_url, settings.identity_issuer).decode_service_token(
+        token,
+        audience=audience,
+        required_scopes=required_scopes,
+        client_id=client_id,
+        expected_subject=expected_subject,
+    )
 
 
 def user_id_from_identity_payload(payload: dict) -> UUID:
