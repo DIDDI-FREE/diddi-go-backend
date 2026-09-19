@@ -4,6 +4,8 @@ import re
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app_base.core.errors import ApiError
 from app_base.core.observability import log_event
 from app_base.core.settings import settings
@@ -40,7 +42,11 @@ class RideSummaryService:
 
         start = datetime.combine(selected_day, time.min, tzinfo=ABIDJAN_TIMEZONE).astimezone(UTC)
         end = datetime.combine(next_day, time.min, tzinfo=ABIDJAN_TIMEZONE).astimezone(UTC)
-        totals = await self._repository.summarize_period(start, end)
+        try:
+            totals = await self._repository.summarize_period(start, end)
+        except SQLAlchemyError as exc:
+            log_event("ride.summary.database_error", level="error", date=day)
+            raise ApiError(503, "RIDE_SUMMARY_UNAVAILABLE", "Resume des courses temporairement indisponible.") from exc
         if totals.completed_rides_without_fare:
             log_event(
                 "ride.summary.missing_final_fare",
