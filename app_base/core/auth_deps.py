@@ -16,13 +16,14 @@ Two convenience deps for role gating:
 
 from __future__ import annotations
 
-from fastapi import Depends, Request
+from fastapi import Depends, Header, Request
 from fastapi.security import OAuth2PasswordBearer
 
 from app_base.core.deps import driver_profile_repo, user_repo
 from app_base.core.errors import ApiError
 from app_base.core.identity import (
     decode_identity_access_token,
+    decode_identity_service_token,
     fetch_identity_profile,
     identity_mode_enabled,
     identity_payload_to_user_model,
@@ -34,6 +35,44 @@ from app_base.modules.auth.infra.repositories import SqlAlchemyUserRepository
 from app_base.modules.ride.infra.repositories import SqlAlchemyDriverProfileRepository
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/otp/verify", auto_error=False)
+
+
+def require_identity_service_token(
+    *,
+    audience: str,
+    required_scope: str,
+    expected_subject: str | None = None,
+):
+    """Dependency factory for backend endpoints protected by a service JWT.
+
+    Example for Radar:
+        Depends(require_identity_service_token(
+            audience="diddigo",
+            required_scope="ride-summary:read",
+            expected_subject="service:pilotage",
+        ))
+    """
+
+    async def _dependency(
+        request: Request,
+        token: str | None = Depends(oauth2_scheme),
+        x_client_id: str | None = Header(default=None, alias="X-Client-ID"),
+    ) -> dict:
+        if not token:
+            raise ApiError(401, "TOKEN_MISSING", "Authentification service requise.")
+        if not x_client_id:
+            raise ApiError(401, "SERVICE_CLIENT_ID_MISSING", "X-Client-ID est requis.")
+        claims = decode_identity_service_token(
+            token,
+            audience=audience,
+            required_scopes={required_scope},
+            client_id=x_client_id,
+            expected_subject=expected_subject,
+        )
+        request.state.service_claims = claims
+        return claims
+
+    return _dependency
 
 
 async def get_current_user(
