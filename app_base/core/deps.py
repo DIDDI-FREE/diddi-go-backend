@@ -50,6 +50,7 @@ from app_base.modules.ride.application.emergency_notifications import EmergencyN
 from app_base.modules.ride.application.matching_service import MatchingService
 from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.application.services import RideService
+from app_base.modules.ride.application.summary_service import RideSummaryService
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.infra.offer_store import RedisOfferStore
 from app_base.modules.ride.infra.repositories import (
@@ -60,6 +61,7 @@ from app_base.modules.ride.infra.repositories import (
     SqlAlchemyVehicleRepository,
 )
 from app_base.modules.ride.infra.routing_client import DiddiMapRoutingClient
+from app_base.modules.ride.infra.summary_repository import SqlAlchemyRideSummaryRepository
 
 # --- sessions & resources --------------------------------------------------
 
@@ -102,6 +104,10 @@ async def otp_repo(session: AsyncSession = Depends(session_dep)) -> SqlAlchemyOT
 
 async def ride_repo(session: AsyncSession = Depends(session_dep)) -> SqlAlchemyRideRepository:
     return SqlAlchemyRideRepository(session)
+
+
+async def ride_summary_service(session: AsyncSession = Depends(session_dep)) -> RideSummaryService:
+    return RideSummaryService(SqlAlchemyRideSummaryRepository(session))
 
 
 async def driver_profile_repo(

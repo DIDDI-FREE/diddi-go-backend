@@ -21,6 +21,7 @@ from app_base.modules.ride.presentation.driver_router import admin_vehicle_route
 from app_base.modules.ride.presentation.driver_router import router as driver_router
 from app_base.modules.ride.presentation.router import places_router
 from app_base.modules.ride.presentation.router import router as ride_router
+from app_base.modules.ride.presentation.summary_router import router as ride_summary_router
 from app_base.modules.ride.presentation.websocket import router as ride_ws_router
 
 configure_observability(log_level=settings.log_level)
@@ -42,6 +43,7 @@ app.include_router(notification_router, prefix="/v1")
 app.include_router(capabilities_router, prefix="/v1")
 app.include_router(places_router, prefix="/v1")
 app.include_router(ride_router, prefix="/v1")
+app.include_router(ride_summary_router)
 app.include_router(driver_router, prefix="/v1")
 app.include_router(admin_vehicle_router, prefix="/v1")
 app.include_router(payment_router, prefix="/v1")

@@ -1926,7 +1926,55 @@ Route admin. Termine l'assignation active du vehicule.
 
 ---
 
-## 13. Hors Scope v3.2
+## 13. Resume quotidien interne pour Pilotage
+
+### `GET /internal/v1/ride-summary?date=YYYY-MM-DD`
+
+Cette route serveur-a-serveur requiert un JWT DiddiFreeID signe (JWKS),
+`Authorization: Bearer <service_token>` et `X-Client-ID` identique au claim
+`client_id`. Les claims doivent inclure `iss=diddifree-id`, `aud=diddigo`,
+`sub=service:pilotage`, `role=service`, `token_type=service`, `status=active`
+et le scope `ride-summary:read`. Un JWT utilisateur ne donne aucun acces.
+
+La date est interpretee dans `Africa/Abidjan` et les bornes sont inclusives
+au debut, exclusives a la fin. Par defaut, seules la date courante et les
+31 jours precedents sont admis (`RIDE_SUMMARY_MAX_AGE_DAYS`).
+
+```json
+{
+  "module": "diddigo",
+  "date": "2026-09-19",
+  "timezone": "Africa/Abidjan",
+  "rides_requested": 12,
+  "rides_completed": 8,
+  "completed_fare_total_xof": 24000,
+  "calculated_at": "2026-09-19T12:00:00Z"
+}
+```
+
+`rides_requested` compte les courses par `requested_at` quel que soit leur
+statut actuel. `rides_completed` compte les courses de statut `completed`
+par `completed_at`. Le total additionne uniquement leurs `final_fare` non
+nuls en XOF. Les courses terminees sans prix final restent dans le compte,
+mais pas dans la somme; une alerte est ecrite dans les logs. Les trois
+agregats proviennent d'une seule requete SQL.
+
+| HTTP | Code | Sens |
+|---|---|---|
+| `401` | `TOKEN_MISSING` | Jeton absent |
+| `401` | `SERVICE_CLIENT_ID_MISSING` | En-tete `X-Client-ID` absent |
+| `401` | `SERVICE_CLIENT_ID_INVALID` | Client ID different du jeton |
+| `401` | `SERVICE_TOKEN_INVALID` | Signature, issuer, audience ou claims invalides |
+| `401` | `SERVICE_TOKEN_EXPIRED` | Jeton expire |
+| `403` | `SERVICE_SCOPE_INVALID` | Scope insuffisant |
+| `403` | `SERVICE_SUBJECT_INVALID` | Service appelant non autorise |
+| `403` | `SERVICE_TOKEN_INACTIVE` | Client service inactif |
+| `422` | `INVALID_DATE` | Date mal formee ou invalide |
+| `422` | `SUMMARY_DATE_IN_FUTURE` | Date future |
+| `422` | `SUMMARY_DATE_OUT_OF_RANGE` | Date hors fenetre configuree |
+| `500` | `INVALID_RIDE_FARE` | Montant XOF non entier, sans troncature silencieuse |
+
+## 14. Hors Scope v3.2
 
 ```text
 DiddiSend

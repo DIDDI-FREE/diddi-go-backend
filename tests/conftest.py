@@ -295,7 +295,7 @@ async def driver_factory(client, otp_code, phone_factory, admin_headers):
     """
     from tests.test_auth_flow import register_and_login
 
-    async def _make(location: dict[str, float] | None = None) -> dict[str, str]:
+    async def _make(location: dict[str, float] | None = None, comfort_level: str = "standard") -> dict[str, str]:
         token = await register_and_login(client, otp_code, phone_factory("+22508"), role="driver")
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -325,10 +325,20 @@ async def driver_factory(client, otp_code, phone_factory, admin_headers):
                 "model": "Yaris",
                 "color": "gris",
                 "category": "standard",
+                "comfort_level": comfort_level,
+                **full_vehicle_kyv_documents(),
             },
             headers=headers,
         )
         assert r.status_code == 201, r.text
+        vehicle_id = r.json()["id"]
+
+        r = await client.post(
+            f"/v1/drivers/vehicles/{vehicle_id}/kyv/approve",
+            json={"notes": "test fixture approval"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
 
         r = await client.post("/v1/drivers/online", json=location or ABIDJAN_PICKUP, headers=headers)
         assert r.status_code == 200, r.text
@@ -345,6 +355,22 @@ def full_driver_kyc_documents() -> dict[str, str]:
         "national_id_document_file_id": str(uuid.uuid4()),
         "national_id_back_document_file_id": str(uuid.uuid4()),
         "selfie_document_file_id": str(uuid.uuid4()),
+    }
+
+
+def full_vehicle_kyv_documents() -> dict[str, str]:
+    return {
+        key: str(uuid.uuid4())
+        for key in (
+            "registration_document_file_id",
+            "insurance_document_file_id",
+            "technical_inspection_document_file_id",
+            "vehicle_front_photo_file_id",
+            "vehicle_back_photo_file_id",
+            "vehicle_left_photo_file_id",
+            "vehicle_right_photo_file_id",
+            "vehicle_interior_photo_file_id",
+        )
     }
 
 
