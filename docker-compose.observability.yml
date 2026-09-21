@@ -1,4 +1,12 @@
 services:
+  app:
+    labels:
+      diddifree_observability: diddigo
+    environment:
+      LOKI_BASE_URL: ${LOKI_BASE_URL:-http://loki:3100}
+      LOKI_DIDDIGO_SERVICE_LABEL: ${LOKI_DIDDIGO_SERVICE_LABEL:-app}
+      LOKI_TIMEOUT_SECONDS: ${LOKI_TIMEOUT_SECONDS:-5}
+
   prometheus:
     image: prom/prometheus:v2.55.1
     command:
@@ -30,7 +38,28 @@ services:
       - "${GRAFANA_PORT:-13000}:3000"
     depends_on:
       - prometheus
+      - loki
+
+  loki:
+    image: grafana/loki:3.2.1
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./docker/loki/config.yml:/etc/loki/config.yml:ro
+      - loki-data:/loki
+
+  promtail:
+    image: grafana/promtail:3.2.1
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./docker/promtail/config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail-positions:/var/lib/promtail
+    depends_on:
+      - loki
 
 volumes:
   prometheus-data:
   grafana-data:
+  loki-data:
+  promtail-positions:
