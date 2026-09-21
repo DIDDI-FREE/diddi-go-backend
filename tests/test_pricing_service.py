@@ -52,7 +52,16 @@ class FakeRouting:
         return None
 
     async def analyze_trace(self, trace_id):
-        return SimpleNamespace(actual_distance_km=Decimal("12.5"), actual_duration_seconds=900)
+        return SimpleNamespace(
+            actual_distance_km=Decimal("12.5"),
+            actual_duration_seconds=900,
+            usable_for_scoring=True,
+            recommendation=None,
+            quality_label="good",
+            quality_score=Decimal("0.95"),
+            points_count=100,
+            usable_points_count=98,
+        )
 
 
 class FakeRideRepo:
@@ -61,6 +70,19 @@ class FakeRideRepo:
 
     async def list_route_points(self, ride_id):
         return self._points
+
+
+class CompletedRideRepo:
+    def __init__(self, ride):
+        self.ride = ride
+        self.save_calls = 0
+
+    async def find_by_id(self, ride_id):
+        return self.ride
+
+    async def save(self, ride):
+        self.save_calls += 1
+        return ride
 
 
 class FakePricingRules:
@@ -175,6 +197,80 @@ async def test_completed_ride_pricing_uses_diddimap_trace_metrics():
     assert ride.platform_commission is None
     assert ride.driver_payout_estimate is None
     assert routing.trace_points == points
+
+
+@pytest.mark.asyncio
+async def test_completed_ride_keeps_locked_fare_when_trace_is_ignored():
+    ride_id = uuid4()
+    points = [
+        RideRoutePoint(
+            ride_id=ride_id,
+            location=GeoPoint(lat=5.352, lng=-3.997),
+            recorded_at=datetime.now(UTC),
+        )
+    ]
+    routing = FakeRouting()
+
+    async def ignored_analysis(trace_id):
+        return SimpleNamespace(
+            actual_distance_km=None,
+            actual_duration_seconds=None,
+            usable_for_scoring=False,
+            recommendation="ignore_for_scoring",
+            quality_label="weak",
+            quality_score=Decimal("0.48"),
+            points_count=2,
+            usable_points_count=2,
+        )
+
+    routing.analyze_trace = ignored_analysis
+    service = RideService(
+        ride_repo=FakeRideRepo(points),
+        routing=routing,
+        pricing_rules=FakePricingRules(),
+    )
+    ride = Ride(
+        id=ride_id,
+        passenger_user_id=uuid4(),
+        status=RideStatus.IN_PROGRESS,
+        pickup_location=GeoPoint(lat=5.3599, lng=-4.0083),
+        dropoff_location=GeoPoint(lat=5.3167, lng=-4.0333),
+        estimated_fare=Decimal("3100"),
+        final_fare=Decimal("3100"),
+    )
+
+    await service._apply_actual_pricing_if_possible(ride)
+
+    assert ride.final_fare == Decimal("3100")
+    assert ride.actual_distance_km is None
+    assert ride.actual_duration_seconds is None
+    assert ride.actual_pricing_fare is None
+
+
+@pytest.mark.asyncio
+async def test_completed_ride_retry_returns_existing_result_without_reprocessing():
+    ride = Ride(
+        id=uuid4(),
+        passenger_user_id=uuid4(),
+        status=RideStatus.COMPLETED,
+        estimated_fare=Decimal("3100"),
+        final_fare=Decimal("3100"),
+    )
+    repo = CompletedRideRepo(ride)
+    routing = FakeRouting()
+    service = RideService(ride_repo=repo, routing=routing, pricing_rules=FakePricingRules())
+
+    result = await service.update_status(
+        ride.id,
+        RideStatus.COMPLETED,
+        actor_user_id=uuid4(),
+        actor_role="driver",
+    )
+
+    assert result["status"] == "completed"
+    assert result["final_fare"] == 3100
+    assert repo.save_calls == 0
+    assert routing.trace_points == []
 
 
 @pytest.mark.asyncio

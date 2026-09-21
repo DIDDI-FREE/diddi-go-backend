@@ -25,8 +25,14 @@ class RouteTracePoint(Protocol):
 
 
 class RouteTraceAnalysis(Protocol):
-    actual_distance_km: Decimal
-    actual_duration_seconds: int
+    actual_distance_km: Decimal | None
+    actual_duration_seconds: int | None
+    usable_for_scoring: bool
+    recommendation: str | None
+    quality_label: str | None
+    quality_score: Decimal | None
+    points_count: int | None
+    usable_points_count: int | None
 
 
 class RoutingProvider(Protocol):

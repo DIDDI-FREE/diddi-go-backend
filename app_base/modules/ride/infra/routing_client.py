@@ -47,8 +47,14 @@ class GeocodeResultItem:
 
 @dataclass(frozen=True)
 class RouteTraceAnalysisResult:
-    actual_distance_km: Decimal
-    actual_duration_seconds: int
+    actual_distance_km: Decimal | None
+    actual_duration_seconds: int | None
+    usable_for_scoring: bool = True
+    recommendation: str | None = None
+    quality_label: str | None = None
+    quality_score: Decimal | None = None
+    points_count: int | None = None
+    usable_points_count: int | None = None
 
 
 @dataclass
@@ -236,6 +242,7 @@ class DiddiMapRoutingClient:
             self._trace_path(f"/map-traces/{trace_id}/positions"),
             payload,
             unavailable_message="DiddiMap trace positions unavailable",
+            tolerated_conflict_codes={"trace_already_finished", "trace_not_accepting_positions"},
         )
 
     async def finish_trace(self, trace_id: str, *, finished_at: datetime) -> None:
@@ -243,6 +250,7 @@ class DiddiMapRoutingClient:
             self._trace_path(f"/map-traces/{trace_id}/finish"),
             {"finished_at": _iso(finished_at)},
             unavailable_message="DiddiMap trace finish unavailable",
+            tolerated_conflict_codes={"trace_already_finished"},
         )
 
     async def analyze_trace(self, trace_id: str) -> RouteTraceAnalysisResult:
@@ -254,21 +262,49 @@ class DiddiMapRoutingClient:
         if not isinstance(payload, dict):
             logger.error("DiddiMap trace analyze returned non-object payload: %r", payload)
             raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Analyse DiddiMap invalide.")
+        recommendation = _optional_string(payload.get("recommendation"))
+        quality_label = _optional_string(payload.get("quality_label"))
+        quality_score = _optional_decimal(payload.get("quality_score"))
+        points_count = _optional_int(payload.get("points_count"))
+        usable_points_count = _optional_int(payload.get("usable_points_count"))
         try:
             actual_distance_m = Decimal(str(payload["actual_distance_m"]))
             actual_duration_seconds = int(payload["actual_duration_s"])
         except (KeyError, TypeError, ValueError) as exc:
             logger.exception("DiddiMap trace analyze sent invalid metrics: %r", payload)
             raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Metriques DiddiMap invalides.") from exc
+        if recommendation == "ignore_for_scoring":
+            return RouteTraceAnalysisResult(
+                actual_distance_km=None,
+                actual_duration_seconds=None,
+                usable_for_scoring=False,
+                recommendation=recommendation,
+                quality_label=quality_label,
+                quality_score=quality_score,
+                points_count=points_count,
+                usable_points_count=usable_points_count,
+            )
         if actual_distance_m <= 0 or actual_duration_seconds <= 0:
             logger.error("DiddiMap trace analyze sent unusable metrics: %r", payload)
             raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Metriques DiddiMap inutilisables.")
         return RouteTraceAnalysisResult(
             actual_distance_km=actual_distance_m / Decimal(1000),
             actual_duration_seconds=actual_duration_seconds,
+            recommendation=recommendation,
+            quality_label=quality_label,
+            quality_score=quality_score,
+            points_count=points_count,
+            usable_points_count=usable_points_count,
         )
 
-    async def _post_json(self, path: str, payload: dict, *, unavailable_message: str) -> object:
+    async def _post_json(
+        self,
+        path: str,
+        payload: dict,
+        *,
+        unavailable_message: str,
+        tolerated_conflict_codes: set[str] | None = None,
+    ) -> object:
         started = time.perf_counter()
         try:
             response = await self._http().post(path, json=payload, headers=self._auth_headers())
@@ -281,7 +317,35 @@ class DiddiMapRoutingClient:
                 duration_ms=_duration_ms(started),
             )
             return result
-        except httpx.HTTPError as exc:
+        except httpx.HTTPStatusError as exc:
+            provider_code = _provider_error_code(exc.response)
+            if exc.response.status_code == 409 and provider_code in (tolerated_conflict_codes or set()):
+                log_event(
+                    "diddimap.request.conflict_tolerated",
+                    level="warning",
+                    path=path,
+                    operation=_operation_from_path(path),
+                    duration_ms=_duration_ms(started),
+                    provider_code=provider_code,
+                )
+                return {"provider_code": provider_code, "idempotent": True}
+            logger.warning("%s: status=%s code=%s", unavailable_message, exc.response.status_code, provider_code)
+            log_event(
+                "diddimap.request.rejected",
+                level="warning",
+                path=path,
+                operation=_operation_from_path(path),
+                duration_ms=_duration_ms(started),
+                status_code=exc.response.status_code,
+                provider_code=provider_code,
+            )
+            raise ApiError(
+                exc.response.status_code,
+                "DIDDIMAP_BUSINESS_ERROR",
+                "DiddiMap a refuse l'operation.",
+                {"provider_code": provider_code},
+            ) from exc
+        except httpx.RequestError as exc:
             logger.exception("%s: %s", unavailable_message, exc)
             log_event(
                 "diddimap.request.failed",
@@ -374,6 +438,45 @@ class DiddiMapRoutingClient:
             except (KeyError, TypeError, ValueError):
                 logger.warning("Skipping malformed DiddiMap geocode item: %r", item)
         return results
+
+
+def _provider_error_code(response: httpx.Response) -> str | None:
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    error = payload.get("error")
+    if isinstance(error, dict) and isinstance(error.get("code"), str):
+        return error["code"]
+    detail = payload.get("detail")
+    if isinstance(detail, dict) and isinstance(detail.get("code"), str):
+        return detail["code"]
+    code = payload.get("code")
+    return code if isinstance(code, str) else None
+
+
+def _optional_string(value: object) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _optional_decimal(value: object) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _abidjanmaps_profile(profile: str) -> str:
