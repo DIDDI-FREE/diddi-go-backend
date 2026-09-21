@@ -292,10 +292,11 @@ tarifaire DiddiGo par defaut si aucune regle n'est encore seedee. Au passage
 `/api/v1/integrations/diddigo/map-traces/start` et envoie le `source_ride_id`
 de la course. Au passage `completed`, il envoie les points GPS stockes
 localement, demande l'analyse DiddiMap, puis
-recalcule `final_fare`, `platform_commission` et le montant net chauffeur avec
-la distance/duree reelles. Si DiddiMap echoue alors que des points GPS existent,
-la finalisation echoue explicitement avec `DIDDIMAP_UNAVAILABLE` ou
-`DIDDIMAP_INVALID_RESPONSE`; il n'y a pas de fallback silencieux.
+calcule les metriques reelles d'analytics sans modifier `final_fare`, qui reste
+le montant estime et accepte au depart. Si DiddiMap echoue alors que des points
+GPS existent, la course est cloturee avec le prix verrouille et
+`trace_analysis_status=provider_error`; le log structure
+`ride.actual_pricing.failed` rend ce fallback explicite.
 
 ---
 

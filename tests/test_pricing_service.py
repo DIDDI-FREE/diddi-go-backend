@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 
+from app_base.core.errors import ApiError
 from app_base.modules.ride.application.services import RideService, _ride_detail_payload
 from app_base.modules.ride.domain.entities import (
     ComfortLevel,
@@ -194,6 +195,9 @@ async def test_completed_ride_pricing_uses_diddimap_trace_metrics():
     assert ride.final_fare == Decimal("3100")
     assert ride.actual_pricing_fare == Decimal("3250")
     assert ride.pricing_delta == Decimal("150")
+    assert ride.trace_analysis_status == "applied"
+    assert ride.trace_quality_label == "good"
+    assert ride.trace_points_count == 100
     assert ride.platform_commission is None
     assert ride.driver_payout_estimate is None
     assert routing.trace_points == points
@@ -245,6 +249,56 @@ async def test_completed_ride_keeps_locked_fare_when_trace_is_ignored():
     assert ride.actual_distance_km is None
     assert ride.actual_duration_seconds is None
     assert ride.actual_pricing_fare is None
+    assert ride.trace_analysis_status == "ignored"
+    assert ride.trace_recommendation == "ignore_for_scoring"
+    assert ride.trace_quality_label == "weak"
+
+
+@pytest.mark.asyncio
+async def test_completion_survives_diddimap_failure_and_records_explicit_fallback():
+    ride_id = uuid4()
+    ride = Ride(
+        id=ride_id,
+        passenger_user_id=uuid4(),
+        status=RideStatus.IN_PROGRESS,
+        pickup_location=GeoPoint(lat=5.3599, lng=-4.0083),
+        dropoff_location=GeoPoint(lat=5.3167, lng=-4.0333),
+        estimated_fare=Decimal("3100"),
+        final_fare=Decimal("3100"),
+    )
+    point = RideRoutePoint(
+        ride_id=ride_id,
+        location=GeoPoint(lat=5.352, lng=-3.997),
+        recorded_at=datetime.now(UTC),
+    )
+
+    class FailingRouting(FakeRouting):
+        async def append_trace_positions(self, trace_id, points):
+            raise ApiError(502, "DIDDIMAP_AUTHENTICATION_FAILED", "service auth rejected")
+
+    class Repo(CompletedRideRepo):
+        async def list_route_points(self, requested_ride_id):
+            return [point]
+
+        async def record_status_transition(self, transition):
+            return None
+
+    repo = Repo(ride)
+    service = RideService(ride_repo=repo, routing=FailingRouting(), pricing_rules=FakePricingRules())
+
+    result = await service.update_status(
+        ride.id,
+        RideStatus.COMPLETED,
+        actor_user_id=uuid4(),
+        actor_role="driver",
+    )
+
+    assert result["status"] == "completed"
+    assert result["final_fare"] == 3100
+    assert result["trace_analysis"]["status"] == "provider_error"
+    assert result["trace_analysis"]["error_code"] is None
+    assert ride.trace_analysis_error_code == "DIDDIMAP_AUTHENTICATION_FAILED"
+    assert repo.save_calls == 1
 
 
 @pytest.mark.asyncio

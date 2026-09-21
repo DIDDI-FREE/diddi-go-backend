@@ -16,8 +16,9 @@ from decimal import Decimal
 
 import httpx
 
+from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
-from app_base.core.observability import log_event
+from app_base.core.observability import current_request_id, log_event
 from app_base.shared_kernel.contracts.routing import GeoPoint, RouteTracePoint
 from app_base.shared_kernel.types import GeoPoint as _GeoPoint
 
@@ -75,14 +76,18 @@ class DiddiMapRoutingClient:
         return self._client
 
     def _auth_headers(self) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        request_id = current_request_id()
+        if request_id:
+            headers["X-Request-ID"] = request_id
         if self.service_token:
-            headers = {"Authorization": f"Bearer {self.service_token}"}
+            headers["Authorization"] = f"Bearer {self.service_token}"
             if self.service_client_id:
                 headers["X-Client-ID"] = self.service_client_id
             return headers
-        if not self.access_token:
-            return {}
-        return {"Authorization": f"Bearer {self.access_token}"}
+        if self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
+        return headers
 
     def _trace_path(self, path: str) -> str:
         if self.service_token:
@@ -102,7 +107,9 @@ class DiddiMapRoutingClient:
         }
         started = time.perf_counter()
         try:
-            response = await self._http().post("/api/v1/route", json=request_payload)
+            response = await self._http().post(
+                "/api/v1/route", json=request_payload, headers=self._auth_headers()
+            )
             response.raise_for_status()
             payload = response.json()
         except httpx.HTTPError as exc:
@@ -153,7 +160,9 @@ class DiddiMapRoutingClient:
             params["limit"] = str(limit)
         started = time.perf_counter()
         try:
-            response = await self._http().get("/api/v1/geocoding/search", params=params)
+            response = await self._http().get(
+                "/api/v1/geocoding/search", params=params, headers=self._auth_headers()
+            )
             response.raise_for_status()
             payload = response.json()
         except httpx.HTTPError as exc:
@@ -329,6 +338,31 @@ class DiddiMapRoutingClient:
                     provider_code=provider_code,
                 )
                 return {"provider_code": provider_code, "idempotent": True}
+            if exc.response.status_code in {401, 403}:
+                logger.error(
+                    "%s: provider authentication rejected status=%s code=%s",
+                    unavailable_message,
+                    exc.response.status_code,
+                    provider_code,
+                )
+                log_event(
+                    "diddimap.authentication.failed",
+                    level="error",
+                    path=path,
+                    operation=_operation_from_path(path),
+                    duration_ms=_duration_ms(started),
+                    provider_status_code=exc.response.status_code,
+                    provider_code=provider_code,
+                )
+                raise ApiError(
+                    502,
+                    ErrorCode.DIDDIMAP_AUTHENTICATION_FAILED,
+                    "Authentification du service geographique refusee.",
+                    {
+                        "provider_status_code": exc.response.status_code,
+                        "provider_code": provider_code,
+                    },
+                ) from exc
             logger.warning("%s: status=%s code=%s", unavailable_message, exc.response.status_code, provider_code)
             log_event(
                 "diddimap.request.rejected",
@@ -341,7 +375,7 @@ class DiddiMapRoutingClient:
             )
             raise ApiError(
                 exc.response.status_code,
-                "DIDDIMAP_BUSINESS_ERROR",
+                ErrorCode.DIDDIMAP_BUSINESS_ERROR,
                 "DiddiMap a refuse l'operation.",
                 {"provider_code": provider_code},
             ) from exc

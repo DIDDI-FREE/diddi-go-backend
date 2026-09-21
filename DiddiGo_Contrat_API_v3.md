@@ -749,6 +749,9 @@ Erreurs :
 |---|---|---|
 | `503` | `DIDDIMAP_UNAVAILABLE` | DiddiMap indisponible ou timeout |
 | `502` | `DIDDIMAP_INVALID_RESPONSE` | reponse DiddiMap invalide |
+| `502` | `DIDDIMAP_AUTHENTICATION_FAILED` | authentification interne DiddiGo vers DiddiMap refusee; ce code ne signifie pas que le JWT utilisateur a expire |
+| `409` | `DIDDIMAP_BUSINESS_ERROR` | conflit metier DiddiMap non idempotent |
+| `422` | `VALIDATION_ERROR` | latitude hors `[-90, 90]` ou longitude hors `[-180, 180]` |
 
 ---
 
@@ -828,10 +831,12 @@ terminer la course, recupere `actual_distance_km` et
 `pricing_delta` pour analytics. DiddiGo ne remplace pas le prix facture par ce
 prix theorique reel.
 
-Si aucun point GPS n'a ete recu, DiddiGo garde le prix estime et logge
-explicitement `ride_actual_pricing_skipped reason=no_route_samples`. Si des
-points GPS existent mais que DiddiMap trace/analyze echoue, DiddiGo retourne
-une erreur explicite et ne fait pas de fallback silencieux.
+Si aucun point GPS n'a ete recu, DiddiGo garde le prix estime et enregistre
+`trace_analysis.status=no_samples`. Si DiddiMap retourne
+`ignore_for_scoring`, le statut vaut `ignored`. Si l'integration DiddiMap
+echoue, la course est tout de meme cloturee avec le prix initial verrouille et
+le statut vaut `provider_error`; l'erreur est journalisee via
+`ride.actual_pricing.failed`. Ce fallback est donc explicite et observable.
 
 Regle commerciale :
 
@@ -968,6 +973,15 @@ Reponse partielle :
     "actual_pricing_fare": null,
     "pricing_delta": null
   },
+  "trace_analysis": {
+    "status": "pending",
+    "error_code": null,
+    "recommendation": null,
+    "quality_label": null,
+    "quality_score": null,
+    "points_count": null,
+    "usable_points_count": null
+  },
   "payment": {
     "method": "cash",
     "transaction_id": null
@@ -1024,6 +1038,17 @@ Le backend logge `ride_map_trace_started` au debut de course,
 `ride_actual_pricing_applied` quand le prix final reel est calcule, ou
 `ride_actual_pricing_skipped reason=no_route_samples` si aucune trace chauffeur
 n'a ete recue.
+
+Valeurs de `trace_analysis.status` :
+
+| Statut | Sens |
+|---|---|
+| `pending` | course non terminee ou analyse pas encore lancee |
+| `applied` | metriques reelles calculees et conservees pour analytics |
+| `ignored` | DiddiMap recommande `ignore_for_scoring` |
+| `no_samples` | aucun point GPS chauffeur disponible |
+| `provider_error` | erreur DiddiMap; course cloturee au prix verrouille |
+| `legacy_not_analyzed` | ancienne course terminee avant le suivi du statut |
 
 ### Pipeline DiddiMap Core retenu
 

@@ -167,6 +167,13 @@ class Ride:
     actual_pricing_fare: Decimal | None = None
     pricing_delta: Decimal | None = None
     map_trace_id: str | None = None
+    trace_analysis_status: str | None = None
+    trace_analysis_error_code: str | None = None
+    trace_recommendation: str | None = None
+    trace_quality_label: str | None = None
+    trace_quality_score: Decimal | None = None
+    trace_points_count: int | None = None
+    trace_usable_points_count: int | None = None
     payment_method: PaymentMethod = PaymentMethod.CASH
 
     # Cross-module refs (logical — resolved via module APIs, never via SQL)

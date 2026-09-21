@@ -369,6 +369,13 @@ class SqlAlchemyRideRepository:
         row.actual_pricing_fare = ride.actual_pricing_fare
         row.pricing_delta = ride.pricing_delta
         row.map_trace_id = ride.map_trace_id
+        row.trace_analysis_status = ride.trace_analysis_status
+        row.trace_analysis_error_code = ride.trace_analysis_error_code
+        row.trace_recommendation = ride.trace_recommendation
+        row.trace_quality_label = ride.trace_quality_label
+        row.trace_quality_score = ride.trace_quality_score
+        row.trace_points_count = ride.trace_points_count
+        row.trace_usable_points_count = ride.trace_usable_points_count
         row.payment_method = ride.payment_method.value
         row.driver_id = ride.driver_id
         row.vehicle_id = ride.vehicle_id
@@ -427,6 +434,13 @@ class SqlAlchemyRideRepository:
             actual_pricing_fare=Decimal(str(row.actual_pricing_fare)) if row.actual_pricing_fare is not None else None,
             pricing_delta=Decimal(str(row.pricing_delta)) if row.pricing_delta is not None else None,
             map_trace_id=row.map_trace_id,
+            trace_analysis_status=row.trace_analysis_status,
+            trace_analysis_error_code=row.trace_analysis_error_code,
+            trace_recommendation=row.trace_recommendation,
+            trace_quality_label=row.trace_quality_label,
+            trace_quality_score=Decimal(str(row.trace_quality_score)) if row.trace_quality_score is not None else None,
+            trace_points_count=row.trace_points_count,
+            trace_usable_points_count=row.trace_usable_points_count,
             payment_method=PaymentMethod(row.payment_method),
             driver_id=row.driver_id,
             vehicle_id=row.vehicle_id,
