@@ -1,4 +1,4 @@
-# DiddiGo - Contrat API v3.3
+# DiddiGo - Contrat API v3.4
 
 **Destine a :** equipes Frontend / Mobile / Backend DiddiGo
 **Base URL staging :** `https://go-staging.diddifree.com/v1`
@@ -50,7 +50,7 @@ Le catalogue complet des codes est maintenu dans `DiddiGo_Error_Catalog.md`.
 | `vehicle.category` | `standard`, `comfort`, `van` |
 | `comfort_level` | `standard`, `comfort`, `premium` |
 | `payment_method` | `cash`, `wave`, `diddipay` |
-| `ride.status` | `requested`, `matched`, `driver_en_route`, `in_progress`, `completed`, `cancelled_by_passenger`, `cancelled_by_driver`, `no_driver_found` |
+| `ride.status` | `requested`, `matched`, `driver_en_route`, `in_progress`, `waiting`, `completed`, `cancelled_by_passenger`, `cancelled_by_driver`, `no_driver_found` |
 | `payment.status` | `pending`, `requires_action`, `processing`, `succeeded`, `failed`, `cancelled`, `partially_refunded`, `refunded`, `collected`, `disputed` |
 | `wallet.direction` | `credit`, `debit` |
 | `wallet.entry_type` | `ride_payout`, `platform_commission`, `topup`, `adjustment` |
@@ -1976,7 +1976,81 @@ agregats proviennent d'une seule requete SQL.
 | `503` | `RIDE_SUMMARY_UNAVAILABLE` | Base de donnees momentanement indisponible |
 | `503` | `SERVICE_JWKS_UNAVAILABLE` | Cles JWKS temporairement inaccessibles |
 
-## 14. Hors Scope v3.2
+## 14. Attente pendant une course
+
+L'attente manuelle est disponible uniquement pendant une course `in_progress`.
+Le chauffeur doit envoyer sa position WebSocket avec `speed_kmh`; DiddiGo
+refuse l'activation si cette telemetrie est absente/perimee ou si la vitesse
+depasse le seuil configure. Les horodatages et le montant sont calcules par le
+serveur. Chaque minute commencee est facturee, avec un minimum d'une minute par
+periode d'attente.
+
+### Demarrer l'attente
+
+`POST /v1/rides/{ride_id}/waiting/start`
+
+Reponse `200` :
+
+```json
+{
+  "ride_id": "uuid",
+  "status": "waiting",
+  "waiting": {
+    "active": true,
+    "started_at": "2026-09-21T10:00:00Z",
+    "duration_seconds": 0,
+    "fee": 0,
+    "rate_per_minute": 100
+  }
+}
+```
+
+### Arreter l'attente
+
+`POST /v1/rides/{ride_id}/waiting/stop`
+
+La reponse reprend la meme structure avec `status=in_progress`, `active=false`,
+la duree cumulee et le supplement cumule. Une reprise du mouvement au-dessus
+du seuil arrete aussi automatiquement l'attente.
+
+Le detail `GET /v1/rides/{ride_id}` expose `waiting` et
+`pricing.waiting_fee`. A la fin, `final_fare` vaut le prix estime verrouille
+plus le supplement d'attente. Commission plateforme et net chauffeur sont
+recalcules sur ce montant final.
+
+Evenements WebSocket envoyes aux abonnes de la course :
+
+```text
+ride.status_changed  status=waiting|in_progress
+ride.waiting_changed ride_id, status, waiting, at
+```
+
+Le message chauffeur `driver.location_push` accepte maintenant `speed_kmh` :
+
+```json
+{
+  "event": "driver.location_push",
+  "ride_id": "uuid",
+  "location": {"lat": 5.35, "lng": -4.00},
+  "heading": 90,
+  "speed_kmh": 0.0
+}
+```
+
+| HTTP | Code | Sens |
+|---|---|---|
+| `403` | `RIDE_NOT_OWNED_BY_USER` | Chauffeur non assigne |
+| `409` | `WAITING_INVALID_RIDE_STATUS` | Course pas encore demarree |
+| `409` | `WAITING_TELEMETRY_REQUIRED` | Vitesse recente absente |
+| `409` | `VEHICLE_NOT_STOPPED` | Vitesse superieure au seuil |
+| `409` | `WAITING_NOT_ACTIVE` | Arret demande sans attente active |
+| `409` | `WAITING_STOP_ENDPOINT_REQUIRED` | Utiliser `/waiting/stop`, pas le PATCH generique |
+
+Configuration backend : `WAITING_PRICE_PER_MINUTE_XOF` (defaut `100`),
+`WAITING_STATIONARY_SPEED_THRESHOLD_KMH` (defaut `3`) et
+`WAITING_TELEMETRY_TTL_SECONDS` (defaut `30`).
+
+## 15. Hors Scope v3.4
 
 ```text
 DiddiSend

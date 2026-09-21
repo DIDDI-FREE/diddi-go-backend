@@ -92,6 +92,11 @@ Ces routes restent utiles en local/dev si l'auth locale est active.
 | `422` | `INVALID_CANCEL_REASON` | Motif d'annulation invalide |
 | `422` | `EMERGENCY_CONTACT_REQUIRED` | Contact d'urgence incomplet, telephone WhatsApp ou e-mail requis |
 | `422` | `INVALID_STATUS` | Statut inconnu |
+| `409` | `WAITING_INVALID_RIDE_STATUS` | L'attente exige une course en cours |
+| `409` | `WAITING_TELEMETRY_REQUIRED` | Aucune vitesse GPS recente disponible |
+| `409` | `VEHICLE_NOT_STOPPED` | Le vehicule roule encore |
+| `409` | `WAITING_NOT_ACTIVE` | Aucune attente active a arreter |
+| `409` | `WAITING_STOP_ENDPOINT_REQUIRED` | La reprise doit passer par la route dediee |
 | `422` | `RATING_OUT_OF_RANGE` | Note hors intervalle 1 a 5 |
 | `409` | `RATING_ALREADY_SUBMITTED` | Note deja envoyee pour ce role |
 

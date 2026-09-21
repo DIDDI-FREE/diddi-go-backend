@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     driver_min_balance: int = 0
     driver_max_estimated_commission: int = 0
 
+    # Manual ride waiting. GPS drift is tolerated up to the configured speed;
+    # telemetry older than the Redis TTL cannot authorize a waiting start.
+    waiting_price_per_minute_xof: int = Field(default=100, ge=0)
+    waiting_stationary_speed_threshold_kmh: float = Field(default=3.0, ge=0)
+    waiting_telemetry_ttl_seconds: int = Field(default=30, ge=5, le=300)
+
     emergency_support_email: str = "direction.generale@diddifree.com"
     emergency_support_whatsapp: str | None = None
     emergency_whatsapp_webhook_url: str | None = None

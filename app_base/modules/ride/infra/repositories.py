@@ -41,6 +41,7 @@ _ACTIVE_STATES = {
     RideStatus.MATCHED,
     RideStatus.DRIVER_EN_ROUTE,
     RideStatus.IN_PROGRESS,
+    RideStatus.WAITING,
 }
 
 
@@ -87,6 +88,20 @@ class SqlAlchemyRideRepository:
         if row is None:
             return None
         return self._to_domain(row)
+
+    async def find_active_by_driver_user_id(self, user_id: UUID) -> Ride | None:
+        result = await self._session.execute(
+            select(orm.RideModel)
+            .join(orm.DriverProfileModel, orm.RideModel.driver_id == orm.DriverProfileModel.id)
+            .where(
+                orm.DriverProfileModel.user_id == user_id,
+                orm.RideModel.status.in_([status.value for status in _ACTIVE_STATES]),
+            )
+            .order_by(orm.RideModel.requested_at.desc())
+            .limit(1),
+        )
+        row = result.scalar_one_or_none()
+        return self._to_domain(row) if row is not None else None
 
     async def list_by(
         self,
@@ -334,6 +349,10 @@ class SqlAlchemyRideRepository:
         row.cancellation_reason = ride.cancellation_reason
         row.estimated_fare = ride.estimated_fare
         row.final_fare = ride.final_fare
+        row.waiting_started_at = ride.waiting_started_at
+        row.waiting_duration_seconds = ride.waiting_duration_seconds
+        row.waiting_fee = ride.waiting_fee
+        row.waiting_rate_per_minute = ride.waiting_rate_per_minute
         row.currency = ride.currency
         row.distance_km = ride.distance_km
         row.duration_seconds = ride.duration_seconds
@@ -384,6 +403,12 @@ class SqlAlchemyRideRepository:
             cancellation_reason=row.cancellation_reason,
             estimated_fare=Decimal(str(row.estimated_fare)) if row.estimated_fare is not None else None,
             final_fare=Decimal(str(row.final_fare)) if row.final_fare is not None else None,
+            waiting_started_at=row.waiting_started_at,
+            waiting_duration_seconds=row.waiting_duration_seconds,
+            waiting_fee=Decimal(str(row.waiting_fee)),
+            waiting_rate_per_minute=Decimal(str(row.waiting_rate_per_minute))
+            if row.waiting_rate_per_minute is not None
+            else None,
             currency=row.currency,
             distance_km=Decimal(str(row.distance_km)) if row.distance_km is not None else None,
             duration_seconds=row.duration_seconds,

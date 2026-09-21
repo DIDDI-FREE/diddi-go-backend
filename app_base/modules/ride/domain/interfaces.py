@@ -41,6 +41,8 @@ class RideRepository(Protocol):
 
     async def find_by_share_token(self, token: str) -> Ride | None: ...
 
+    async def find_active_by_driver_user_id(self, user_id: UUID) -> Ride | None: ...
+
     async def list_by(
         self,
         *,
@@ -57,7 +59,7 @@ class RideRepository(Protocol):
 
     async def has_active_ride(self, passenger_user_id: UUID) -> bool:
         """A passenger cannot have two rides in active states simultaneously.
-        Active = {requested, matched, driver_en_route, in_progress}."""
+        Active = {requested, matched, driver_en_route, in_progress, waiting}."""
         ...
 
     async def record_status_transition(self, transition: RideStatusTransition) -> None: ...
@@ -140,7 +142,11 @@ class DriverLocationService(Protocol):
     carry), not `driver_profiles.id`.
     """
 
-    async def update_position(self, driver_id: UUID, location: GeoPoint) -> None: ...
+    async def update_position(
+        self, driver_id: UUID, location: GeoPoint, *, speed_kmh: float | None = None,
+    ) -> None: ...
+
+    async def get_speed_kmh(self, driver_id: UUID) -> float | None: ...
 
     async def set_available(self, driver_id: UUID, *, available: bool) -> None:
         """Add to / remove from the pool of candidates for new rides."""
