@@ -339,6 +339,43 @@ async def update_status(
     return result
 
 
+@router.post("/{ride_id}/waiting/start")
+async def start_waiting(
+    request: Request,
+    ride_id: UUID,
+    service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    speed_kmh = await request.app.state.driver_locations.get_speed_kmh(current_user.id)
+    result = await service.start_waiting(
+        ride_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        speed_kmh=speed_kmh,
+    )
+    await manager.broadcast_status_changed(ride_id, RideStatus.WAITING.value)
+    await manager.broadcast_waiting_changed(ride_id, result)
+    return result
+
+
+@router.post("/{ride_id}/waiting/stop")
+async def stop_waiting(
+    ride_id: UUID,
+    service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    result = await service.stop_waiting(
+        ride_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
+    await manager.broadcast_status_changed(ride_id, RideStatus.IN_PROGRESS.value)
+    await manager.broadcast_waiting_changed(ride_id, result)
+    return result
+
+
 @router.post("/{ride_id}/cancel")
 async def cancel_ride(
     ride_id: UUID,

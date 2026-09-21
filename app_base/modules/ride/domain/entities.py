@@ -21,6 +21,7 @@ class RideStatus(str, Enum):
     MATCHED = "matched"
     DRIVER_EN_ROUTE = "driver_en_route"
     IN_PROGRESS = "in_progress"
+    WAITING = "waiting"
     COMPLETED = "completed"
     CANCELLED_BY_PASSENGER = "cancelled_by_passenger"
     CANCELLED_BY_DRIVER = "cancelled_by_driver"
@@ -46,6 +47,13 @@ ALLOWED_TRANSITIONS: dict[RideStatus, set[RideStatus]] = {
         RideStatus.CANCELLED_BY_DRIVER,
     },
     RideStatus.IN_PROGRESS: {
+        RideStatus.WAITING,
+        RideStatus.COMPLETED,
+        RideStatus.CANCELLED_BY_PASSENGER,
+        RideStatus.CANCELLED_BY_DRIVER,
+    },
+    RideStatus.WAITING: {
+        RideStatus.IN_PROGRESS,
         RideStatus.COMPLETED,
         RideStatus.CANCELLED_BY_PASSENGER,
         RideStatus.CANCELLED_BY_DRIVER,
@@ -139,6 +147,10 @@ class Ride:
     # Pricing
     estimated_fare: Decimal | None = None
     final_fare: Decimal | None = None
+    waiting_started_at: datetime | None = None
+    waiting_duration_seconds: int = 0
+    waiting_fee: Decimal = Decimal("0")
+    waiting_rate_per_minute: Decimal | None = None
     currency: str = "XOF"
     distance_km: Decimal | None = None
     duration_seconds: int | None = None
@@ -185,6 +197,7 @@ class Ride:
             RideStatus.MATCHED,
             RideStatus.DRIVER_EN_ROUTE,
             RideStatus.IN_PROGRESS,
+            RideStatus.WAITING,
         }
 
     def transition(

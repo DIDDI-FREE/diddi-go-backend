@@ -1,10 +1,53 @@
 # DiddiGo - Brief frontend ajouts recents
 
-**Version brief :** `v3.3`
-**Date :** `2026-09-12`
-**Perimetre :** application mobile/frontend DiddiGo consommant DiddiGo API v3.3
+**Version brief :** `v3.4`
+**Date :** `2026-09-21`
+**Perimetre :** application mobile/frontend DiddiGo consommant DiddiGo API v3.4
 
 Ce brief resume les changements recents a consommer cote mobile/frontend.
+
+## Sprint SCRUM-205 - Mode attente
+
+### Parcours chauffeur
+
+```text
+Course demarree
+  -> le chauffeur immobilise le vehicule
+  -> l'app continue driver.location_push avec speed_kmh
+  -> bouton "Demarrer l'attente"
+  -> POST /rides/{id}/waiting/start
+  -> afficher compteur + tarif/minute + supplement courant
+  -> bouton "Reprendre la course"
+  -> POST /rides/{id}/waiting/stop
+  -> retour a l'ecran course en cours
+```
+
+Si le vehicule recommence a rouler, le backend arrete automatiquement
+l'attente. L'app recoit `ride.status_changed` puis `ride.waiting_changed` et
+doit fermer l'ecran/compteur d'attente sans demander une seconde confirmation.
+
+### Parcours passager
+
+```text
+Course en cours
+  -> reception status=waiting
+  -> afficher "Le chauffeur est en attente"
+  -> afficher le supplement depuis waiting.fee
+  -> reception status=in_progress
+  -> afficher "Course reprise"
+  -> fin de course: afficher final_fare incluant l'attente
+```
+
+Le frontend n'envoie jamais une duree, un prix, un timestamp ou une preuve
+"vehicule arrete". DiddiGo en est la source d'autorite. En cas de reconnexion,
+relire `GET /rides/{id}` et reconstruire l'ecran depuis `status` et `waiting`.
+
+Erreurs UX :
+
+- `WAITING_TELEMETRY_REQUIRED` : demander au chauffeur de patienter pendant la reprise GPS.
+- `VEHICLE_NOT_STOPPED` : indiquer qu'il doit immobiliser le vehicule.
+- `WAITING_INVALID_RIDE_STATUS` : masquer le bouton hors course demarree.
+- `WAITING_NOT_ACTIVE` : resynchroniser avec `GET /rides/{id}`.
 
 ## 0. Contrat API v3
 

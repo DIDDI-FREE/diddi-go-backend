@@ -35,6 +35,7 @@ logger = logging.getLogger("uvicorn.error")
 POSITIONS_KEY = "drivers:positions"
 SEEN_KEY_PREFIX = "drivers:seen:"
 AVAILABLE_KEY_PREFIX = "drivers:available:"
+SPEED_KEY_PREFIX = "drivers:speed:"
 
 # A driver who hasn't pushed a position in this long is treated as gone.
 # The API contract asks the driver app to push every 3–5s, so 30s tolerates
@@ -52,8 +53,11 @@ class RedisDriverLocationService:
     redis: Redis
     presence_ttl_seconds: int = PRESENCE_TTL_SECONDS
     availability_ttl_seconds: int = AVAILABILITY_TTL_SECONDS
+    telemetry_ttl_seconds: int = 30
 
-    async def update_position(self, driver_id: UUID, location: GeoPoint) -> None:
+    async def update_position(
+        self, driver_id: UUID, location: GeoPoint, *, speed_kmh: float | None = None,
+    ) -> None:
         """Record a driver's current position and refresh their presence marker.
 
         Called on every `driver.location_push` WebSocket frame, so it must stay
@@ -67,6 +71,8 @@ class RedisDriverLocationService:
         # GEOADD takes longitude first.
         pipe.geoadd(POSITIONS_KEY, (location.lng, location.lat, member))
         pipe.set(f"{SEEN_KEY_PREFIX}{member}", "1", ex=self.presence_ttl_seconds)
+        if speed_kmh is not None:
+            pipe.set(f"{SPEED_KEY_PREFIX}{member}", str(max(0.0, speed_kmh)), ex=self.telemetry_ttl_seconds)
         await pipe.execute()
         logger.info(
             "driver_position_updated user_id=%s lat=%s lng=%s presence_ttl_seconds=%s",
@@ -75,6 +81,15 @@ class RedisDriverLocationService:
             location.lng,
             self.presence_ttl_seconds,
         )
+
+    async def get_speed_kmh(self, driver_id: UUID) -> float | None:
+        value = await self.redis.get(f"{SPEED_KEY_PREFIX}{driver_id}")
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
 
     async def set_available(self, driver_id: UUID, *, available: bool) -> None:
         """Add or remove a driver from the pool of candidates for new rides.
@@ -212,6 +227,7 @@ class RedisDriverLocationService:
         pipe.zrem(POSITIONS_KEY, member)
         pipe.delete(f"{SEEN_KEY_PREFIX}{member}")
         pipe.delete(f"{AVAILABLE_KEY_PREFIX}{member}")
+        pipe.delete(f"{SPEED_KEY_PREFIX}{member}")
         await pipe.execute()
         logger.info("driver_offline user_id=%s", driver_id)
 

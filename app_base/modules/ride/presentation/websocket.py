@@ -15,7 +15,7 @@ Events, server → driver:
                             comfort_level, payment_method, expires_in_seconds}
 
 Events, client → server:
-    driver.location_push   {location: {lat, lng}, heading}
+    driver.location_push   {location: {lat, lng}, heading, speed_kmh, ride_id}
     ride.subscribe         {ride_id}   — passenger follows one ride
 
 Dispatching a `ride.new_request` to drivers belongs to the matching engine,
@@ -42,8 +42,13 @@ from app_base.core.identity import (
 )
 from app_base.core.observability import log_event
 from app_base.core.security import decode_token, user_id_from_token
-from app_base.modules.ride.domain.entities import DriverStatus
-from app_base.modules.ride.infra.repositories import SqlAlchemyDriverProfileRepository
+from app_base.core.settings import settings
+from app_base.modules.ride.application.services import RideService
+from app_base.modules.ride.domain.entities import DriverStatus, RideStatus
+from app_base.modules.ride.infra.repositories import (
+    SqlAlchemyDriverProfileRepository,
+    SqlAlchemyRideRepository,
+)
 from app_base.shared_kernel.types import GeoPoint
 
 # Uvicorn wires this logger to the Docker console.
@@ -165,6 +170,12 @@ class ConnectionManager:
         )
         await self.send_to_user(driver_user_id, {"event": "ride.new_request", **payload})
 
+    async def broadcast_waiting_changed(self, ride_id: UUID, payload: dict[str, Any]) -> None:
+        await self.send_to_ride(
+            ride_id,
+            {"event": "ride.waiting_changed", **payload, "at": _now_iso()},
+        )
+
 
 manager = ConnectionManager()
 
@@ -281,7 +292,10 @@ async def _handle_message(
             await websocket.send_json({"event": "error", "code": "INVALID_LOCATION"})
             return
         if locations is not None:
-            await locations.update_position(user_id, location)
+            speed_kmh = _parse_speed(message.get("speed_kmh"))
+            await locations.update_position(user_id, location, speed_kmh=speed_kmh)
+            if speed_kmh is not None and speed_kmh > settings.waiting_stationary_speed_threshold_kmh:
+                await _stop_waiting_if_vehicle_moves(user_id, speed_kmh)
         ride_id = message.get("ride_id")
         if ride_id:
             try:
@@ -322,6 +336,39 @@ def _parse_location(raw: Any) -> GeoPoint | None:
         return GeoPoint(lat=float(raw["lat"]), lng=float(raw["lng"]))
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def _parse_speed(raw: Any) -> float | None:
+    if raw is None:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+async def _stop_waiting_if_vehicle_moves(user_id: UUID, speed_kmh: float) -> None:
+    async with async_session_factory() as session:
+        ride_repo = SqlAlchemyRideRepository(session)
+        ride = await ride_repo.find_active_by_driver_user_id(user_id)
+        if ride is None or ride.status is not RideStatus.WAITING:
+            return
+        service = RideService(
+            ride_repo=ride_repo,
+            routing=None,  # type: ignore[arg-type]
+            pricing_rules=None,  # type: ignore[arg-type]
+            driver_repo=SqlAlchemyDriverProfileRepository(session),
+        )
+        payload = await service.stop_waiting(
+            ride.id,
+            actor_user_id=user_id,
+            actor_role="driver",
+            reason="vehicle_moved",
+        )
+        await session.commit()
+    await manager.broadcast_status_changed(ride.id, RideStatus.IN_PROGRESS.value)
+    await manager.broadcast_waiting_changed(ride.id, payload)
+    log_event("ride.waiting.auto_stopped", ride_id=ride.id, user_id=user_id, speed_kmh=speed_kmh)
 
 
 def _ws_client_ip(websocket: WebSocket) -> str | None:

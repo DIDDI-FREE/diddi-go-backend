@@ -190,6 +190,10 @@ class RideModel(Base):
     # -- Pricing (XOF has no sub-unit → stored as integer-equivalent decimals)
     estimated_fare: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     final_fare: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    waiting_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    waiting_duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    waiting_fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal("0"))
+    waiting_rate_per_minute: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="XOF")
     distance_km: Mapped[Decimal | None] = mapped_column(Numeric(6, 2), nullable=True)  # from DiddiMap
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)  # from DiddiMap

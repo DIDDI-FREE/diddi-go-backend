@@ -42,7 +42,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         base_url=settings.diddimap_base_url,
         access_token=settings.diddimap_access_token,
     )
-    app.state.driver_locations = RedisDriverLocationService(redis=app.state.redis)
+    app.state.driver_locations = RedisDriverLocationService(
+        redis=app.state.redis,
+        telemetry_ttl_seconds=settings.waiting_telemetry_ttl_seconds,
+    )
 
     app.state.payment_reconciliation_task = None
     if settings.payment_reconciliation_enabled:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -12,6 +13,7 @@ from uuid import UUID
 from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
 from app_base.core.observability import log_event
+from app_base.core.settings import settings
 from app_base.modules.auth.domain.interfaces import UserRepository
 from app_base.modules.ride.application.emergency_notifications import EmergencyNotificationService
 from app_base.modules.ride.domain.entities import (
@@ -265,6 +267,20 @@ class RideService:
         actor_role: str = "driver",
     ) -> dict:
         ride = await self.load_ride(ride_id)
+        if ride.status is RideStatus.WAITING and new_status is RideStatus.IN_PROGRESS:
+            raise ApiError(
+                409,
+                "WAITING_STOP_ENDPOINT_REQUIRED",
+                "Utilisez la route d'arret d'attente pour reprendre la course.",
+            )
+        if new_status is RideStatus.COMPLETED and ride.status is RideStatus.WAITING:
+            await self.stop_waiting(
+                ride_id,
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                reason="ride_completed",
+            )
+            ride = await self.load_ride(ride_id)
         if new_status is RideStatus.IN_PROGRESS:
             await self._ensure_map_trace_started(ride)
         if new_status is RideStatus.COMPLETED:
@@ -278,6 +294,11 @@ class RideService:
                 "Transition de statut invalide.",
                 {"current_status": ride.status.value, "attempted_status": new_status.value},
             ) from exc
+        if new_status is RideStatus.COMPLETED:
+            base_fare = ride.final_fare or ride.estimated_fare or Decimal("0")
+            ride.final_fare = base_fare + ride.waiting_fee
+            ride.platform_commission = (ride.final_fare * ride.commission_rate).quantize(Decimal("1"))
+            ride.driver_payout_estimate = ride.final_fare - ride.platform_commission
         await self.ride_repo.save(ride)
         for transition in ride.status_history:
             await self.ride_repo.record_status_transition(transition)
@@ -291,6 +312,82 @@ class RideService:
         viewer_role = "admin" if actor_role == "admin" else "driver"
         return _ride_detail_payload(ride, driver=None, viewer_role=viewer_role)
 
+    async def start_waiting(
+        self,
+        ride_id: UUID,
+        *,
+        actor_user_id: UUID,
+        actor_role: str,
+        speed_kmh: float | None,
+    ) -> dict:
+        ride = await self.load_ride(ride_id)
+        if actor_role != "admin" and not await self._is_assigned_driver(ride, actor_user_id):
+            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Seul le chauffeur assigne peut activer l'attente.")
+        if ride.status is RideStatus.WAITING:
+            return _waiting_payload(ride)
+        if ride.status is not RideStatus.IN_PROGRESS:
+            raise ApiError(409, "WAITING_INVALID_RIDE_STATUS", "L'attente exige une course en cours.")
+        if speed_kmh is None:
+            raise ApiError(409, "WAITING_TELEMETRY_REQUIRED", "Une vitesse GPS recente est necessaire.")
+        if speed_kmh > settings.waiting_stationary_speed_threshold_kmh:
+            raise ApiError(
+                409,
+                "VEHICLE_NOT_STOPPED",
+                "Le vehicule doit etre arrete pour activer l'attente.",
+                {"speed_kmh": speed_kmh, "maximum_kmh": settings.waiting_stationary_speed_threshold_kmh},
+            )
+        now = datetime.now(UTC)
+        ride.waiting_started_at = now
+        ride.waiting_rate_per_minute = Decimal(settings.waiting_price_per_minute_xof)
+        ride.transition(RideStatus.WAITING, when=now, metadata={"reason": "manual"})
+        await self._persist_waiting_change(ride)
+        log_event("ride.waiting.started", ride_id=ride.id, actor_user_id=actor_user_id, speed_kmh=speed_kmh)
+        return _waiting_payload(ride)
+
+    async def stop_waiting(
+        self,
+        ride_id: UUID,
+        *,
+        actor_user_id: UUID,
+        actor_role: str,
+        reason: str = "manual",
+    ) -> dict:
+        ride = await self.load_ride(ride_id)
+        if actor_role != "admin" and not await self._is_assigned_driver(ride, actor_user_id):
+            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Seul le chauffeur assigne peut arreter l'attente.")
+        if ride.status is not RideStatus.WAITING or ride.waiting_started_at is None:
+            raise ApiError(409, "WAITING_NOT_ACTIVE", "Aucune attente active pour cette course.")
+        now = datetime.now(UTC)
+        started_at = ride.waiting_started_at
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=UTC)
+        elapsed = max(0, math.ceil((now - started_at).total_seconds()))
+        billed_minutes = max(1, math.ceil(elapsed / 60))
+        rate = ride.waiting_rate_per_minute or Decimal(settings.waiting_price_per_minute_xof)
+        ride.waiting_duration_seconds += elapsed
+        ride.waiting_fee += rate * billed_minutes
+        ride.waiting_started_at = None
+        ride.transition(
+            RideStatus.IN_PROGRESS,
+            when=now,
+            metadata={"reason": reason, "duration_seconds": elapsed, "billed_minutes": billed_minutes},
+        )
+        await self._persist_waiting_change(ride)
+        log_event(
+            "ride.waiting.stopped",
+            ride_id=ride.id,
+            actor_user_id=actor_user_id,
+            reason=reason,
+            duration_seconds=elapsed,
+            waiting_fee=ride.waiting_fee,
+        )
+        return _waiting_payload(ride)
+
+    async def _persist_waiting_change(self, ride: Ride) -> None:
+        await self.ride_repo.save(ride)
+        for transition in ride.status_history:
+            await self.ride_repo.record_status_transition(transition)
+
     async def cancel(self, ride_id: UUID, reason: str, *, actor_user_id: UUID, actor_role: str) -> dict:
         if reason not in VALID_CANCEL_REASONS:
             raise ApiError(422, "INVALID_CANCEL_REASON", "Motif d'annulation invalide.")
@@ -301,6 +398,14 @@ class RideService:
             raise ApiError(409, "RIDE_ALREADY_CANCELLED", "La course est deja annulee.")
         if ride.status == RideStatus.NO_DRIVER_FOUND:
             raise ApiError(409, "RIDE_NOT_CANCELLABLE", "Cette course n'a pas trouve de chauffeur.")
+        if ride.status is RideStatus.WAITING:
+            await self.stop_waiting(
+                ride_id,
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                reason="ride_cancelled",
+            )
+            ride = await self.load_ride(ride_id)
         is_driver = actor_role == "driver" or await self._is_assigned_driver(ride, actor_user_id)
         new_status = (
             RideStatus.CANCELLED_BY_DRIVER
@@ -620,6 +725,19 @@ def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -
             if analytics_visible and ride.actual_pricing_fare is not None
             else None,
             "pricing_delta": int(ride.pricing_delta) if analytics_visible and ride.pricing_delta is not None else None,
+            "waiting_fee": int(ride.waiting_fee) if money_visible else None,
+            "waiting_rate_per_minute": int(ride.waiting_rate_per_minute)
+            if money_visible and ride.waiting_rate_per_minute is not None
+            else None,
+        },
+        "waiting": {
+            "active": ride.status is RideStatus.WAITING,
+            "started_at": iso_utc(ride.waiting_started_at),
+            "duration_seconds": ride.waiting_duration_seconds,
+            "fee": int(ride.waiting_fee) if money_visible else None,
+            "rate_per_minute": int(ride.waiting_rate_per_minute)
+            if money_visible and ride.waiting_rate_per_minute is not None
+            else None,
         },
         "payment": {
             "method": ride.payment_method.value,
@@ -633,6 +751,22 @@ def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -
         "matched_at": iso_utc(ride.matched_at),
         "started_at": iso_utc(ride.started_at),
         "completed_at": iso_utc(ride.completed_at),
+    }
+
+
+def _waiting_payload(ride: Ride) -> dict:
+    return {
+        "ride_id": str(ride.id),
+        "status": ride.status.value,
+        "waiting": {
+            "active": ride.status is RideStatus.WAITING,
+            "started_at": iso_utc(ride.waiting_started_at),
+            "duration_seconds": ride.waiting_duration_seconds,
+            "fee": int(ride.waiting_fee),
+            "rate_per_minute": int(ride.waiting_rate_per_minute)
+            if ride.waiting_rate_per_minute is not None
+            else None,
+        },
     }
 
 
