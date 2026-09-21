@@ -66,6 +66,7 @@ class FakeDiddiMap:
         planned_distance_km=None,
         planned_duration_seconds=None,
         profile="palh_vtc",
+        source_ride_id=None,
     ):
         return "test-map-trace-1"
 

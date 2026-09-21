@@ -45,6 +45,8 @@ class Settings(BaseSettings):
 
     diddimap_base_url: str = "http://localhost:4000"
     diddimap_access_token: str | None = None
+    diddimap_service_client_id: str | None = None
+    diddimap_service_token: str | None = None
 
     # Internal Pilotage reports are intentionally bounded to a recent window
     # so a service caller cannot turn a daily endpoint into an unbounded scan.
