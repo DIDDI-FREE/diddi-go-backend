@@ -1,7 +1,9 @@
 # Graphify - SCRUM-205 Mode attente
 
-**Date :** 2026-09-21  
-**Etat :** livre sur `dev` et `stage`  
+**Date :** 2026-09-21
+
+**Etat :** livre sur `dev` et `stage`
+
 **Contrat :** DiddiGo API v3.4
 
 ```mermaid
