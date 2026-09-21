@@ -649,6 +649,7 @@ class RideService:
             planned_distance_km=ride.distance_km,
             planned_duration_seconds=ride.duration_seconds,
             profile="palh_vtc",
+            source_ride_id=str(ride.id),
         )
         logger.info("ride_map_trace_started ride_id=%s map_trace_id=%s", ride.id, ride.map_trace_id)
         log_event("ride.map_trace.started", ride_id=ride.id, map_trace_id=ride.map_trace_id)

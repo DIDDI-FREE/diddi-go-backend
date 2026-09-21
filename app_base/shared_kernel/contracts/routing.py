@@ -50,6 +50,7 @@ class RoutingProvider(Protocol):
         planned_distance_km: Decimal | None,
         planned_duration_seconds: int | None,
         profile: str,
+        source_ride_id: str | None = None,
     ) -> str: ...
 
     async def append_trace_positions(self, trace_id: str, points: list[RouteTracePoint]) -> None: ...

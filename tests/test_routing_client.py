@@ -42,6 +42,19 @@ def authed_client_with(handler) -> DiddiMapRoutingClient:
     return client
 
 
+def service_client_with(handler) -> DiddiMapRoutingClient:
+    client = DiddiMapRoutingClient(
+        base_url="http://diddimap.test",
+        service_client_id="diddigo-staging",
+        service_token="service-token",
+    )
+    client._client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="http://diddimap.test",
+    )
+    return client
+
+
 # --- /route ----------------------------------------------------------------
 
 @pytest.mark.unit
@@ -228,6 +241,31 @@ async def test_trace_start_uses_diddimap_contract_shape_and_auth() -> None:
         "planned_duration_s": 1140,
         "planned_route_geometry": {"type": "LineString", "coordinates": []},
     }
+
+
+@pytest.mark.unit
+async def test_trace_start_uses_service_integration_contract_when_configured() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/integrations/diddigo/map-traces/start"
+        assert request.headers["authorization"] == "Bearer service-token"
+        assert request.headers["x-client-id"] == "diddigo-staging"
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"id": 42, "status": "recording"})
+
+    trace_id = await service_client_with(handler).start_trace(
+        start=ORIGIN,
+        end=DESTINATION,
+        planned_distance_km=Decimal("8.4"),
+        planned_duration_seconds=1140,
+        profile="palh_vtc",
+        source_ride_id="ride-123",
+    )
+
+    assert trace_id == "42"
+    assert seen["source_ride_id"] == "ride-123"
+    assert seen["profile"] == "car"
 
 
 @pytest.mark.unit

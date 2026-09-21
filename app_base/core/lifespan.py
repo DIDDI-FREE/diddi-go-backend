@@ -41,6 +41,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.diddimap = DiddiMapRoutingClient(
         base_url=settings.diddimap_base_url,
         access_token=settings.diddimap_access_token,
+        service_client_id=settings.diddimap_service_client_id,
+        service_token=settings.diddimap_service_token,
     )
     app.state.driver_locations = RedisDriverLocationService(
         redis=app.state.redis,

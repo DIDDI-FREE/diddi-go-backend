@@ -55,6 +55,8 @@ class RouteTraceAnalysisResult:
 class DiddiMapRoutingClient:
     base_url: str
     access_token: str | None = None
+    service_client_id: str | None = None
+    service_token: str | None = None
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
     _client: httpx.AsyncClient | None = field(default=None, init=False, repr=False)
 
@@ -67,9 +69,19 @@ class DiddiMapRoutingClient:
         return self._client
 
     def _auth_headers(self) -> dict[str, str]:
+        if self.service_token:
+            headers = {"Authorization": f"Bearer {self.service_token}"}
+            if self.service_client_id:
+                headers["X-Client-ID"] = self.service_client_id
+            return headers
         if not self.access_token:
             return {}
         return {"Authorization": f"Bearer {self.access_token}"}
+
+    def _trace_path(self, path: str) -> str:
+        if self.service_token:
+            return f"/api/v1/integrations/diddigo{path}"
+        return f"/api/v1{path}"
 
     async def estimate(
         self,
@@ -179,18 +191,20 @@ class DiddiMapRoutingClient:
         planned_distance_km: Decimal | None,
         planned_duration_seconds: int | None,
         profile: str = DEFAULT_PROFILE,
+        source_ride_id: str | None = None,
     ) -> str:
         payload = {
             "start": {"lng": start.lng, "lat": start.lat},
             "end": {"lng": end.lng, "lat": end.lat},
             "profile": _abidjanmaps_profile(profile),
+            "source_ride_id": source_ride_id,
             "planned_distance_m": _km_to_meters(planned_distance_km),
             "planned_duration_s": planned_duration_seconds,
             "planned_route_geometry": {"type": "LineString", "coordinates": []},
         }
         payload = {key: value for key, value in payload.items() if value is not None}
         response_payload = await self._post_json(
-            "/api/v1/map-traces/start",
+            self._trace_path("/map-traces/start"),
             payload,
             unavailable_message="DiddiMap trace start unavailable",
         )
@@ -219,21 +233,21 @@ class DiddiMapRoutingClient:
             for key in [key for key, value in position.items() if value is None]:
                 del position[key]
         await self._post_json(
-            f"/api/v1/map-traces/{trace_id}/positions",
+            self._trace_path(f"/map-traces/{trace_id}/positions"),
             payload,
             unavailable_message="DiddiMap trace positions unavailable",
         )
 
     async def finish_trace(self, trace_id: str, *, finished_at: datetime) -> None:
         await self._post_json(
-            f"/api/v1/map-traces/{trace_id}/finish",
+            self._trace_path(f"/map-traces/{trace_id}/finish"),
             {"finished_at": _iso(finished_at)},
             unavailable_message="DiddiMap trace finish unavailable",
         )
 
     async def analyze_trace(self, trace_id: str) -> RouteTraceAnalysisResult:
         payload = await self._post_json(
-            f"/api/v1/map-traces/{trace_id}/analyze",
+            self._trace_path(f"/map-traces/{trace_id}/analyze"),
             {},
             unavailable_message="DiddiMap trace analyze unavailable",
         )
