@@ -269,6 +269,27 @@ async def test_trace_start_uses_service_integration_contract_when_configured() -
 
 
 @pytest.mark.unit
+async def test_trace_request_propagates_bound_request_id() -> None:
+    from app_base.core.observability import bind_request_id, reset_request_id
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["x-request-id"] == "req-trace-123"
+        return httpx.Response(200, json={"id": 42, "status": "recording"})
+
+    token = bind_request_id("req-trace-123")
+    try:
+        await service_client_with(handler).start_trace(
+            start=ORIGIN,
+            end=DESTINATION,
+            planned_distance_km=Decimal("8.4"),
+            planned_duration_seconds=1140,
+            source_ride_id="ride-123",
+        )
+    finally:
+        reset_request_id(token)
+
+
+@pytest.mark.unit
 async def test_trace_positions_convert_speed_to_meters_per_second() -> None:
     seen: dict = {}
 
@@ -355,6 +376,20 @@ async def test_trace_business_conflict_is_not_reported_as_unavailable() -> None:
     assert exc_info.value.status_code == 409
     assert exc_info.value.code == "DIDDIMAP_BUSINESS_ERROR"
     assert exc_info.value.details == {"provider_code": "trace_not_started"}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("provider_status", [401, 403])
+async def test_trace_provider_auth_failure_is_not_exposed_as_user_auth_failure(provider_status: int) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(provider_status, json={"detail": "Unauthorized"})
+
+    with pytest.raises(ApiError) as exc_info:
+        await service_client_with(handler).finish_trace("42", finished_at=datetime.now(UTC))
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.code == "DIDDIMAP_AUTHENTICATION_FAILED"
+    assert exc_info.value.details["provider_status_code"] == provider_status
 
 
 @pytest.mark.unit

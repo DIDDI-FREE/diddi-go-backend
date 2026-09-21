@@ -294,7 +294,24 @@ class RideService:
         if new_status is RideStatus.IN_PROGRESS:
             await self._ensure_map_trace_started(ride)
         if new_status is RideStatus.COMPLETED:
-            await self._apply_actual_pricing_if_possible(ride)
+            try:
+                await self._apply_actual_pricing_if_possible(ride)
+            except ApiError as exc:
+                ride.trace_analysis_status = "provider_error"
+                ride.trace_analysis_error_code = exc.code
+                logger.exception(
+                    "ride_actual_pricing_failed ride_id=%s error_code=%s; completing_with_locked_fare",
+                    ride.id,
+                    exc.code,
+                )
+                log_event(
+                    "ride.actual_pricing.failed",
+                    level="error",
+                    ride_id=ride.id,
+                    map_trace_id=ride.map_trace_id,
+                    error_code=exc.code,
+                    fallback="locked_estimated_fare",
+                )
         try:
             ride.transition(new_status)
         except InvalidStatusTransition as exc:
@@ -595,6 +612,8 @@ class RideService:
     async def _apply_actual_pricing_if_possible(self, ride: Ride) -> None:
         points = await self.ride_repo.list_route_points(ride.id)
         if not points:
+            ride.trace_analysis_status = "no_samples"
+            ride.trace_analysis_error_code = None
             logger.info("ride_actual_pricing_skipped ride_id=%s reason=no_route_samples", ride.id)
             return
 
@@ -606,8 +625,15 @@ class RideService:
         await self.routing.append_trace_positions(ride.map_trace_id, points)
         await self.routing.finish_trace(ride.map_trace_id, finished_at=datetime.now(UTC))
         analysis = await self.routing.analyze_trace(ride.map_trace_id)
+        ride.trace_recommendation = analysis.recommendation
+        ride.trace_quality_label = analysis.quality_label
+        ride.trace_quality_score = analysis.quality_score
+        ride.trace_points_count = analysis.points_count
+        ride.trace_usable_points_count = analysis.usable_points_count
 
         if not analysis.usable_for_scoring:
+            ride.trace_analysis_status = "ignored"
+            ride.trace_analysis_error_code = None
             logger.warning(
                 "ride_actual_pricing_skipped ride_id=%s map_trace_id=%s reason=diddimap_trace_not_usable "
                 "recommendation=%s quality_label=%s points_count=%s usable_points_count=%s",
@@ -651,6 +677,8 @@ class RideService:
         ride.actual_duration_seconds = actual_duration_seconds
         ride.actual_pricing_fare = pricing["total_fare"]
         ride.pricing_delta = pricing["total_fare"] - locked_fare if locked_fare is not None else None
+        ride.trace_analysis_status = "applied"
+        ride.trace_analysis_error_code = None
         if locked_fare is not None:
             ride.final_fare = locked_fare
         logger.info(
@@ -768,6 +796,16 @@ def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -
             "waiting_rate_per_minute": int(ride.waiting_rate_per_minute)
             if money_visible and ride.waiting_rate_per_minute is not None
             else None,
+        },
+        "trace_analysis": {
+            "status": ride.trace_analysis_status
+            or ("legacy_not_analyzed" if ride.status is RideStatus.COMPLETED else "pending"),
+            "error_code": ride.trace_analysis_error_code if analytics_visible else None,
+            "recommendation": ride.trace_recommendation,
+            "quality_label": ride.trace_quality_label,
+            "quality_score": float(ride.trace_quality_score) if ride.trace_quality_score is not None else None,
+            "points_count": ride.trace_points_count,
+            "usable_points_count": ride.trace_usable_points_count,
         },
         "waiting": {
             "active": ride.status is RideStatus.WAITING,

@@ -624,11 +624,15 @@ Impact frontend actuel :
 - Continuer le WebSocket pour le temps reel/share ride.
 - Lire les champs `pricing.actual_distance_km` et
   `pricing.actual_duration_seconds` dans le detail de course terminee.
+- Lire `trace_analysis.status` pour distinguer une analyse appliquee, ignoree,
+  sans samples, en erreur fournisseur ou une ancienne course non analysee.
 - Ne jamais recalculer/facturer cote app avec `actual_pricing_fare`.
 - Chauffeur : ne pas afficher le prix avant le statut `in_progress`.
-- Si la finalisation retourne `DIDDIMAP_UNAVAILABLE` ou
-  `DIDDIMAP_INVALID_RESPONSE`, afficher une erreur claire au chauffeur/support:
-  la course n'a pas pu etre cloturee car l'analyse geographique a echoue.
+- Une erreur d'analyse DiddiMap ne bloque plus la cloture : le montant initial
+  verrouille reste facture. Si `trace_analysis.status=provider_error`, afficher
+  seulement un indicateur support/admin; ne jamais deconnecter l'utilisateur.
+- `DIDDIMAP_AUTHENTICATION_FAILED` concerne le service interne DiddiGo, pas le
+  JWT de l'utilisateur et ne doit jamais declencher un logout.
 
 ## 4.4 Offre chauffeur sans prix
 

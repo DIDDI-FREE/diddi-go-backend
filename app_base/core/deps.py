@@ -93,11 +93,16 @@ def get_driver_locations(request: Request) -> RedisDriverLocationService:
     return service
 
 
+_unconfigured_identity_capabilities = IdentityCapabilityClient(
+    base_url=None,
+    client_id=None,
+    client_secret=None,
+)
+
+
 def get_identity_capabilities(request: Request) -> IdentityCapabilityClient:
     client: IdentityCapabilityClient | None = getattr(request.app.state, "identity_capabilities", None)
-    if client is None:
-        raise RuntimeError("DiddiFreeID capability client not initialized - lifespan may not have run.")
-    return client
+    return client or _unconfigured_identity_capabilities
 
 
 # --- repositories ----------------------------------------------------------
