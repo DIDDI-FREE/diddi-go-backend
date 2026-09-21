@@ -29,6 +29,7 @@ from app_base.core.redis import create_redis_pool
 from app_base.core.settings import settings
 from app_base.modules.payment.application.reconciliation import reconciliation_loop
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
+from app_base.modules.ride.infra.identity_capability_client import IdentityCapabilityClient
 from app_base.modules.ride.infra.routing_client import DiddiMapRoutingClient
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.driver_locations = RedisDriverLocationService(
         redis=app.state.redis,
         telemetry_ttl_seconds=settings.waiting_telemetry_ttl_seconds,
+    )
+    app.state.identity_capabilities = IdentityCapabilityClient(
+        base_url=settings.identity_base_url,
+        client_id=settings.identity_service_client_id,
+        client_secret=settings.identity_service_client_secret,
+        timeout_seconds=settings.identity_service_timeout_seconds,
     )
 
     app.state.payment_reconciliation_task = None
@@ -72,5 +79,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await task
         diddimap: DiddiMapRoutingClient = app.state.diddimap  # type: ignore[assignment]
         await diddimap.close()
+        identity_capabilities: IdentityCapabilityClient = app.state.identity_capabilities  # type: ignore[assignment]
+        await identity_capabilities.close()
         await app.state.redis.aclose()
         logger.info("lifespan shutdown complete")

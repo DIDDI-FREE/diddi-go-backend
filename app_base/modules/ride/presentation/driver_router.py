@@ -16,7 +16,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from app_base.core.auth_deps import get_current_active_user, require_business_driver, require_role
-from app_base.core.deps import driver_service, driver_wallet_service, get_driver_locations, partner_service
+from app_base.core.deps import (
+    driver_service,
+    driver_wallet_service,
+    get_driver_locations,
+    get_identity_capabilities,
+    partner_service,
+)
 from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
 from app_base.core.observability import log_event
@@ -26,6 +32,7 @@ from app_base.modules.payment.application.wallet_service import DriverWalletServ
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.domain.entities import DriverProfile
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
+from app_base.modules.ride.infra.identity_capability_client import IdentityCapabilityClient
 from app_base.modules.ride.presentation.driver_schemas import (
     DriverKycResubmitRequest,
     DriverKycReviewRequest,
@@ -246,6 +253,7 @@ async def go_online(
     wallets: DriverWalletService = Depends(driver_wallet_service),
     partners: PartnerService = Depends(partner_service),
     locations: RedisDriverLocationService = Depends(get_driver_locations),
+    capabilities: IdentityCapabilityClient = Depends(get_identity_capabilities),
     current_user: UserModel = Depends(get_current_active_user),
     _driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
@@ -288,6 +296,11 @@ async def go_online(
         lat=position.lat,
         lng=position.lng,
     )
+    await capabilities.publish_driver_status(
+        current_user.id,
+        operational_status="online",
+        actions=["go_offline"],
+    )
     return {
         "status": "online",
         "driver_id": str(profile.id),
@@ -299,6 +312,7 @@ async def go_online(
 @router.post("/offline")
 async def go_offline(
     locations: RedisDriverLocationService = Depends(get_driver_locations),
+    capabilities: IdentityCapabilityClient = Depends(get_identity_capabilities),
     current_user: UserModel = Depends(get_current_active_user),
     driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
@@ -308,5 +322,10 @@ async def go_offline(
         "driver.offline",
         user_id=current_user.id,
         driver_id=driver_profile.id if driver_profile else None,
+    )
+    await capabilities.publish_driver_status(
+        current_user.id,
+        operational_status="offline",
+        actions=["go_online"],
     )
     return {"status": "offline"}
