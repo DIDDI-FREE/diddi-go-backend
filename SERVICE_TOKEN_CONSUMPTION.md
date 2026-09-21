@@ -1,5 +1,29 @@
 # DiddiGo: consommation des tokens service
 
+## Variables du service Pilotage
+
+Ces variables appartiennent au service **Pilotage** qui appelle DiddiGo. Elles
+ne doivent pas etre ajoutees a l'environnement du conteneur DiddiGo.
+
+Exemple staging sans secret reel :
+
+```env
+DIDDIGO_BASE_URL=https://go-staging.diddifree.com
+DIDDIGO_SERVICE_CLIENT_ID=pilotage-staging-diddigo
+DIDDIGO_SERVICE_CLIENT_SECRET=<secret-genere-par-diddifreeid>
+DIDDIGO_SERVICE_AUDIENCE=diddigo
+DIDDIGO_SERVICE_SCOPE=ride-summary:read
+DIDDIGO_SERVICE_TOKEN_URL=https://auth-staging.diddifree.com/identity/v1/auth/service/token
+```
+
+La valeur de `DIDDIGO_SERVICE_CLIENT_SECRET` doit exister uniquement dans le
+gestionnaire de secrets ou les variables Portainer de Pilotage. Elle ne doit
+jamais etre commitee, placee dans `.env.example`, transmise au frontend ou
+enregistree dans les logs.
+
+Si un secret est affiche dans une conversation, un ticket ou un journal, il
+doit etre revoque puis regenere avant utilisation.
+
 ## Contrat Radar
 
 Les endpoints backend Radar protégés par DiddiGo utilisent :
