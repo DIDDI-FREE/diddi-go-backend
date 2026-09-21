@@ -267,6 +267,16 @@ class RideService:
         actor_role: str = "driver",
     ) -> dict:
         ride = await self.load_ride(ride_id)
+        if ride.status is RideStatus.COMPLETED and new_status is RideStatus.COMPLETED:
+            log_event(
+                "ride.completion.retry",
+                level="warning",
+                ride_id=ride.id,
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+            )
+            viewer_role = "admin" if actor_role == "admin" else "driver"
+            return _ride_detail_payload(ride, driver=None, viewer_role=viewer_role)
         if ride.status is RideStatus.WAITING and new_status is RideStatus.IN_PROGRESS:
             raise ApiError(
                 409,
@@ -597,6 +607,34 @@ class RideService:
         await self.routing.finish_trace(ride.map_trace_id, finished_at=datetime.now(UTC))
         analysis = await self.routing.analyze_trace(ride.map_trace_id)
 
+        if not analysis.usable_for_scoring:
+            logger.warning(
+                "ride_actual_pricing_skipped ride_id=%s map_trace_id=%s reason=diddimap_trace_not_usable "
+                "recommendation=%s quality_label=%s points_count=%s usable_points_count=%s",
+                ride.id,
+                ride.map_trace_id,
+                analysis.recommendation,
+                analysis.quality_label,
+                analysis.points_count,
+                analysis.usable_points_count,
+            )
+            log_event(
+                "ride.actual_pricing.skipped",
+                level="warning",
+                ride_id=ride.id,
+                map_trace_id=ride.map_trace_id,
+                reason="diddimap_trace_not_usable",
+                recommendation=analysis.recommendation,
+                quality_label=analysis.quality_label,
+                quality_score=analysis.quality_score,
+                points_count=analysis.points_count,
+                usable_points_count=analysis.usable_points_count,
+                final_fare=ride.final_fare or ride.estimated_fare,
+            )
+            return
+
+        if analysis.actual_distance_km is None or analysis.actual_duration_seconds is None:
+            raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Metriques DiddiMap absentes.")
         actual_distance_km = Decimal(str(analysis.actual_distance_km))
         actual_duration_seconds = int(analysis.actual_duration_seconds)
         pricing = _pricing_breakdown(

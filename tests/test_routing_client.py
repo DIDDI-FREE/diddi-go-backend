@@ -307,6 +307,54 @@ async def test_trace_analyze_parses_actual_metrics() -> None:
 
     assert result.actual_distance_km == Decimal("12.5")
     assert result.actual_duration_seconds == 900
+    assert result.usable_for_scoring is True
+
+
+@pytest.mark.unit
+async def test_trace_analyze_accepts_explicit_ignore_for_scoring() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "actual_distance_m": 0,
+                "actual_duration_s": 1,
+                "recommendation": "ignore_for_scoring",
+                "quality_label": "weak",
+                "quality_score": 0.48,
+                "points_count": 2,
+                "usable_points_count": 2,
+            },
+        )
+
+    result = await authed_client_with(handler).analyze_trace("42")
+
+    assert result.usable_for_scoring is False
+    assert result.actual_distance_km is None
+    assert result.actual_duration_seconds is None
+    assert result.recommendation == "ignore_for_scoring"
+    assert result.quality_label == "weak"
+    assert result.points_count == 2
+
+
+@pytest.mark.unit
+async def test_trace_finish_tolerates_already_finished_conflict() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(409, json={"error": {"code": "trace_already_finished"}})
+
+    await authed_client_with(handler).finish_trace("42", finished_at=datetime.now(UTC))
+
+
+@pytest.mark.unit
+async def test_trace_business_conflict_is_not_reported_as_unavailable() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(409, json={"error": {"code": "trace_not_started"}})
+
+    with pytest.raises(ApiError) as exc_info:
+        await authed_client_with(handler).finish_trace("42", finished_at=datetime.now(UTC))
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.code == "DIDDIMAP_BUSINESS_ERROR"
+    assert exc_info.value.details == {"provider_code": "trace_not_started"}
 
 
 @pytest.mark.unit
