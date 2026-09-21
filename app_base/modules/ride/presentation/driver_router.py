@@ -300,9 +300,13 @@ async def go_online(
 async def go_offline(
     locations: RedisDriverLocationService = Depends(get_driver_locations),
     current_user: UserModel = Depends(get_current_active_user),
-    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+    driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
     await locations.go_offline(current_user.id)
     logger.info("driver_offline_requested user_id=%s", current_user.id)
-    log_event("driver.offline", user_id=current_user.id)
+    log_event(
+        "driver.offline",
+        user_id=current_user.id,
+        driver_id=driver_profile.id if driver_profile else None,
+    )
     return {"status": "offline"}

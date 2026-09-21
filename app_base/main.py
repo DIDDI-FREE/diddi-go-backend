@@ -10,6 +10,7 @@ from app_base.core.request_logging import RequestLoggingMiddleware
 from app_base.core.settings import settings
 from app_base.modules.auth.presentation.router import router as auth_router
 from app_base.modules.notification.presentation import router as notification_router
+from app_base.modules.observability.presentation.router import router as observability_router
 from app_base.modules.partner.presentation.router import admin_router as partner_admin_router
 from app_base.modules.partner.presentation.router import router as partner_router
 from app_base.modules.payment.presentation.router import admin_payment_router, admin_wallet_router, wallet_router
@@ -40,6 +41,7 @@ app.add_exception_handler(ApiError, api_error_handler)
 
 app.include_router(auth_router, prefix="/v1")
 app.include_router(notification_router, prefix="/v1")
+app.include_router(observability_router, prefix="/v1")
 app.include_router(capabilities_router, prefix="/v1")
 app.include_router(places_router, prefix="/v1")
 app.include_router(ride_router, prefix="/v1")

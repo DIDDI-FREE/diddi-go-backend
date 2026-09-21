@@ -2060,3 +2060,48 @@ wallet partenaire complet
 payout automatique partenaire
 contrat physique /v2 ou /v3 dans l'URL
 ```
+
+## 16. Recherche de logs administrateur (v3.5)
+
+Ces routes sont reservees aux utilisateurs DiddiFreeID ayant le role global
+`admin`. Le role n'est jamais accepte depuis un parametre client.
+
+```http
+GET /v1/admin/logs/rides/{ride_id}
+GET /v1/admin/logs/drivers/{driver_id}
+```
+
+Parametres optionnels : `from`, `to` (ISO 8601), `level`, `limit` (1 a 500)
+et `cursor`. Sans periode, les dernieres 24 heures sont consultees. Une requete
+ne peut pas couvrir plus de 30 jours. Les resultats sont classes du plus recent
+au plus ancien.
+
+```json
+{
+  "items": [
+    {
+      "timestamp": "2026-09-21T12:00:00Z",
+      "level": "INFO",
+      "event": "ride.created",
+      "message": null,
+      "request_id": "req-123",
+      "metadata": {"ride_id": "uuid", "status": "requested"}
+    }
+  ],
+  "next_cursor": "1789991999999999999",
+  "limit": 100,
+  "from": "2026-09-20T12:00:00+00:00",
+  "to": "2026-09-21T12:00:00+00:00"
+}
+```
+
+| HTTP | Code | Sens |
+|---|---|---|
+| `403` | `FORBIDDEN_ROLE` | L'utilisateur n'est pas administrateur |
+| `422` | `INVALID_LOG_TIME_RANGE` | Debut posterieur ou egal a la fin |
+| `422` | `LOG_TIME_RANGE_TOO_LARGE` | Periode superieure a 30 jours |
+| `422` | `INVALID_LOG_CURSOR` | Curseur de pagination invalide |
+| `503` | `LOG_SEARCH_UNAVAILABLE` | Loki absent, en erreur ou mal configure |
+
+La source de verite est Loki. DiddiGo ne masque jamais son indisponibilite par
+une reponse vide ou par une recherche de secours en base.

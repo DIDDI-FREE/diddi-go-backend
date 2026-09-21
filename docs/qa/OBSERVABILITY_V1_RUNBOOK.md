@@ -89,6 +89,10 @@ Le dashboard Grafana provisionne est :
 DiddiGo / DiddiGo Terrain
 ```
 
+Grafana dispose aussi de la source `DiddiGo Loki`. Promtail ne collecte que
+les conteneurs portant le label Docker `diddifree_observability=diddigo`; il
+ne lit donc ni les autres produits DiddiFree, ni ses propres journaux.
+
 Il permet de suivre rapidement :
 
 - trafic HTTP;
@@ -190,3 +194,23 @@ diddigo_business_events_total{event="ws.driver_location.received"}
 
 Toujours partir de `request_id` ou `ride_id` dans les logs, puis utiliser
 `/metrics` pour voir si le probleme est isole ou frequent.
+
+## Consultation depuis Radar DG
+
+Un admin DiddiFreeID peut consulter les journaux indexes sans acces Portainer :
+
+```http
+GET /v1/admin/logs/rides/{ride_id}
+GET /v1/admin/logs/drivers/{driver_id}
+```
+
+Variables de l'application :
+
+```text
+LOKI_BASE_URL=http://loki:3100
+LOKI_DIDDIGO_SERVICE_LABEL=app
+LOKI_TIMEOUT_SECONDS=5
+```
+
+La retention Loki locale est de 30 jours. Une indisponibilite Loki produit
+`503 LOG_SEARCH_UNAVAILABLE`; elle n'est jamais transformee en resultat vide.
