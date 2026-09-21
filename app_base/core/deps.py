@@ -52,6 +52,7 @@ from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.application.services import RideService
 from app_base.modules.ride.application.summary_service import RideSummaryService
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
+from app_base.modules.ride.infra.identity_capability_client import IdentityCapabilityClient
 from app_base.modules.ride.infra.offer_store import RedisOfferStore
 from app_base.modules.ride.infra.repositories import (
     SqlAlchemyDriverProfileRepository,
@@ -90,6 +91,13 @@ def get_driver_locations(request: Request) -> RedisDriverLocationService:
     if service is None:
         raise RuntimeError("Driver location service not initialized — lifespan may not have run.")
     return service
+
+
+def get_identity_capabilities(request: Request) -> IdentityCapabilityClient:
+    client: IdentityCapabilityClient | None = getattr(request.app.state, "identity_capabilities", None)
+    if client is None:
+        raise RuntimeError("DiddiFreeID capability client not initialized - lifespan may not have run.")
+    return client
 
 
 # --- repositories ----------------------------------------------------------
@@ -199,8 +207,13 @@ async def driver_wallet_service(
 async def driver_service(
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
     vehicle_repo_dep: SqlAlchemyVehicleRepository = Depends(vehicle_repo),
+    capability_publisher: IdentityCapabilityClient = Depends(get_identity_capabilities),
 ) -> DriverService:
-    return DriverService(driver_repo=driver_repo_dep, vehicle_repo=vehicle_repo_dep)
+    return DriverService(
+        driver_repo=driver_repo_dep,
+        vehicle_repo=vehicle_repo_dep,
+        capability_publisher=capability_publisher,
+    )
 
 
 async def scoring_service(

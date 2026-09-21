@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     identity_issuer: str = "diddifree-id"
     identity_profile_url: str | None = None
     identity_service_key: str | None = None
+    identity_service_client_id: str | None = None
+    identity_service_client_secret: str | None = None
+    identity_service_timeout_seconds: float = 5.0
 
     push_enabled: bool = False
     fcm_project_id: str | None = None

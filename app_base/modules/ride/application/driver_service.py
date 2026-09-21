@@ -29,12 +29,14 @@ from app_base.modules.ride.domain.interfaces import (
     DriverProfileRepository,
     VehicleRepository,
 )
+from app_base.shared_kernel.contracts.capabilities import CapabilityStatusPublisher
 
 
 @dataclass
 class DriverService:
     driver_repo: DriverProfileRepository
     vehicle_repo: VehicleRepository
+    capability_publisher: CapabilityStatusPublisher | None = None
 
     async def create_profile(
         self,
@@ -93,6 +95,7 @@ class DriverService:
         )
         await self.driver_repo.save(profile)
         log_event("driver.kyc.submitted", driver_id=profile.id, user_id=user_id, status=profile.status.value)
+        await self._publish_profile_status(profile)
         return _profile_payload(profile)
 
     async def resubmit_kyc(
@@ -150,6 +153,7 @@ class DriverService:
         profile.updated_at = now
         await self.driver_repo.save(profile)
         log_event("driver.kyc.resubmitted", driver_id=profile.id, user_id=user_id, status=profile.status.value)
+        await self._publish_profile_status(profile)
         return _profile_payload(profile)
 
     async def approve_kyc(self, driver_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None = None) -> dict:
@@ -170,6 +174,7 @@ class DriverService:
             user_id=profile.user_id,
             reviewed_by_user_id=reviewed_by_user_id,
         )
+        await self._publish_profile_status(profile)
         return _profile_payload(profile)
 
     async def reject_kyc(self, driver_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None = None) -> dict:
@@ -190,6 +195,7 @@ class DriverService:
             user_id=profile.user_id,
             reviewed_by_user_id=reviewed_by_user_id,
         )
+        await self._publish_profile_status(profile)
         return _profile_payload(profile)
 
     async def register_vehicle(
@@ -285,6 +291,7 @@ class DriverService:
             comfort_level=vehicle.comfort_level.value,
             verification_status=vehicle.verification_status.value,
         )
+        await self._publish_profile_status(profile)
         return _vehicle_payload(vehicle)
 
     async def resubmit_vehicle_kyv(
@@ -346,6 +353,7 @@ class DriverService:
         vehicle.review_notes = None
         await self.vehicle_repo.save(vehicle)
         log_event("driver.vehicle.kyv.resubmitted", driver_id=profile.id, user_id=user_id, vehicle_id=vehicle.id)
+        await self._publish_profile_status(profile)
         return _vehicle_payload(vehicle)
 
     async def approve_vehicle_kyv(
@@ -365,6 +373,7 @@ class DriverService:
         vehicle.active = True
         await self.vehicle_repo.save(vehicle)
         log_event("driver.vehicle.kyv.approved", vehicle_id=vehicle.id, driver_id=vehicle.driver_id)
+        await self._publish_status_for_driver_id(vehicle.driver_id)
         return _vehicle_payload(vehicle)
 
     async def reject_vehicle_kyv(
@@ -382,7 +391,24 @@ class DriverService:
         vehicle.active = False
         await self.vehicle_repo.save(vehicle)
         log_event("driver.vehicle.kyv.rejected", level="warning", vehicle_id=vehicle.id, driver_id=vehicle.driver_id)
+        await self._publish_status_for_driver_id(vehicle.driver_id)
         return _vehicle_payload(vehicle)
+
+    async def _publish_status_for_driver_id(self, driver_id: UUID) -> None:
+        profile = await self.driver_repo.find_by_id(driver_id)
+        if profile is not None:
+            await self._publish_profile_status(profile)
+
+    async def _publish_profile_status(self, profile: DriverProfile) -> None:
+        if self.capability_publisher is None:
+            return
+        vehicle = await self.vehicle_repo.find_active_for_driver(profile.id)
+        status, actions = _operational_status(profile, vehicle)
+        await self.capability_publisher.publish_driver_status(
+            profile.user_id,
+            operational_status=status,
+            actions=actions,
+        )
 
     async def get_profile(self, user_id: UUID) -> dict:
         profile = await self._require_profile(user_id)
@@ -772,6 +798,22 @@ def _driver_capability_payload(profile: DriverProfile | None, *, vehicle: Vehicl
         "vehicle": _vehicle_capability_payload(vehicle),
         "score": None,
     }
+
+
+def _operational_status(profile: DriverProfile, vehicle: Vehicle | None) -> tuple[str, list[str]]:
+    if profile.status is DriverStatus.PENDING_VERIFICATION:
+        return "pending_verification", ["await_kyc_review"]
+    if profile.status is DriverStatus.SUSPENDED:
+        return "kyc_rejected", ["resubmit_kyc"]
+    if vehicle is None:
+        return "vehicle_missing", ["add_vehicle"]
+    if vehicle.verification_status is VehicleVerificationStatus.PENDING_VERIFICATION:
+        return "vehicle_pending_verification", ["await_vehicle_review"]
+    if vehicle.verification_status is VehicleVerificationStatus.REJECTED:
+        return "vehicle_rejected", ["resubmit_vehicle"]
+    if vehicle.verification_status is not VehicleVerificationStatus.ACTIVE or not vehicle.active:
+        return "vehicle_unavailable", ["contact_support"]
+    return "offline", ["go_online"]
 
 
 def _vehicle_capability_payload(vehicle: Vehicle | None) -> dict | None:
