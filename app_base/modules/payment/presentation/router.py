@@ -47,7 +47,6 @@ async def prepare_payment(
         payer_user_id=current_user.id,
         customer_email=payload.customer_email,
         customer_phone=payload.customer_phone or current_user.phone,
-        callback_url=payload.callback_url,
     )
 
 
@@ -110,7 +109,6 @@ async def create_driver_topup(
         method=payload.method,
         customer_email=payload.customer_email,
         customer_phone=payload.customer_phone or current_user.phone,
-        callback_url=payload.callback_url,
     )
 
 

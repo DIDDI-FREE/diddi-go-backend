@@ -1287,10 +1287,13 @@ Requete :
 {
   "method": "wave",
   "customer_email": "client@example.com",
-  "customer_phone": "+2250700000000",
-  "callback_url": "https://go-staging.diddifree.com/payments/return"
+  "customer_phone": "+2250700000000"
 }
 ```
+
+Le client ne peut pas fournir de `callback_url`. DiddiGo choisit la destination
+passager configuree par `DIDDIGO_CONSUMER_RETURN_URL`; toute propriete inconnue
+dans cette requete est rejetee avec `422`.
 
 `customer_email` est obligatoire pour `wave` et `diddipay`, car le PSP actif
 derriere DiddiPay/Paystack l'exige. DiddiGo ne doit pas inventer d'email si
@@ -1327,7 +1330,7 @@ ou reconcilie le statut `succeeded` depuis DiddiPay.
 ### `GET /payments/return`
 
 Route publique de retour navigateur apres checkout. Elle existe pour eviter un
-404 lorsque `DIDDIGO_PAYMENT_CALLBACK_URL` pointe vers DiddiGo.
+404 lorsque `DIDDIGO_CONSUMER_RETURN_URL` pointe vers DiddiGo.
 
 Important : cette route ne confirme jamais le paiement. Elle affiche seulement
 une page demandant a l'utilisateur de revenir dans l'application. L'application
@@ -1459,10 +1462,13 @@ Requete :
   "amount": 5000,
   "method": "wave",
   "customer_email": "driver@example.com",
-  "customer_phone": "+2250700000000",
-  "callback_url": "https://go-staging.diddifree.com/wallet/return"
+  "customer_phone": "+2250700000000"
 }
 ```
+
+Le client ne peut pas fournir de `callback_url`. DiddiGo choisit la destination
+chauffeur configuree par `DIDDIGO_PRO_RETURN_URL`; toute propriete inconnue dans
+cette requete est rejetee avec `422`.
 
 Reponse :
 

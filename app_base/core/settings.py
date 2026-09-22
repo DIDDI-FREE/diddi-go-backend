@@ -72,6 +72,8 @@ class Settings(BaseSettings):
     diddipay_callback_secret: str | None = None
     diddipay_http_timeout_seconds: float = 15.0
     diddigo_payment_callback_url: str | None = None
+    diddigo_consumer_return_url: str | None = None
+    diddigo_pro_return_url: str | None = None
     driver_min_balance: int = 0
     driver_max_estimated_commission: int = 0
 

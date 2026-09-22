@@ -5,7 +5,7 @@ Shape matches the API contract (`DiddiGo_Contrat_API.md` §3):
     sub-unit). The domain service handles Decimal conversion.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CashConfirmationRequest(BaseModel):
@@ -13,15 +13,17 @@ class CashConfirmationRequest(BaseModel):
 
 
 class PaymentPreparationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     method: str = Field(default="cash")
     customer_email: str | None = Field(default=None, min_length=3, max_length=255)
     customer_phone: str | None = Field(default=None, min_length=4, max_length=32)
-    callback_url: str | None = Field(default=None, min_length=1, max_length=1000)
 
 
 class DriverTopupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     amount: int = Field(gt=0)
     method: str = Field(default="diddipay")
     customer_email: str = Field(min_length=3, max_length=255)
     customer_phone: str | None = Field(default=None, min_length=4, max_length=32)
-    callback_url: str | None = Field(default=None, min_length=1, max_length=1000)

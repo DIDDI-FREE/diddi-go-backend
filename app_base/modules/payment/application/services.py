@@ -170,7 +170,6 @@ class PaymentService:
         payer_user_id: UUID,
         customer_email: str | None = None,
         customer_phone: str | None = None,
-        callback_url: str | None = None,
     ) -> dict:
         ride = await self.ride_repo.find_by_id(ride_id)
         if ride is None:
@@ -199,7 +198,6 @@ class PaymentService:
             payer_user_id=payer_user_id,
             customer_email=customer_email,
             customer_phone=customer_phone,
-            callback_url=callback_url,
         )
 
     async def apply_diddipay_webhook(
@@ -579,7 +577,6 @@ class PaymentService:
         payer_user_id: UUID,
         customer_email: str,
         customer_phone: str | None,
-        callback_url: str | None,
     ) -> dict:
         ride = await self.ride_repo.find_by_id(ride_id)
         if ride is None:
@@ -618,7 +615,7 @@ class PaymentService:
                 "network": "wave" if payment_method is PaymentMethod.WAVE else None,
                 "customer_email": customer_email,
                 "customer_phone": customer_phone,
-                "callback_url": callback_url or settings.diddigo_payment_callback_url,
+                "callback_url": _consumer_return_url(),
                 "description": f"Course DiddiGo {ride_id}",
                 "metadata": {"ride_id": str(ride_id)},
             },
@@ -784,3 +781,7 @@ def _next_action_from_intent(intent: dict) -> dict | None:
         return None
     next_action = attempts[0].get("next_action")
     return next_action if isinstance(next_action, dict) else None
+
+
+def _consumer_return_url() -> str | None:
+    return settings.diddigo_consumer_return_url or settings.diddigo_payment_callback_url
