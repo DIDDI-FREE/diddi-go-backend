@@ -18,6 +18,9 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
+
+from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
 from app_base.core.observability import log_event
 from app_base.core.settings import settings
@@ -212,6 +215,25 @@ class MatchingService:
             await self.ride_repo.save(ride)
             for transition in ride.status_history:
                 await self.ride_repo.record_status_transition(transition)
+        except IntegrityError as exc:
+            await self.offers.release_claim(ride_id)
+            logger.warning(
+                "matching_accept_rejected ride_id=%s driver_user_id=%s reason=driver_already_active",
+                ride_id,
+                driver_user_id,
+            )
+            log_event(
+                "ride.matching.accept_rejected",
+                level="warning",
+                ride_id=ride_id,
+                driver_user_id=driver_user_id,
+                reason="driver_already_on_active_ride",
+            )
+            raise ApiError(
+                409,
+                ErrorCode.DRIVER_ALREADY_ON_ACTIVE_RIDE,
+                "Ce chauffeur est deja affecte a une course active.",
+            ) from exc
         except Exception:
             await self.offers.release_claim(ride_id)
             raise

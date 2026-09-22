@@ -29,6 +29,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     SmallInteger,
@@ -144,7 +145,17 @@ class VehicleModel(Base):
 
 class RideModel(Base):
     __tablename__ = "rides"
-    __table_args__ = {"schema": "ride"}
+    __table_args__ = (
+        Index(
+            "uq_rides_one_active_per_driver",
+            "driver_id",
+            unique=True,
+            postgresql_where=text(
+                "driver_id IS NOT NULL AND status IN ('matched', 'driver_en_route', 'in_progress', 'waiting')",
+            ),
+        ),
+        {"schema": "ride"},
+    )
 
     id: Mapped[UUID] = mapped_column(
         _PG_UUID, primary_key=True, server_default=text("uuid_generate_v4()"),
