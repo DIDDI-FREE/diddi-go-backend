@@ -138,6 +138,23 @@ class FakePaymentRepo:
         return pending[:limit]
 
 
+class FakeReturnContexts:
+    def __init__(self) -> None:
+        self.created: dict | None = None
+        self.bound = None
+
+    async def create(self, **kwargs) -> str:
+        self.created = kwargs
+        return "opaque-context"
+
+    async def bind_payment_intent(self, token, payment_intent_id) -> None:
+        self.bound = (token, payment_intent_id)
+
+    @staticmethod
+    def callback_url(base_url, token):
+        return f"{base_url}?context={token}"
+
+
 class FakeRideRepo:
     def __init__(self, ride):
         self.ride = ride
@@ -243,7 +260,13 @@ async def test_prepare_wave_creates_diddipay_intent(monkeypatch) -> None:
     intent_id = uuid4()
     gateway = FakeDiddiPay(intent_id)
     repo = FakePaymentRepo()
-    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddipay=gateway)
+    contexts = FakeReturnContexts()
+    service = PaymentService(
+        payment_repo=repo,
+        ride_repo=FakeRideRepo(ride),
+        diddipay=gateway,
+        return_contexts=contexts,  # type: ignore[arg-type]
+    )
 
     payload = await service.prepare_payment(
         ride.id,
@@ -260,7 +283,14 @@ async def test_prepare_wave_creates_diddipay_intent(monkeypatch) -> None:
     assert gateway.last_idempotency_key == f"diddigo:ride:{ride.id}:collection:v1"
     assert gateway.last_payload["business_reference"] == f"diddigo:ride:{ride.id}"
     assert gateway.last_payload["network"] == "wave"
-    assert gateway.last_payload["callback_url"] == "https://go.test/payments/return"
+    assert gateway.last_payload["callback_url"] == "https://go.test/payments/return?context=opaque-context"
+    assert contexts.created == {
+        "flow": "ride_payment",
+        "surface": "consumer",
+        "user_id": ride.passenger_user_id,
+        "resource_id": ride.id,
+    }
+    assert contexts.bound == ("opaque-context", intent_id)
 
 
 def test_payment_requests_reject_client_owned_callback_urls() -> None:
@@ -422,10 +452,12 @@ async def test_driver_topup_callback_credits_wallet_once(monkeypatch) -> None:
     intent_id = uuid4()
     repo = FakePaymentRepo()
     gateway = FakeDiddiPay(intent_id)
+    contexts = FakeReturnContexts()
     wallet_service = DriverWalletService(
         payment_repo=repo,
         driver_repo=FakeDriverRepo(driver_id=driver_id, user_id=user_id),
         diddipay=gateway,
+        return_contexts=contexts,  # type: ignore[arg-type]
     )
     payment_service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(make_completed_ride()))
     topup = await wallet_service.create_topup(
@@ -434,7 +466,14 @@ async def test_driver_topup_callback_credits_wallet_once(monkeypatch) -> None:
         method="wave",
         customer_email="driver@example.com",
     )
-    assert gateway.last_payload["callback_url"] == "https://go.test/wallet/return"
+    assert gateway.last_payload["callback_url"] == "https://go.test/wallet/return?context=opaque-context"
+    assert contexts.created == {
+        "flow": "driver_topup",
+        "surface": "pro",
+        "user_id": user_id,
+        "resource_id": UUID(topup["id"]),
+    }
+    assert contexts.bound == ("opaque-context", intent_id)
 
     monkeypatch.setattr("app_base.modules.payment.application.services.settings.diddipay_callback_secret", "secret")
     body = {

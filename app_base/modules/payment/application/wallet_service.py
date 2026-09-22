@@ -10,6 +10,7 @@ from uuid import UUID
 from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
 from app_base.core.settings import settings
+from app_base.modules.payment.application.return_contexts import PaymentReturnContextStore
 from app_base.modules.payment.domain.entities import (
     DriverLedgerEntry,
     DriverTopup,
@@ -31,6 +32,7 @@ class DriverWalletService:
     payment_repo: PaymentRepository
     driver_repo: DriverProfileRepository
     diddipay: DiddiPayClient | None = None
+    return_contexts: PaymentReturnContextStore | None = None
 
     async def get_wallet(self, *, driver_user_id: UUID) -> dict:
         driver_id = await self._driver_id_for_user(driver_user_id)
@@ -101,6 +103,13 @@ class DriverWalletService:
         topup_id = DriverTopup.new_id()
         idempotency_key = f"diddigo:driver_topup:{topup_id}:v1"
         business_reference = f"diddigo:driver_topup:{topup_id}"
+        return_token = None
+        callback_url = _pro_return_url()
+        if self.return_contexts:
+            return_token = await self.return_contexts.create(
+                flow="driver_topup", surface="pro", user_id=driver_user_id, resource_id=topup_id,
+            )
+            callback_url = self.return_contexts.callback_url(callback_url, return_token)
         intent = await (self.diddipay or DiddiPayClient()).create_payment_intent(
             {
                 "business_reference": business_reference,
@@ -112,13 +121,16 @@ class DriverWalletService:
                 "network": "wave" if payment_method is PaymentMethod.WAVE else None,
                 "customer_email": customer_email,
                 "customer_phone": customer_phone,
-                "callback_url": _pro_return_url(),
+                "callback_url": callback_url,
                 "description": f"Recharge compte chauffeur DiddiGo {driver_id}",
                 "metadata": {"driver_id": str(driver_id), "topup_id": str(topup_id)},
             },
             idempotency_key=idempotency_key,
         )
         status = _topup_status_from_payment_status(_payment_status_from_diddipay(str(intent.get("status") or "")))
+        payment_intent_id = UUID(str(intent["id"]))
+        if self.return_contexts and return_token:
+            await self.return_contexts.bind_payment_intent(return_token, payment_intent_id)
         next_action = _next_action_from_intent(intent)
         topup = DriverTopup(
             id=topup_id,
@@ -127,7 +139,7 @@ class DriverWalletService:
             currency=str(intent.get("currency") or "XOF"),
             method=payment_method,
             status=status,
-            payment_intent_id=UUID(str(intent["id"])),
+            payment_intent_id=payment_intent_id,
             business_reference=business_reference,
             idempotency_key=idempotency_key,
             provider_status=str(intent.get("status") or status.value),

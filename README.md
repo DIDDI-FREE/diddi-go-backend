@@ -150,6 +150,7 @@ DIDDIPAY_CALLBACK_SECRET=<diddipay-callback-hmac-secret>
 DIDDIPAY_HTTP_TIMEOUT_SECONDS=15
 DIDDIGO_CONSUMER_RETURN_URL=https://go-staging.diddifree.com/payments/return
 DIDDIGO_PRO_RETURN_URL=https://go-staging.diddifree.com/wallet/return
+PAYMENT_RETURN_CONTEXT_TTL_SECONDS=900
 # Compatibilite temporaire si les deux variables ci-dessus ne sont pas encore definies.
 DIDDIGO_PAYMENT_CALLBACK_URL=https://go-staging.diddifree.com/payments/return
 DRIVER_MIN_BALANCE=0
