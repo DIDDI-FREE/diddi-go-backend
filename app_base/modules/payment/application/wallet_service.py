@@ -80,7 +80,6 @@ class DriverWalletService:
         method: str,
         customer_email: str,
         customer_phone: str | None = None,
-        callback_url: str | None = None,
     ) -> dict:
         driver_id = await self._driver_id_for_user(driver_user_id)
         if amount <= 0:
@@ -113,7 +112,7 @@ class DriverWalletService:
                 "network": "wave" if payment_method is PaymentMethod.WAVE else None,
                 "customer_email": customer_email,
                 "customer_phone": customer_phone,
-                "callback_url": callback_url or settings.diddigo_payment_callback_url,
+                "callback_url": _pro_return_url(),
                 "description": f"Recharge compte chauffeur DiddiGo {driver_id}",
                 "metadata": {"driver_id": str(driver_id), "topup_id": str(topup_id)},
             },
@@ -300,3 +299,12 @@ def _next_action_from_intent(intent: dict) -> dict | None:
         return None
     next_action = attempts[0].get("next_action")
     return next_action if isinstance(next_action, dict) else None
+
+
+def _pro_return_url() -> str | None:
+    if settings.diddigo_pro_return_url:
+        return settings.diddigo_pro_return_url
+    fallback = settings.diddigo_payment_callback_url
+    if fallback and fallback.endswith("/payments/return"):
+        return f"{fallback[:-len('/payments/return')]}/wallet/return"
+    return fallback

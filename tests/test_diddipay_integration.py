@@ -8,6 +8,7 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from app_base.core.errors import ApiError
 from app_base.modules.payment.application.services import PaymentService
@@ -20,6 +21,7 @@ from app_base.modules.payment.domain.entities import (
     WalletEntryDirection,
     WalletEntryType,
 )
+from app_base.modules.payment.presentation.schemas import DriverTopupRequest, PaymentPreparationRequest
 from app_base.modules.ride.domain.entities import PaymentMethod as RidePaymentMethod
 from app_base.modules.ride.domain.entities import Ride, RideStatus
 from app_base.shared_kernel.types import GeoPoint
@@ -232,7 +234,11 @@ def make_completed_ride() -> Ride:
 
 
 @pytest.mark.asyncio
-async def test_prepare_wave_creates_diddipay_intent() -> None:
+async def test_prepare_wave_creates_diddipay_intent(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app_base.modules.payment.application.services.settings.diddigo_consumer_return_url",
+        "https://go.test/payments/return",
+    )
     ride = make_completed_ride()
     intent_id = uuid4()
     gateway = FakeDiddiPay(intent_id)
@@ -254,6 +260,19 @@ async def test_prepare_wave_creates_diddipay_intent() -> None:
     assert gateway.last_idempotency_key == f"diddigo:ride:{ride.id}:collection:v1"
     assert gateway.last_payload["business_reference"] == f"diddigo:ride:{ride.id}"
     assert gateway.last_payload["network"] == "wave"
+    assert gateway.last_payload["callback_url"] == "https://go.test/payments/return"
+
+
+def test_payment_requests_reject_client_owned_callback_urls() -> None:
+    with pytest.raises(ValidationError):
+        PaymentPreparationRequest(method="wave", callback_url="https://attacker.test/redirect")
+
+    with pytest.raises(ValidationError):
+        DriverTopupRequest(
+            amount=5000,
+            customer_email="driver@example.com",
+            callback_url="https://attacker.test/redirect",
+        )
 
 
 @pytest.mark.asyncio
@@ -394,14 +413,19 @@ async def test_digital_payment_webhook_credits_driver_payout_once(monkeypatch) -
 
 @pytest.mark.asyncio
 async def test_driver_topup_callback_credits_wallet_once(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app_base.modules.payment.application.wallet_service.settings.diddigo_pro_return_url",
+        "https://go.test/wallet/return",
+    )
     user_id = uuid4()
     driver_id = uuid4()
     intent_id = uuid4()
     repo = FakePaymentRepo()
+    gateway = FakeDiddiPay(intent_id)
     wallet_service = DriverWalletService(
         payment_repo=repo,
         driver_repo=FakeDriverRepo(driver_id=driver_id, user_id=user_id),
-        diddipay=FakeDiddiPay(intent_id),
+        diddipay=gateway,
     )
     payment_service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(make_completed_ride()))
     topup = await wallet_service.create_topup(
@@ -410,6 +434,7 @@ async def test_driver_topup_callback_credits_wallet_once(monkeypatch) -> None:
         method="wave",
         customer_email="driver@example.com",
     )
+    assert gateway.last_payload["callback_url"] == "https://go.test/wallet/return"
 
     monkeypatch.setattr("app_base.modules.payment.application.services.settings.diddipay_callback_secret", "secret")
     body = {

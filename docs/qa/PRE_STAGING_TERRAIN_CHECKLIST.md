@@ -71,6 +71,9 @@ DIDDIPAY_CLIENT_ID=diddigo
 DIDDIPAY_SERVICE_KEY=<service-key-diddipay-pour-diddigo>
 DIDDIPAY_CALLBACK_SECRET=<secret-hmac-callback-diddipay>
 DIDDIPAY_HTTP_TIMEOUT_SECONDS=15
+DIDDIGO_CONSUMER_RETURN_URL=https://go-staging.diddifree.com/payments/return
+DIDDIGO_PRO_RETURN_URL=https://go-staging.diddifree.com/wallet/return
+# Compatibilite temporaire pendant la migration de configuration.
 DIDDIGO_PAYMENT_CALLBACK_URL=https://go-staging.diddifree.com/payments/return
 PAYMENT_RECONCILIATION_ENABLED=true
 PAYMENT_RECONCILIATION_INTERVAL_SECONDS=300
