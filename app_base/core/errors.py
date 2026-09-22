@@ -37,7 +37,10 @@ async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
             details = {"request_id": request_id}
         else:
             details = {"request_id": request_id, "details": details}
-    return api_error_response(exc.status_code, exc.code, exc.message, details)
+    response = api_error_response(exc.status_code, exc.code, exc.message, details)
+    if request_id:
+        response.headers["X-Request-ID"] = request_id
+    return response
 
 
 async def infrastructure_error_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -60,7 +63,10 @@ async def infrastructure_error_handler(request: Request, exc: Exception) -> JSON
         exception_type=type(exc).__name__,
     )
     details = {"request_id": request_id} if request_id else None
-    return api_error_response(503, code, message, details)
+    response = api_error_response(503, code, message, details)
+    if request_id:
+        response.headers["X-Request-ID"] = request_id
+    return response
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -80,9 +86,12 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         exception_type=type(exc).__name__,
     )
     details = {"request_id": request_id} if request_id else None
-    return api_error_response(
+    response = api_error_response(
         500,
         "INTERNAL_SERVER_ERROR",
         "Une erreur interne inattendue est survenue.",
         details,
     )
+    if request_id:
+        response.headers["X-Request-ID"] = request_id
+    return response
