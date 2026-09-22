@@ -40,6 +40,13 @@ class FakeRideRepo:
             return [self.ride], 1
         return [], 0
 
+    async def save(self, ride: Ride) -> Ride:
+        self.ride = ride
+        return ride
+
+    async def record_status_transition(self, transition) -> None:
+        return None
+
 
 class FakeDriverRepo:
     async def find_by_user_id(self, user_id: UUID) -> DriverProfile | None:
@@ -104,6 +111,34 @@ async def test_unassigned_user_cannot_read_someone_elses_ride_detail() -> None:
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.code == "RIDE_NOT_OWNED_BY_USER"
+
+
+@pytest.mark.asyncio
+async def test_unassigned_driver_cannot_update_ride_status() -> None:
+    with pytest.raises(ApiError) as exc_info:
+        await service_with(matched_ride()).update_status(
+            RIDE_ID,
+            RideStatus.DRIVER_EN_ROUTE,
+            actor_user_id=OTHER_USER_ID,
+            actor_role="driver",
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.code == "RIDE_NOT_OWNED_BY_USER"
+
+
+@pytest.mark.asyncio
+async def test_assigned_driver_can_update_ride_status() -> None:
+    ride = matched_ride()
+
+    result = await service_with(ride).update_status(
+        RIDE_ID,
+        RideStatus.DRIVER_EN_ROUTE,
+        actor_user_id=DRIVER_USER_ID,
+        actor_role="user",
+    )
+
+    assert result["status"] == "driver_en_route"
 
 
 @pytest.mark.asyncio
