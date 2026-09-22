@@ -25,6 +25,11 @@ class DriverProfileCreateRequest(BaseModel):
     selfie_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
 
 
+class DriverProvisionRequest(DriverProfileCreateRequest):
+    user_id: UUID
+    full_name: str | None = Field(default=None, min_length=1, max_length=120)
+
+
 class DriverKycResubmitRequest(BaseModel):
     license_number: str | None = Field(default=None, min_length=1, max_length=50)
     legal_name: str | None = Field(default=None, min_length=1, max_length=160)

@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app_base.core.database import get_session
 from app_base.core.redis import get_redis  # noqa: F401 — re-exported
+from app_base.core.s2s_command_store import S2SCommandStore
 from app_base.core.settings import settings
 from app_base.modules.auth.application.services import AuthService
 from app_base.modules.auth.infra.repositories import (
@@ -46,10 +47,10 @@ from app_base.modules.payment.application.services import PaymentService
 from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentRepository
+from app_base.modules.ride.application.driver_provisioning_service import DriverProvisioningService
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.application.emergency_contact_service import EmergencyContactService
 from app_base.modules.ride.application.emergency_notifications import EmergencyNotificationService
-from app_base.modules.ride.application.kyc_command_store import KycCommandStore
 from app_base.modules.ride.application.matching_service import MatchingService
 from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.application.services import RideService
@@ -96,8 +97,20 @@ def get_driver_locations(request: Request) -> RedisDriverLocationService:
     return service
 
 
-async def kyc_command_store(redis: Redis = Depends(get_redis)) -> KycCommandStore:
-    return KycCommandStore(redis, ttl_seconds=settings.kyc_command_idempotency_ttl_seconds)
+async def kyc_command_store(redis: Redis = Depends(get_redis)) -> S2SCommandStore:
+    return S2SCommandStore(
+        redis,
+        namespace="kyc-command",
+        ttl_seconds=settings.kyc_command_idempotency_ttl_seconds,
+    )
+
+
+async def driver_provisioning_command_store(redis: Redis = Depends(get_redis)) -> S2SCommandStore:
+    return S2SCommandStore(
+        redis,
+        namespace="driver-provision",
+        ttl_seconds=settings.driver_provisioning_idempotency_ttl_seconds,
+    )
 
 
 _unconfigured_identity_capabilities = IdentityCapabilityClient(
@@ -238,6 +251,13 @@ async def driver_service(
         vehicle_repo=vehicle_repo_dep,
         capability_publisher=capability_publisher,
     )
+
+
+async def driver_provisioning_service(
+    users: SqlAlchemyUserRepository = Depends(user_repo),
+    drivers: DriverService = Depends(driver_service),
+) -> DriverProvisioningService:
+    return DriverProvisioningService(users=users, drivers=drivers)
 
 
 async def scoring_service(

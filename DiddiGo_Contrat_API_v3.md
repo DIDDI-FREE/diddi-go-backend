@@ -558,6 +558,63 @@ egalement que `X-User-ID` correspond a un shadow user local actif avec
 la reponse memorisee; une reutilisation divergente retourne
 `409 IDEMPOTENCY_CONFLICT`.
 
+### `POST /internal/v1/drivers/provision`
+
+Provisionne l'extension metier chauffeur depuis le Backend Backoffice. Avant
+l'appel, le Backoffice doit avoir recherche et valide l'identite cible dans
+DiddiFreeID. Le navigateur ne doit jamais appeler directement cette route ni
+fournir le secret S2S.
+
+Scope requis : `diddigo:drivers:write`.
+
+En-tetes obligatoires :
+
+```http
+Authorization: Bearer <service_access_token>
+X-Client-ID: backoffice-staging-diddigo
+X-User-ID: <user_id DiddiFreeID de l'admin humain>
+X-Request-ID: <uuid-de-correlation>
+Idempotency-Key: <cle stable de la commande>
+```
+
+Requete minimale :
+
+```json
+{
+  "user_id": "identity-user-id",
+  "full_name": "Awa Kone",
+  "license_number": "CI-123456"
+}
+```
+
+La requete accepte aussi les memes champs KYC `file_id` et URL legacy que
+`POST /v1/drivers/profile`.
+
+Reponse :
+
+```json
+{
+  "created": true,
+  "profile": {
+    "id": "driver-profile-id",
+    "user_id": "identity-user-id",
+    "status": "pending_verification",
+    "license_number": "CI-123456",
+    "kyc": {}
+  }
+}
+```
+
+Un retry identique retourne le meme resultat sans creer un second profil. Si le
+profil existe deja avec exactement les memes informations, la route retourne
+`created=false`. Si un profil different existe pour cette identite, elle
+retourne `409 DRIVER_PROVISIONING_CONFLICT`.
+
+DiddiGo cree si necessaire un shadow user purement technique pour respecter ses
+relations locales. Cela ne cree pas l'identite DiddiFreeID, n'active pas la
+capability globale et n'accorde aucune permission de course. Le profil reste
+`pending_verification` jusqu'a la validation KYC et aux autres controles metier.
+
 ### `POST /drivers/online`
 
 Avant validation admin, retourne :
@@ -603,6 +660,7 @@ Erreurs KYC principales :
 | `403` | `DRIVER_BALANCE_TOO_LOW` | Solde chauffeur insuffisant pour passer en ligne |
 | `404` | `DRIVER_PROFILE_NOT_FOUND` | Aucun profil chauffeur pour ce compte ou cet identifiant |
 | `409` | `DRIVER_PROFILE_ALREADY_EXISTS` | Un profil chauffeur existe deja pour ce compte |
+| `409` | `DRIVER_PROVISIONING_CONFLICT` | Un autre profil chauffeur existe pour l'identite cible |
 | `409` | `IDEMPOTENCY_CONFLICT` | La cle S2S designe deja une autre commande |
 | `409` | `IDEMPOTENCY_IN_PROGRESS` | La meme commande S2S est encore en cours |
 | `422` | `DRIVER_KYC_STATUS_INVALID` | Filtre `status` invalide sur la file KYC |
