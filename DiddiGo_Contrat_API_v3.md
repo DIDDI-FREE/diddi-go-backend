@@ -522,6 +522,42 @@ Reponse :
 }
 ```
 
+### Acces Backend Backoffice S2S au KYC
+
+Les routes `/v1/drivers/.../kyc` ci-dessus restent utilisables avec un JWT
+humain DiddiFreeID `role=admin`. Le Backend Backoffice utilise les routes
+internes equivalentes; son secret de client ne doit jamais etre expose au
+navigateur.
+
+| Methode | Route interne | Scope requis |
+|---|---|---|
+| `GET` | `/internal/v1/drivers/kyc` | `diddigo:kyc:read` |
+| `GET` | `/internal/v1/drivers/{driver_id}/kyc` | `diddigo:kyc:read` |
+| `POST` | `/internal/v1/drivers/{driver_id}/kyc/approve` | `diddigo:kyc:decide` |
+| `POST` | `/internal/v1/drivers/{driver_id}/kyc/reject` | `diddigo:kyc:decide` |
+
+En-tetes communs :
+
+```http
+Authorization: Bearer <service_access_token>
+X-Client-ID: backoffice-staging-diddigo
+X-Request-ID: <uuid-de-correlation>
+```
+
+Les deux mutations exigent en plus :
+
+```http
+X-User-ID: <user_id DiddiFreeID de l'admin humain>
+Idempotency-Key: <cle stable de la commande>
+```
+
+Le jeton de service doit avoir `aud=diddigo`, `role=service`,
+`token_type=service`, `status=active`, et le scope de la route. DiddiGo verifie
+egalement que `X-User-ID` correspond a un shadow user local actif avec
+`role=admin`. Une decision rejouee avec la meme cle et le meme contenu retourne
+la reponse memorisee; une reutilisation divergente retourne
+`409 IDEMPOTENCY_CONFLICT`.
+
 ### `POST /drivers/online`
 
 Avant validation admin, retourne :
@@ -562,10 +598,13 @@ Erreurs KYC principales :
 | HTTP | Code | Sens |
 |---|---|---|
 | `403` | `FORBIDDEN_ROLE` | Le token n'est pas admin pour une route admin |
+| `403` | `SERVICE_ACTOR_FORBIDDEN` | L'acteur humain d'une decision S2S n'est pas un admin actif |
 | `403` | `DRIVER_NOT_VERIFIED` | Le chauffeur n'est pas valide pour passer en ligne |
 | `403` | `DRIVER_BALANCE_TOO_LOW` | Solde chauffeur insuffisant pour passer en ligne |
 | `404` | `DRIVER_PROFILE_NOT_FOUND` | Aucun profil chauffeur pour ce compte ou cet identifiant |
 | `409` | `DRIVER_PROFILE_ALREADY_EXISTS` | Un profil chauffeur existe deja pour ce compte |
+| `409` | `IDEMPOTENCY_CONFLICT` | La cle S2S designe deja une autre commande |
+| `409` | `IDEMPOTENCY_IN_PROGRESS` | La meme commande S2S est encore en cours |
 | `422` | `DRIVER_KYC_STATUS_INVALID` | Filtre `status` invalide sur la file KYC |
 | `422` | `INVALID_KYC_DOCUMENTS` | Dossier KYC incomplet : permis recto/verso, CNI recto/verso ou selfie absent |
 | `422` | `INVALID_LICENSE_NUMBER` | Numero de permis vide ou invalide |

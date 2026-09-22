@@ -16,10 +16,13 @@ Two convenience deps for role gating:
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import Depends, Header, Request
 from fastapi.security import OAuth2PasswordBearer
 
 from app_base.core.deps import driver_profile_repo, user_repo
+from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
 from app_base.core.identity import (
     decode_identity_access_token,
@@ -117,6 +120,16 @@ async def get_current_active_user(
     if user.status != "active":
         raise ApiError(403, "USER_SUSPENDED", "Compte suspendu.")
     return user
+
+
+async def require_s2s_admin_actor(
+    actor_user_id: UUID = Header(alias="X-User-ID"),
+    repo: SqlAlchemyUserRepository = Depends(user_repo),
+) -> User:
+    actor = await repo.find_by_id(actor_user_id)
+    if actor is None or actor.role != UserRole.ADMIN or actor.status != UserStatus.ACTIVE:
+        raise ApiError(403, ErrorCode.SERVICE_ACTOR_FORBIDDEN, "L'acteur humain doit etre un administrateur actif.")
+    return actor
 
 
 def require_role(*roles: str):

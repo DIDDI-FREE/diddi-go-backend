@@ -49,6 +49,7 @@ from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentReposit
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.application.emergency_contact_service import EmergencyContactService
 from app_base.modules.ride.application.emergency_notifications import EmergencyNotificationService
+from app_base.modules.ride.application.kyc_command_store import KycCommandStore
 from app_base.modules.ride.application.matching_service import MatchingService
 from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.application.services import RideService
@@ -93,6 +94,10 @@ def get_driver_locations(request: Request) -> RedisDriverLocationService:
     if service is None:
         raise RuntimeError("Driver location service not initialized — lifespan may not have run.")
     return service
+
+
+async def kyc_command_store(redis: Redis = Depends(get_redis)) -> KycCommandStore:
+    return KycCommandStore(redis, ttl_seconds=settings.kyc_command_idempotency_ttl_seconds)
 
 
 _unconfigured_identity_capabilities = IdentityCapabilityClient(
