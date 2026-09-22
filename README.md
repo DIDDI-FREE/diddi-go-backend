@@ -26,7 +26,13 @@ Le service `init-db` applique les migrations Alembic une fois puis s'arrête
 normalement avec un code `0`. L'application ne démarre qu'après sa réussite.
 
 Application : <http://localhost:8000/docs>
-Santé : <http://localhost:8000/health>
+Liveness : <http://localhost:8000/health>
+Readiness PostgreSQL + Redis : <http://localhost:8000/ready>
+
+`/health` indique uniquement que le processus FastAPI répond et reste adapté
+au healthcheck Docker. `/ready` retourne `503 not_ready` lorsqu'une dépendance
+critique est indisponible ; les reverse proxies et outils d'exploitation
+doivent l'utiliser pour décider si l'instance peut recevoir du trafic.
 
 Repères locaux :
 - Backend exposé sur `18000`

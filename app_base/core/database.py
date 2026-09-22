@@ -56,6 +56,16 @@ async def ping_db() -> None:
         raise
 
 
+async def database_ready() -> bool:
+    """Return dependency readiness without logging on every probe failure."""
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False
+
+
 async def get_session() -> AsyncIterator[AsyncSession]:
     """FastAPI dependency. Yields one AsyncSession per request; commits if the
     handler completes without raising, rolls back otherwise.

@@ -1,8 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
+from redis.exceptions import RedisError
+from sqlalchemy.exc import SQLAlchemyError
 
-from app_base.core.errors import ApiError, api_error_handler
+from app_base.core.database import database_ready
+from app_base.core.errors import (
+    ApiError,
+    api_error_handler,
+    infrastructure_error_handler,
+    unhandled_exception_handler,
+)
 from app_base.core.lifespan import lifespan
 from app_base.core.metrics import render_prometheus
 from app_base.core.observability import configure_observability
@@ -38,6 +46,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_exception_handler(ApiError, api_error_handler)
+app.add_exception_handler(SQLAlchemyError, infrastructure_error_handler)
+app.add_exception_handler(RedisError, infrastructure_error_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(auth_router, prefix="/v1")
 app.include_router(notification_router, prefix="/v1")
@@ -62,6 +73,22 @@ app.include_router(payment_return_router)
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "app": settings.app_name}
+
+
+@app.get("/ready")
+async def readiness(request: Request) -> Response:
+    db_ok = await database_ready()
+    redis_pool = getattr(request.app.state, "redis", None)
+    try:
+        redis_ok = redis_pool is not None and bool(await redis_pool.ping())
+    except Exception:
+        redis_ok = False
+    payload = {
+        "status": "ready" if db_ok and redis_ok else "not_ready",
+        "app": settings.app_name,
+        "components": {"database": "ok" if db_ok else "unavailable", "redis": "ok" if redis_ok else "unavailable"},
+    }
+    return JSONResponse(status_code=200 if db_ok and redis_ok else 503, content=payload)
 
 
 @app.get("/metrics", include_in_schema=False)
