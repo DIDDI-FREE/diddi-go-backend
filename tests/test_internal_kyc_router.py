@@ -9,9 +9,9 @@ from fastapi import FastAPI
 from app_base.core.auth_deps import require_s2s_admin_actor
 from app_base.core.deps import driver_service, kyc_command_store
 from app_base.core.errors import ApiError, api_error_handler
+from app_base.core.s2s_command_store import S2SCommandStore
 from app_base.core.service_scopes import KYC_DECIDE, KYC_READ
 from app_base.modules.auth.domain.entities import User, UserRole, UserStatus
-from app_base.modules.ride.application.kyc_command_store import KycCommandStore
 from app_base.modules.ride.presentation.kyc_internal_router import router
 
 pytestmark = pytest.mark.unit
@@ -67,7 +67,7 @@ class FakeUserRepository:
 def kyc_api(monkeypatch):
     scopes: list[set[str]] = []
     service = FakeDriverService()
-    commands = KycCommandStore(FakeRedis())  # type: ignore[arg-type]
+    commands = S2SCommandStore(FakeRedis(), namespace="kyc-command")  # type: ignore[arg-type]
     actor = User(id=uuid4(), phone="+2250700000000", role=UserRole.ADMIN, status=UserStatus.ACTIVE)
 
     def decode(token, *, audience, required_scopes, client_id, expected_subject=None):

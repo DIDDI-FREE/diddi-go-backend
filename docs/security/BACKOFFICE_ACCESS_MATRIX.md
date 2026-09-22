@@ -18,6 +18,7 @@ attribuer le role admin.
 | Lire la file KYC | `GET /internal/v1/drivers/kyc` | JWT service + `X-Client-ID` | `diddigo:kyc:read` |
 | Lire un dossier KYC | `GET /internal/v1/drivers/{id}/kyc` | JWT service + `X-Client-ID` | `diddigo:kyc:read` |
 | Decider un KYC | `POST /internal/v1/drivers/{id}/kyc/{approve,reject}` | JWT service + acteur/audit/idempotence | `diddigo:kyc:decide` |
+| Provisionner un chauffeur | `POST /internal/v1/drivers/provision` | JWT service + acteur/audit/idempotence | `diddigo:drivers:write` |
 | Lire la file KYV | `GET /v1/admin/vehicles/kyv` | JWT humain admin | `diddigo:kyc:read` |
 | Decider un KYV | routes `kyv/approve` et `kyv/reject` | JWT humain admin | `diddigo:kyc:decide` |
 | Lire les courses | `GET /v1/rides` | JWT humain admin | `diddigo:rides:read` |
@@ -25,8 +26,9 @@ attribuer le role admin.
 | Lire wallet/ledger | `GET /v1/admin/drivers/{id}/wallet*` | JWT humain admin | `diddigo:wallets:read` |
 | Reconciliation | `POST /v1/admin/payments/*/reconcile` | JWT humain admin | `diddigo:payments:reconcile` |
 
-Les lignes KYV, courses, wallet et paiements documentent encore la cible. Seul
-le KYC chauffeur dispose des routes S2S synchrones dans cette version.
+Les lignes KYV, courses, wallet et paiements documentent encore la cible. Le
+KYC chauffeur et le provisioning du profil chauffeur disposent de routes S2S
+synchrones dans cette version.
 
 ## Client S2S Backoffice
 
@@ -44,6 +46,12 @@ Pour une decision KYC, le Backend Backoffice doit aussi transmettre :
 `role=admin` et `status=active`. Une cle d'idempotence reutilisee avec un contenu
 different est rejetee. La reponse d'une commande terminee est rejouee sans
 executer une seconde decision.
+
+Pour le provisioning, le Backoffice doit d'abord rechercher et valider
+l'identite dans DiddiFreeID. DiddiGo fait confiance au contexte transmis par ce
+client S2S autorise et cree uniquement son shadow technique et son profil metier
+`pending_verification`; il ne cree aucun compte global et ne rend pas le
+chauffeur eligible aux courses.
 
 ## Erreurs attendues
 

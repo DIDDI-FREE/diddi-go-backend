@@ -7,10 +7,10 @@ from fastapi import APIRouter, Depends, Header, Query, Request
 from app_base.core.auth_deps import require_identity_service_token, require_s2s_admin_actor
 from app_base.core.deps import driver_service, kyc_command_store
 from app_base.core.observability import log_event
+from app_base.core.s2s_command_store import S2SCommandStore
 from app_base.core.service_scopes import DIDDIGO_AUDIENCE, KYC_DECIDE, KYC_READ
 from app_base.modules.auth.domain.entities import User
 from app_base.modules.ride.application.driver_service import DriverService
-from app_base.modules.ride.application.kyc_command_store import KycCommandStore
 from app_base.modules.ride.presentation.driver_schemas import DriverKycReviewRequest
 
 router = APIRouter(prefix="/internal/v1/drivers", tags=["internal-driver-kyc"])
@@ -48,7 +48,7 @@ async def _decide(
     claims: dict,
     actor: User,
     service: DriverService,
-    commands: KycCommandStore,
+    commands: S2SCommandStore,
 ) -> dict:
     client_id = request.headers["X-Client-ID"]
     reservation = await commands.reserve(
@@ -87,7 +87,7 @@ async def approve_driver_kyc(
     claims: dict = Depends(require_kyc_decide),
     actor: User = Depends(require_s2s_admin_actor),
     service: DriverService = Depends(driver_service),
-    commands: KycCommandStore = Depends(kyc_command_store),
+    commands: S2SCommandStore = Depends(kyc_command_store),
 ) -> dict:
     return await _decide(
         decision="approve", driver_id=driver_id, notes=payload.notes, request=request,
@@ -105,7 +105,7 @@ async def reject_driver_kyc(
     claims: dict = Depends(require_kyc_decide),
     actor: User = Depends(require_s2s_admin_actor),
     service: DriverService = Depends(driver_service),
-    commands: KycCommandStore = Depends(kyc_command_store),
+    commands: S2SCommandStore = Depends(kyc_command_store),
 ) -> dict:
     return await _decide(
         decision="reject", driver_id=driver_id, notes=payload.notes, request=request,
