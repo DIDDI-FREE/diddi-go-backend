@@ -378,6 +378,29 @@ async def test_only_one_driver_can_win_a_simultaneous_accept(
     assert statuses.count(200) == 1, f"exactly one accept must win, got {statuses}"
 
 
+async def test_one_driver_cannot_accept_two_distinct_rides_concurrently(
+    client, passenger, passenger_factory, driver_factory,
+) -> None:
+    """The database constraint is the final guard across distinct ride locks."""
+    driver = await driver_factory(NEAR)
+    other_passenger = await passenger_factory()
+    first_ride = await create_ride(client, passenger)
+    second_ride = await create_ride(client, other_passenger)
+
+    results = await asyncio.gather(
+        client.post(f"/v1/rides/{first_ride}/accept", headers=driver),
+        client.post(f"/v1/rides/{second_ride}/accept", headers=driver),
+    )
+
+    assert sorted(response.status_code for response in results) == [200, 409]
+    rejected = next(response for response in results if response.status_code == 409)
+    assert rejected.json()["error"]["code"] == "DRIVER_ALREADY_ON_ACTIVE_RIDE"
+
+    first = await client.get(f"/v1/rides/{first_ride}", headers=passenger)
+    second = await client.get(f"/v1/rides/{second_ride}", headers=other_passenger)
+    assert [first.json()["status"], second.json()["status"]].count("matched") == 1
+
+
 async def test_accepting_an_already_matched_ride_is_rejected(
     client, passenger, driver_factory,
 ) -> None:

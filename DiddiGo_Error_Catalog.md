@@ -79,6 +79,7 @@ Ces routes restent utiles en local/dev si l'auth locale est active.
 | `403` | `OFFER_NOT_YOURS` | Offre de course reservee a un autre chauffeur |
 | `404` | `RIDE_NOT_FOUND` | Course introuvable |
 | `409` | `ACTIVE_RIDE_ALREADY_EXISTS` | Le passager a deja une course active |
+| `409` | `DRIVER_ALREADY_ON_ACTIVE_RIDE` | Le chauffeur est deja affecte a une autre course active |
 | `409` | `INVALID_STATUS_TRANSITION` | Transition de statut interdite |
 | `409` | `OFFER_EXPIRED` | Offre chauffeur expiree |
 | `409` | `RIDE_ALREADY_CANCELLED` | Course deja annulee |
