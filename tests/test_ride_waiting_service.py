@@ -124,6 +124,18 @@ async def test_passenger_can_cancel_during_active_waiting():
     assert repo.ride.waiting_duration_seconds >= 10
     assert repo.ride.waiting_fee == Decimal("100")
 
+    billed_duration = repo.ride.waiting_duration_seconds
+    with pytest.raises(ApiError) as retry:
+        await service.cancel(
+            ride.id,
+            "passenger_changed_mind",
+            actor_user_id=ride.passenger_user_id,
+            actor_role="user",
+        )
+    assert retry.value.code == "RIDE_ALREADY_CANCELLED"
+    assert repo.ride.waiting_fee == Decimal("100")
+    assert repo.ride.waiting_duration_seconds == billed_duration
+
 
 @pytest.mark.asyncio
 async def test_unrelated_user_cannot_cancel_ride():
@@ -139,3 +151,45 @@ async def test_unrelated_user_cannot_cancel_ride():
 
     assert error.value.code == "RIDE_NOT_OWNED_BY_USER"
     assert repo.ride.status is RideStatus.IN_PROGRESS
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("actor", "expected_status"),
+    [("driver", RideStatus.CANCELLED_BY_DRIVER), ("admin", RideStatus.CANCELLED_BY_PASSENGER)],
+)
+async def test_driver_and_admin_can_cancel_during_active_waiting(actor, expected_status):
+    service, repo, ride, driver_user_id = waiting_service()
+    await service.start_waiting(
+        ride.id, actor_user_id=driver_user_id, actor_role="driver", speed_kmh=0,
+    )
+    actor_user_id = driver_user_id if actor == "driver" else uuid4()
+
+    await service.cancel(
+        ride.id,
+        "other",
+        actor_user_id=actor_user_id,
+        actor_role=actor,
+    )
+
+    assert repo.ride.status is expected_status
+    assert repo.ride.waiting_started_at is None
+    assert repo.ride.waiting_fee == Decimal("100")
+
+
+@pytest.mark.asyncio
+async def test_passenger_cannot_directly_stop_waiting():
+    service, repo, ride, driver_user_id = waiting_service()
+    await service.start_waiting(
+        ride.id, actor_user_id=driver_user_id, actor_role="driver", speed_kmh=0,
+    )
+
+    with pytest.raises(ApiError) as error:
+        await service.stop_waiting(
+            ride.id,
+            actor_user_id=ride.passenger_user_id,
+            actor_role="user",
+        )
+
+    assert error.value.code == "RIDE_NOT_OWNED_BY_USER"
+    assert repo.ride.status is RideStatus.WAITING
