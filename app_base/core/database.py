@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
+from app_base.core.errors import ApiError
 from app_base.core.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -83,6 +84,17 @@ async def get_session() -> AsyncIterator[AsyncSession]:
     ends the transaction, which also keeps pooled connections clean.
     """
     async with async_session_factory() as session:
+        try:
+            # Force the initial checkout here. Some asyncpg connection failures
+            # (notably DNS errors) escape SQLAlchemy as raw OSError subclasses;
+            # at this boundary they are unambiguously database failures.
+            await session.connection()
+        except Exception as exc:
+            raise ApiError(
+                503,
+                "DATABASE_UNAVAILABLE",
+                "Le service de base de donnees est temporairement indisponible.",
+            ) from exc
         try:
             yield session
             await session.commit()
