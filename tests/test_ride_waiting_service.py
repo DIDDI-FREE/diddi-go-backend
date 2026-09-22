@@ -101,3 +101,41 @@ async def test_waiting_cannot_start_before_ride_is_in_progress():
             ride.id, actor_user_id=user_id, actor_role="driver", speed_kmh=0,
         )
     assert error.value.code == "WAITING_INVALID_RIDE_STATUS"
+
+
+@pytest.mark.asyncio
+async def test_passenger_can_cancel_during_active_waiting():
+    service, repo, ride, driver_user_id = waiting_service()
+    await service.start_waiting(
+        ride.id, actor_user_id=driver_user_id, actor_role="driver", speed_kmh=0,
+    )
+    ride.waiting_started_at = datetime.now(UTC) - timedelta(seconds=10)
+
+    result = await service.cancel(
+        ride.id,
+        "passenger_changed_mind",
+        actor_user_id=ride.passenger_user_id,
+        actor_role="user",
+    )
+
+    assert result["status"] == "cancelled_by_passenger"
+    assert repo.ride.status is RideStatus.CANCELLED_BY_PASSENGER
+    assert repo.ride.waiting_started_at is None
+    assert repo.ride.waiting_duration_seconds >= 10
+    assert repo.ride.waiting_fee == Decimal("100")
+
+
+@pytest.mark.asyncio
+async def test_unrelated_user_cannot_cancel_ride():
+    service, repo, ride, _ = waiting_service()
+
+    with pytest.raises(ApiError) as error:
+        await service.cancel(
+            ride.id,
+            "passenger_changed_mind",
+            actor_user_id=uuid4(),
+            actor_role="user",
+        )
+
+    assert error.value.code == "RIDE_NOT_OWNED_BY_USER"
+    assert repo.ride.status is RideStatus.IN_PROGRESS

@@ -382,6 +382,10 @@ class RideService:
         ride = await self.load_ride(ride_id)
         if actor_role != "admin" and not await self._is_assigned_driver(ride, actor_user_id):
             raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Seul le chauffeur assigne peut arreter l'attente.")
+        return await self._stop_waiting(ride, actor_user_id=actor_user_id, reason=reason)
+
+    async def _stop_waiting(self, ride: Ride, *, actor_user_id: UUID, reason: str) -> dict:
+        """Finalize an active wait after the caller has already been authorized."""
         if ride.status is not RideStatus.WAITING or ride.waiting_started_at is None:
             raise ApiError(409, "WAITING_NOT_ACTIVE", "Aucune attente active pour cette course.")
         now = datetime.now(UTC)
@@ -419,6 +423,11 @@ class RideService:
         if reason not in VALID_CANCEL_REASONS:
             raise ApiError(422, "INVALID_CANCEL_REASON", "Motif d'annulation invalide.")
         ride = await self.load_ride(ride_id)
+        is_admin = actor_role == "admin"
+        is_passenger = ride.passenger_user_id == actor_user_id
+        is_driver = await self._is_assigned_driver(ride, actor_user_id)
+        if not is_admin and not is_passenger and not is_driver:
+            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Cette course ne vous appartient pas.")
         if ride.status == RideStatus.COMPLETED:
             raise ApiError(409, "RIDE_ALREADY_COMPLETED", "La course est deja terminee.")
         if ride.status in {RideStatus.CANCELLED_BY_PASSENGER, RideStatus.CANCELLED_BY_DRIVER}:
@@ -426,17 +435,10 @@ class RideService:
         if ride.status == RideStatus.NO_DRIVER_FOUND:
             raise ApiError(409, "RIDE_NOT_CANCELLABLE", "Cette course n'a pas trouve de chauffeur.")
         if ride.status is RideStatus.WAITING:
-            await self.stop_waiting(
-                ride_id,
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                reason="ride_cancelled",
-            )
-            ride = await self.load_ride(ride_id)
-        is_driver = actor_role == "driver" or await self._is_assigned_driver(ride, actor_user_id)
+            await self._stop_waiting(ride, actor_user_id=actor_user_id, reason="ride_cancelled")
         new_status = (
             RideStatus.CANCELLED_BY_DRIVER
-            if reason == CancelReason.DRIVER_UNAVAILABLE.value or is_driver
+            if reason == CancelReason.DRIVER_UNAVAILABLE.value or (is_driver and not is_admin)
             else RideStatus.CANCELLED_BY_PASSENGER
         )
         ride.transition(new_status, metadata={"reason": reason})
