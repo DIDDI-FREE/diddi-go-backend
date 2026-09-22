@@ -14,9 +14,10 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app_base.core.auth_deps import get_current_user, require_business_driver, require_role
-from app_base.core.deps import driver_wallet_service, payment_service, session_dep
+from app_base.core.deps import driver_wallet_service, payment_return_context_store, payment_service, session_dep
 from app_base.core.errors import ApiError
 from app_base.modules.auth.infra.models import UserModel
+from app_base.modules.payment.application.return_contexts import PaymentReturnContextStore
 from app_base.modules.payment.application.services import PaymentService
 from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.payment.presentation.schemas import (
@@ -200,8 +201,11 @@ async def diddipay_webhook(
 @return_router.get("/payments/return", response_class=HTMLResponse)
 @return_router.get("/wallet/return", response_class=HTMLResponse)
 async def payment_browser_return(
+    request: Request,
     trxref: str | None = None,
     reference: str | None = None,
+    context: str | None = None,
+    contexts: PaymentReturnContextStore = Depends(payment_return_context_store),
 ) -> str:
     """Browser landing page after provider checkout.
 
@@ -209,7 +213,15 @@ async def payment_browser_return(
     may redirect a browser here before the signed server callback is processed,
     so the application must still poll DiddiGo for the authoritative status.
     """
+    expected_surface = "pro" if request.url.path == "/wallet/return" else "consumer"
+    verified = await contexts.consume(context, expected_surface=expected_surface) if context else None
     escaped_reference = (reference or trxref or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    title = "Retour paiement DiddiGo" if verified else "Lien de retour invalide"
+    message = (
+        "Le paiement est en cours de verification."
+        if verified
+        else "Ce lien est invalide, expire ou a deja ete utilise."
+    )
     return f"""<!doctype html>
 <html lang="fr">
   <head>
@@ -230,8 +242,8 @@ async def payment_browser_return(
   </head>
   <body>
     <main>
-      <h1>Retour paiement DiddiGo</h1>
-      <p>Le paiement est en cours de verification.</p>
+      <h1>{title}</h1>
+      <p>{message}</p>
       <p>Vous pouvez revenir dans l'application. Elle va relire DiddiGo pour confirmer le statut final.</p>
       <p>Reference: <code>{escaped_reference or "non fournie"}</code></p>
     </main>

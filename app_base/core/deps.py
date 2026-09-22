@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app_base.core.database import get_session
 from app_base.core.redis import get_redis  # noqa: F401 — re-exported
+from app_base.core.settings import settings
 from app_base.modules.auth.application.services import AuthService
 from app_base.modules.auth.infra.repositories import (
     SqlAlchemyOTPRepository,
@@ -40,6 +41,7 @@ from app_base.modules.notification.infra.fcm import build_push_gateway
 from app_base.modules.notification.infra.repositories import SqlAlchemyUserDeviceRepository
 from app_base.modules.partner.application.services import PartnerService
 from app_base.modules.partner.infra.repositories import SqlAlchemyPartnerRepository
+from app_base.modules.payment.application.return_contexts import PaymentReturnContextStore
 from app_base.modules.payment.application.services import PaymentService
 from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
@@ -190,23 +192,35 @@ async def ride_service(
 async def payment_service(
     payment_repo_dep: SqlAlchemyPaymentRepository = Depends(payment_repo),
     ride_repo_dep: SqlAlchemyRideRepository = Depends(ride_repo),
+    redis: Redis = Depends(get_redis),
 ) -> PaymentService:
     return PaymentService(
         payment_repo=payment_repo_dep,
         ride_repo=ride_repo_dep,
         diddipay=DiddiPayClient(),
+        return_contexts=PaymentReturnContextStore(
+            redis, ttl_seconds=settings.payment_return_context_ttl_seconds,
+        ),
     )
 
 
 async def driver_wallet_service(
     payment_repo_dep: SqlAlchemyPaymentRepository = Depends(payment_repo),
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
+    redis: Redis = Depends(get_redis),
 ) -> DriverWalletService:
     return DriverWalletService(
         payment_repo=payment_repo_dep,
         driver_repo=driver_repo_dep,
         diddipay=DiddiPayClient(),
+        return_contexts=PaymentReturnContextStore(
+            redis, ttl_seconds=settings.payment_return_context_ttl_seconds,
+        ),
     )
+
+
+async def payment_return_context_store(redis: Redis = Depends(get_redis)) -> PaymentReturnContextStore:
+    return PaymentReturnContextStore(redis, ttl_seconds=settings.payment_return_context_ttl_seconds)
 
 
 async def driver_service(

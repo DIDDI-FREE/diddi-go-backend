@@ -19,6 +19,7 @@ from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
 from app_base.core.observability import log_event
 from app_base.core.settings import settings
+from app_base.modules.payment.application.return_contexts import PaymentReturnContextStore
 from app_base.modules.payment.domain.entities import (
     KEEP,
     DriverLedgerEntry,
@@ -79,6 +80,7 @@ class PaymentService:
     payment_repo: PaymentRepository
     ride_repo: RideRepository
     diddipay: DiddiPayClient | None = None
+    return_contexts: PaymentReturnContextStore | None = None
 
     async def confirm_cash(
         self,
@@ -604,6 +606,13 @@ class PaymentService:
 
         idempotency_key = f"diddigo:ride:{ride_id}:collection:v1"
         business_reference = f"diddigo:ride:{ride_id}"
+        return_token = None
+        callback_url = _consumer_return_url()
+        if self.return_contexts:
+            return_token = await self.return_contexts.create(
+                flow="ride_payment", surface="consumer", user_id=payer_user_id, resource_id=ride_id,
+            )
+            callback_url = self.return_contexts.callback_url(callback_url, return_token)
         intent = await (self.diddipay or DiddiPayClient()).create_payment_intent(
             {
                 "business_reference": business_reference,
@@ -615,13 +624,16 @@ class PaymentService:
                 "network": "wave" if payment_method is PaymentMethod.WAVE else None,
                 "customer_email": customer_email,
                 "customer_phone": customer_phone,
-                "callback_url": _consumer_return_url(),
+                "callback_url": callback_url,
                 "description": f"Course DiddiGo {ride_id}",
                 "metadata": {"ride_id": str(ride_id)},
             },
             idempotency_key=idempotency_key,
         )
         status = _payment_status_from_diddipay(str(intent.get("status") or "requires_action"))
+        payment_intent_id = UUID(str(intent["id"]))
+        if self.return_contexts and return_token:
+            await self.return_contexts.bind_payment_intent(return_token, payment_intent_id)
         next_action = _next_action_from_intent(intent)
         payment = Transaction(
             id=Transaction.new_id(),
@@ -631,7 +643,7 @@ class PaymentService:
             method=payment_method,
             status=status,
             created_at=datetime.now(UTC),
-            payment_intent_id=UUID(str(intent["id"])),
+            payment_intent_id=payment_intent_id,
             business_reference=business_reference,
             idempotency_key=idempotency_key,
             provider_status=str(intent.get("status") or status.value),

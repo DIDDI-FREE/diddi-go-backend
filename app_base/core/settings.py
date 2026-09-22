@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     diddigo_payment_callback_url: str | None = None
     diddigo_consumer_return_url: str | None = None
     diddigo_pro_return_url: str | None = None
+    payment_return_context_ttl_seconds: int = Field(default=900, ge=60, le=3600)
     driver_min_balance: int = 0
     driver_max_estimated_commission: int = 0
 

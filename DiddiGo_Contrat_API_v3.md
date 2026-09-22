@@ -1295,6 +1295,10 @@ Le client ne peut pas fournir de `callback_url`. DiddiGo choisit la destination
 passager configuree par `DIDDIGO_CONSUMER_RETURN_URL`; toute propriete inconnue
 dans cette requete est rejetee avec `422`.
 
+DiddiGo ajoute automatiquement un parametre `context` opaque au retour. Ce
+contexte expire apres 15 minutes par defaut, est lie a l'utilisateur, la course
+et au `payment_intent_id`, et ne peut etre consomme qu'une fois.
+
 `customer_email` est obligatoire pour `wave` et `diddipay`, car le PSP actif
 derriere DiddiPay/Paystack l'exige. DiddiGo ne doit pas inventer d'email si
 l'identite ne le fournit pas.
@@ -1335,6 +1339,9 @@ Route publique de retour navigateur apres checkout. Elle existe pour eviter un
 Important : cette route ne confirme jamais le paiement. Elle affiche seulement
 une page demandant a l'utilisateur de revenir dans l'application. L'application
 doit relire `GET /v1/payments/{ride_id}`.
+
+Un contexte absent, falsifie, expire, deja utilise ou destine a l'espace
+chauffeur affiche une page de lien invalide. Il ne modifie jamais le paiement.
 
 ### `POST /internal/webhooks/diddipay`
 
@@ -1469,6 +1476,10 @@ Requete :
 Le client ne peut pas fournir de `callback_url`. DiddiGo choisit la destination
 chauffeur configuree par `DIDDIGO_PRO_RETURN_URL`; toute propriete inconnue dans
 cette requete est rejetee avec `422`.
+
+DiddiGo ajoute un `context` opaque, lie au chauffeur, a la recharge et au
+`payment_intent_id`. Il expire et ne peut etre consomme qu'une fois. Un contexte
+passager ne peut pas etre utilise sur `/wallet/return`.
 
 Reponse :
 
