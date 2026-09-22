@@ -2,17 +2,22 @@
 
 ## Regle
 
-Le Backoffice interactif utilise un JWT humain DiddiFreeID avec `role=admin`.
-Le parametre d'URL, le frontend et `X-Client-ID` ne peuvent jamais attribuer ce
-role. DiddiGo reste responsable des controles metier et de l'audit.
+Le navigateur ne recoit jamais le secret du client S2S. Le Backend Backoffice
+obtient un jeton de service DiddiFreeID, puis appelle les routes internes
+DiddiGo au nom d'un administrateur humain explicite. DiddiGo valide a la fois le
+scope du service et le statut admin actif de cet acteur local.
+
+Les routes historiques `/v1` avec JWT humain admin restent disponibles pendant
+la migration. Le parametre d'URL, le frontend et `X-Client-ID` ne peuvent jamais
+attribuer le role admin.
 
 ## Matrice V1
 
 | Action | Route | Authentification | Permission cible |
 | --- | --- | --- | --- |
-| Lire la file KYC | `GET /v1/drivers/kyc` | JWT humain admin | `diddigo:kyc:read` |
-| Lire un dossier KYC | `GET /v1/drivers/{id}/kyc` | JWT humain admin | `diddigo:kyc:read` |
-| Decider un KYC | `POST /v1/drivers/{id}/kyc/{approve,reject}` | JWT humain admin | `diddigo:kyc:decide` |
+| Lire la file KYC | `GET /internal/v1/drivers/kyc` | JWT service + `X-Client-ID` | `diddigo:kyc:read` |
+| Lire un dossier KYC | `GET /internal/v1/drivers/{id}/kyc` | JWT service + `X-Client-ID` | `diddigo:kyc:read` |
+| Decider un KYC | `POST /internal/v1/drivers/{id}/kyc/{approve,reject}` | JWT service + acteur/audit/idempotence | `diddigo:kyc:decide` |
 | Lire la file KYV | `GET /v1/admin/vehicles/kyv` | JWT humain admin | `diddigo:kyc:read` |
 | Decider un KYV | routes `kyv/approve` et `kyv/reject` | JWT humain admin | `diddigo:kyc:decide` |
 | Lire les courses | `GET /v1/rides` | JWT humain admin | `diddigo:rides:read` |
@@ -20,8 +25,8 @@ role. DiddiGo reste responsable des controles metier et de l'audit.
 | Lire wallet/ledger | `GET /v1/admin/drivers/{id}/wallet*` | JWT humain admin | `diddigo:wallets:read` |
 | Reconciliation | `POST /v1/admin/payments/*/reconcile` | JWT humain admin | `diddigo:payments:reconcile` |
 
-Les permissions cibles documentent la future equivalence S2S. Elles ne rendent
-pas les routes synchrones accessibles au client service Backoffice aujourd'hui.
+Les lignes KYV, courses, wallet et paiements documentent encore la cible. Seul
+le KYC chauffeur dispose des routes S2S synchrones dans cette version.
 
 ## Client S2S Backoffice
 
@@ -29,14 +34,22 @@ Le client S2S doit utiliser `aud=diddigo`, `role=service`, `token_type=service`,
 `status=active`, un `X-Client-ID` identique au claim `client_id`, et uniquement
 des scopes `diddigo:*` autorises par DiddiFreeID.
 
-Il sera limite aux commandes asynchrones lorsque ces routes et leur mecanisme
-d'idempotence existeront. Un token S2S ne remplace jamais un JWT admin humain
-sur les routes ci-dessus.
+Pour une decision KYC, le Backend Backoffice doit aussi transmettre :
+
+- `X-User-ID`: identifiant DiddiFreeID de l'admin humain ayant decide;
+- `X-Request-ID`: identifiant de correlation;
+- `Idempotency-Key`: cle stable lors des reprises de la meme commande.
+
+`X-User-ID` n'accorde aucun droit seul : DiddiGo charge son shadow user et exige
+`role=admin` et `status=active`. Une cle d'idempotence reutilisee avec un contenu
+different est rejetee. La reponse d'une commande terminee est rejouee sans
+executer une seconde decision.
 
 ## Erreurs attendues
 
 - `401`: token absent, invalide ou expire;
 - `403`: role ou scope insuffisant;
 - `404`: ressource metier absente;
+- `409`: commande deja en cours ou cle d'idempotence reutilisee autrement;
 - `422`: UUID, statut ou payload invalide;
 - `5xx`: dependance indisponible, avec `X-Request-ID` pour diagnostic.

@@ -9,6 +9,8 @@ from app_base.core.errors import ApiError
 from app_base.core.identity import IdentityTokenVerifier
 from app_base.core.service_scopes import RIDE_SUMMARY_READ
 
+pytestmark = pytest.mark.unit
+
 
 class FakeJwkClient:
     def __init__(self, public_key) -> None:

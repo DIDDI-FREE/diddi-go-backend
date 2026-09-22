@@ -28,6 +28,7 @@ from app_base.modules.payment.presentation.router import router as payment_route
 from app_base.modules.ride.presentation.capabilities_router import router as capabilities_router
 from app_base.modules.ride.presentation.driver_router import admin_vehicle_router
 from app_base.modules.ride.presentation.driver_router import router as driver_router
+from app_base.modules.ride.presentation.kyc_internal_router import router as kyc_internal_router
 from app_base.modules.ride.presentation.router import places_router
 from app_base.modules.ride.presentation.router import router as ride_router
 from app_base.modules.ride.presentation.summary_router import router as ride_summary_router
@@ -57,6 +58,7 @@ app.include_router(capabilities_router, prefix="/v1")
 app.include_router(places_router, prefix="/v1")
 app.include_router(ride_router, prefix="/v1")
 app.include_router(ride_summary_router)
+app.include_router(kyc_internal_router)
 app.include_router(driver_router, prefix="/v1")
 app.include_router(admin_vehicle_router, prefix="/v1")
 app.include_router(payment_router, prefix="/v1")

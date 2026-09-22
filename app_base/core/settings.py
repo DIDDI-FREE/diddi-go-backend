@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     diddigo_consumer_return_url: str | None = None
     diddigo_pro_return_url: str | None = None
     payment_return_context_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+    kyc_command_idempotency_ttl_seconds: int = Field(default=86400, ge=300, le=604800)
     driver_min_balance: int = 0
     driver_max_estimated_commission: int = 0
 
