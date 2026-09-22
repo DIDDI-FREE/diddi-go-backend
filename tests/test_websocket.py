@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
@@ -97,6 +98,24 @@ def test_location_push_without_coordinates_is_rejected(ws_client) -> None:
     with ws_client.websocket_connect(f"/v1/ws?token={driver_token()}") as ws:
         ws.send_json({"event": "driver.location_push", "location": {"lat": 5.3}})
         assert ws.receive_json() == {"event": "error", "code": "INVALID_LOCATION"}
+
+
+def test_location_push_closes_cleanly_when_redis_is_unavailable(ws_client, monkeypatch) -> None:
+    locations = AsyncMock()
+    locations.update_position.side_effect = RedisConnectionError("redis unavailable")
+    locations.go_offline.side_effect = RedisConnectionError("redis unavailable")
+    monkeypatch.setattr("app_base.main.app.state.driver_locations", locations, raising=False)
+
+    with ws_client.websocket_connect(f"/v1/ws?token={driver_token()}") as ws:
+        ws.send_json({"event": "driver.location_push", "location": ABIDJAN})
+        assert ws.receive_json() == {
+            "event": "error",
+            "code": "CACHE_UNAVAILABLE",
+            "retryable": True,
+        }
+        with pytest.raises(WebSocketDisconnect) as excinfo:
+            ws.receive_json()
+        assert excinfo.value.code == 1013
 
 
 def test_location_push_writes_through_to_redis(ws_client) -> None:
