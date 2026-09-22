@@ -267,6 +267,12 @@ class RideService:
         actor_role: str = "driver",
     ) -> dict:
         ride = await self.load_ride(ride_id)
+        if actor_role != "admin" and not await self._is_assigned_driver(ride, actor_user_id):
+            raise ApiError(
+                403,
+                "RIDE_NOT_OWNED_BY_USER",
+                "Seul le chauffeur assigne peut modifier l'etat de cette course.",
+            )
         if ride.status is RideStatus.COMPLETED and new_status is RideStatus.COMPLETED:
             log_event(
                 "ride.completion.retry",

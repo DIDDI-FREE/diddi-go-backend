@@ -6,6 +6,7 @@ supports the WebSocket handshake (httpx's ASGITransport does not).
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -124,7 +125,11 @@ def test_location_push_writes_through_to_redis(ws_client) -> None:
 
 # --- ride.subscribe + fan-out ----------------------------------------------
 
-def test_ride_subscribe_is_acknowledged(ws_client) -> None:
+def test_ride_subscribe_is_acknowledged(ws_client, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app_base.modules.ride.presentation.websocket._can_access_ride",
+        AsyncMock(return_value=True),
+    )
     ride_id = str(uuid4())
     with ws_client.websocket_connect(f"/v1/ws?token={passenger_token()}") as ws:
         ws.send_json({"event": "ride.subscribe", "ride_id": ride_id})
@@ -139,10 +144,25 @@ def test_ride_subscribe_rejects_a_bad_uuid(ws_client) -> None:
         assert ws.receive_json() == {"event": "error", "code": "INVALID_RIDE_ID"}
 
 
-def test_driver_location_reaches_a_subscribed_passenger(ws_client) -> None:
+def test_unrelated_user_cannot_subscribe_to_ride(ws_client, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app_base.modules.ride.presentation.websocket._can_access_ride",
+        AsyncMock(return_value=False),
+    )
+    ride_id = str(uuid4())
+    with ws_client.websocket_connect(f"/v1/ws?token={passenger_token()}") as ws:
+        ws.send_json({"event": "ride.subscribe", "ride_id": ride_id})
+        assert ws.receive_json() == {"event": "error", "code": "RIDE_NOT_OWNED_BY_USER"}
+
+
+def test_driver_location_reaches_a_subscribed_passenger(ws_client, monkeypatch) -> None:
     """The core fan-out the contract promises: a driver pushing their position
     on a ride is delivered to whoever is watching that ride."""
     ride_id = str(uuid4())
+    monkeypatch.setattr(
+        "app_base.modules.ride.presentation.websocket._can_access_ride",
+        AsyncMock(return_value=True),
+    )
 
     with ws_client.websocket_connect(f"/v1/ws?token={passenger_token()}") as passenger:
         passenger.send_json({"event": "ride.subscribe", "ride_id": ride_id})
@@ -168,9 +188,13 @@ def test_driver_location_reaches_a_subscribed_passenger(ws_client) -> None:
     assert broadcast["at"].endswith("Z")
 
 
-def test_unsubscribed_sockets_do_not_receive_other_rides(ws_client) -> None:
+def test_unsubscribed_sockets_do_not_receive_other_rides(ws_client, monkeypatch) -> None:
     watched = str(uuid4())
     other = str(uuid4())
+    monkeypatch.setattr(
+        "app_base.modules.ride.presentation.websocket._can_access_ride",
+        AsyncMock(return_value=True),
+    )
 
     with ws_client.websocket_connect(f"/v1/ws?token={passenger_token()}") as passenger:
         passenger.send_json({"event": "ride.subscribe", "ride_id": watched})
@@ -185,6 +209,18 @@ def test_unsubscribed_sockets_do_not_receive_other_rides(ws_client) -> None:
             # Prove the passenger's queue is empty by round-tripping a ping.
             passenger.send_json({"event": "ping"})
             assert passenger.receive_json() == {"event": "ignored", "received_event": "ping"}
+
+
+def test_unassigned_driver_cannot_publish_ride_location(ws_client, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app_base.modules.ride.presentation.websocket._can_access_ride",
+        AsyncMock(return_value=False),
+    )
+    with ws_client.websocket_connect(f"/v1/ws?token={driver_token()}") as driver:
+        driver.send_json(
+            {"event": "driver.location_push", "ride_id": str(uuid4()), "location": ABIDJAN},
+        )
+        assert driver.receive_json() == {"event": "error", "code": "RIDE_NOT_OWNED_BY_USER"}
 
 
 def test_unknown_events_are_ignored_not_fatal(ws_client) -> None:

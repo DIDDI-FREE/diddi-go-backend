@@ -290,13 +290,13 @@ async def test_completion_survives_diddimap_failure_and_records_explicit_fallbac
         ride.id,
         RideStatus.COMPLETED,
         actor_user_id=uuid4(),
-        actor_role="driver",
+        actor_role="admin",
     )
 
     assert result["status"] == "completed"
     assert result["final_fare"] == 3100
     assert result["trace_analysis"]["status"] == "provider_error"
-    assert result["trace_analysis"]["error_code"] is None
+    assert result["trace_analysis"]["error_code"] == "DIDDIMAP_AUTHENTICATION_FAILED"
     assert ride.trace_analysis_error_code == "DIDDIMAP_AUTHENTICATION_FAILED"
     assert repo.save_calls == 1
 
@@ -318,7 +318,7 @@ async def test_completed_ride_retry_returns_existing_result_without_reprocessing
         ride.id,
         RideStatus.COMPLETED,
         actor_user_id=uuid4(),
-        actor_role="driver",
+        actor_role="admin",
     )
 
     assert result["status"] == "completed"

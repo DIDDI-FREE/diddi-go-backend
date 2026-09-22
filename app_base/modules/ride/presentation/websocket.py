@@ -299,12 +299,25 @@ async def _handle_message(
         ride_id = message.get("ride_id")
         if ride_id:
             try:
-                await manager.broadcast_driver_location(
-                    UUID(str(ride_id)), location, message.get("heading"),
-                )
+                parsed_ride_id = UUID(str(ride_id))
             except ValueError:
                 await websocket.send_json({"event": "error", "code": "INVALID_RIDE_ID"})
                 return
+            if not await _can_access_ride(
+                parsed_ride_id, user_id=user_id, role=role, assigned_driver_required=True,
+            ):
+                await websocket.send_json({"event": "error", "code": "RIDE_NOT_OWNED_BY_USER"})
+                log_event(
+                    "ws.ride_location.denied",
+                    level="warning",
+                    user_id=user_id,
+                    role=role,
+                    ride_id=parsed_ride_id,
+                )
+                return
+            await manager.broadcast_driver_location(
+                parsed_ride_id, location, message.get("heading"),
+            )
         await websocket.send_json({"event": "ack", "received_event": event})
         logger.info("ws_driver_location_push user_id=%s ride_id=%s", user_id, ride_id)
         log_event("ws.driver_location.received", user_id=user_id, ride_id=ride_id, role=role)
@@ -315,6 +328,16 @@ async def _handle_message(
             ride_id = UUID(str(message.get("ride_id")))
         except (TypeError, ValueError):
             await websocket.send_json({"event": "error", "code": "INVALID_RIDE_ID"})
+            return
+        if not await _can_access_ride(ride_id, user_id=user_id, role=role):
+            await websocket.send_json({"event": "error", "code": "RIDE_NOT_OWNED_BY_USER"})
+            log_event(
+                "ws.ride_subscribe.denied",
+                level="warning",
+                user_id=user_id,
+                role=role,
+                ride_id=ride_id,
+            )
             return
         manager.subscribe_to_ride(websocket, ride_id)
         await websocket.send_json(
@@ -385,3 +408,23 @@ async def _has_active_driver_profile(user_id: UUID) -> bool:
     async with async_session_factory() as session:
         profile = await SqlAlchemyDriverProfileRepository(session).find_by_user_id(user_id)
     return profile is not None and profile.status is DriverStatus.ACTIVE
+
+
+async def _can_access_ride(
+    ride_id: UUID,
+    *,
+    user_id: UUID,
+    role: str,
+    assigned_driver_required: bool = False,
+) -> bool:
+    async with async_session_factory() as session:
+        ride = await SqlAlchemyRideRepository(session).find_by_id(ride_id)
+        if ride is None:
+            return False
+        if role == "admin":
+            return True
+        driver = await SqlAlchemyDriverProfileRepository(session).find_by_user_id(user_id)
+    is_assigned_driver = driver is not None and ride.driver_id == driver.id
+    if assigned_driver_required:
+        return is_assigned_driver
+    return ride.passenger_user_id == user_id or is_assigned_driver
