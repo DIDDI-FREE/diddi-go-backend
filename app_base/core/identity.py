@@ -15,6 +15,7 @@ from jwt import PyJWKClient
 from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
 
 from app_base.core.errors import ApiError
+from app_base.core.service_scopes import canonicalize_scopes
 from app_base.core.settings import settings
 
 
@@ -85,7 +86,7 @@ class IdentityTokenVerifier:
         if client_id is not None and payload.get("client_id") != client_id:
             raise ApiError(401, "SERVICE_CLIENT_ID_INVALID", "X-Client-ID ne correspond pas au token.")
 
-        token_scopes = set(str(payload.get("scope", "")).split())
+        token_scopes = canonicalize_scopes(set(str(payload.get("scope", "")).split()))
         if not required_scopes.issubset(token_scopes):
             raise ApiError(403, "SERVICE_SCOPE_INVALID", "Scopes insuffisants pour cette opération.")
         return payload

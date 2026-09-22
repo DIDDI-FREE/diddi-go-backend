@@ -28,6 +28,7 @@ from app_base.core.identity import (
     identity_mode_enabled,
     identity_payload_to_user_model,
 )
+from app_base.core.observability import log_event
 from app_base.core.security import decode_token, user_id_from_token
 from app_base.modules.auth.domain.entities import User, UserRole, UserStatus
 from app_base.modules.auth.infra.models import UserModel
@@ -70,6 +71,15 @@ def require_identity_service_token(
             expected_subject=expected_subject,
         )
         request.state.service_claims = claims
+        log_event(
+            "service.authorization.succeeded",
+            client_id=x_client_id,
+            service_subject=claims.get("sub"),
+            audience=audience,
+            required_scope=required_scope,
+            method=request.method,
+            path=request.url.path,
+        )
         return claims
 
     return _dependency
