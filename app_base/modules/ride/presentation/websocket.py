@@ -32,6 +32,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from redis.exceptions import RedisError
 
 from app_base.core.database import async_session_factory
 from app_base.core.errors import ApiError
@@ -58,6 +59,7 @@ router = APIRouter(tags=["ride-ws"])
 
 # Close codes (RFC 6455 application range).
 WS_UNAUTHORIZED = 4401
+WS_TRY_AGAIN_LATER = 1013
 
 
 def _now_iso() -> str:
@@ -247,12 +249,39 @@ async def websocket_endpoint(
     except WebSocketDisconnect:
         logger.info("ws_disconnected connection_id=%s user_id=%s role=%s", connection_id, user_id, role)
         log_event("ws.disconnected", connection_id=connection_id, user_id=user_id, role=role)
+    except RedisError as exc:
+        logger.warning(
+            "ws_cache_unavailable connection_id=%s user_id=%s role=%s error=%s",
+            connection_id,
+            user_id,
+            role,
+            type(exc).__name__,
+        )
+        log_event(
+            "ws.cache_unavailable",
+            level="error",
+            connection_id=connection_id,
+            user_id=user_id,
+            role=role,
+            error_type=type(exc).__name__,
+        )
+        await websocket.send_json({"event": "error", "code": "CACHE_UNAVAILABLE", "retryable": True})
+        await websocket.close(code=WS_TRY_AGAIN_LATER, reason="CACHE_UNAVAILABLE")
     except Exception:
         logger.exception("ws_failed connection_id=%s user_id=%s role=%s", connection_id, user_id, role)
         log_event("ws.failed", level="error", connection_id=connection_id, user_id=user_id, role=role)
     finally:
         if role == "driver" and locations is not None:
-            await locations.go_offline(user_id)
+            try:
+                await locations.go_offline(user_id)
+            except RedisError:
+                log_event(
+                    "ws.offline_cleanup.skipped",
+                    level="warning",
+                    connection_id=connection_id,
+                    user_id=user_id,
+                    reason="cache_unavailable",
+                )
         manager.disconnect(websocket)
 
 
