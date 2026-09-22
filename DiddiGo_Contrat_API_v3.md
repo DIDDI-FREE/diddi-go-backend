@@ -1959,7 +1959,9 @@ Cette route serveur-a-serveur requiert un JWT DiddiFreeID signe (JWKS),
 `Authorization: Bearer <service_token>` et `X-Client-ID` identique au claim
 `client_id`. Les claims doivent inclure `iss=diddifree-id`, `aud=diddigo`,
 `sub=service:pilotage`, `role=service`, `token_type=service`, `status=active`
-et le scope `ride-summary:read`. Un JWT utilisateur ne donne aucun acces.
+et le scope `diddigo:ride-summary:read`. L'ancien scope `ride-summary:read`
+reste temporairement accepte pendant la migration. Un JWT utilisateur ne donne
+aucun acces.
 
 La date est interpretee dans `Africa/Abidjan` et les bornes sont inclusives
 au debut, exclusives a la fin. Par defaut, seules la date courante et les

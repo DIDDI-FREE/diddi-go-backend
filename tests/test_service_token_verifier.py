@@ -7,6 +7,7 @@ from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
 
 from app_base.core.errors import ApiError
 from app_base.core.identity import IdentityTokenVerifier
+from app_base.core.service_scopes import RIDE_SUMMARY_READ
 
 
 class FakeJwkClient:
@@ -49,7 +50,7 @@ def test_service_token_claims_are_accepted(service_verifier) -> None:
     claims = verifier.decode_service_token(
         token,
         audience="diddigo",
-        required_scopes={"ride-summary:read"},
+        required_scopes={RIDE_SUMMARY_READ},
         client_id="pilotage-staging-diddigo",
         expected_subject="service:pilotage",
     )
@@ -84,6 +85,20 @@ def test_service_token_rejects_wrong_permissions(
         )
 
     assert error.value.code == error_code
+
+
+def test_legacy_ride_summary_scope_is_temporarily_canonicalized(service_verifier) -> None:
+    verifier, token = service_verifier
+
+    claims = verifier.decode_service_token(
+        token,
+        audience="diddigo",
+        required_scopes={RIDE_SUMMARY_READ},
+        client_id="pilotage-staging-diddigo",
+        expected_subject="service:pilotage",
+    )
+
+    assert claims["scope"] == "ride-summary:read"
 
 
 @pytest.mark.parametrize(

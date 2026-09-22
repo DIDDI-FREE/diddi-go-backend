@@ -12,7 +12,7 @@ DIDDIGO_BASE_URL=https://go-staging.diddifree.com
 DIDDIGO_SERVICE_CLIENT_ID=pilotage-staging-diddigo
 DIDDIGO_SERVICE_CLIENT_SECRET=<secret-genere-par-diddifreeid>
 DIDDIGO_SERVICE_AUDIENCE=diddigo
-DIDDIGO_SERVICE_SCOPE=ride-summary:read
+DIDDIGO_SERVICE_SCOPE=diddigo:ride-summary:read
 DIDDIGO_SERVICE_TOKEN_URL=https://auth-staging.diddifree.com/identity/v1/auth/service/token
 ```
 
@@ -37,7 +37,7 @@ Le token est émis par DiddiFreeID avec :
 
 ```text
 audience=diddigo
-scope=ride-summary:read
+scope=diddigo:ride-summary:read
 ```
 
 DiddiGo vérifie localement la signature via `IDENTITY_JWKS_URL`, puis :
@@ -47,7 +47,8 @@ DiddiGo vérifie localement la signature via `IDENTITY_JWKS_URL`, puis :
 - `sub=service:pilotage` ;
 - `role=service` et `token_type=service` ;
 - `status=active` ; ce claim est obligatoire du contrat DiddiFreeID ;
-- le scope `ride-summary:read` ;
+- le scope `diddigo:ride-summary:read` ;
+- l'ancien scope `ride-summary:read` reste temporairement accepte pendant la migration ;
 - l'égalité entre `X-Client-ID` et le claim `client_id`.
 
 Le helper est disponible dans
