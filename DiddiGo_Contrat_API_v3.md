@@ -544,16 +544,21 @@ X-Client-ID: backoffice-staging-diddigo
 X-Request-ID: <uuid-de-correlation>
 ```
 
-Les deux mutations exigent en plus :
+Les deux mutations exigent en plus un en-tete acteur. Le premier est canonique;
+le second reste accepte comme alias legacy :
 
 ```http
+X-Backoffice-Actor: <user_id DiddiFreeID de l'admin humain>
+# ou, pendant la migration
 X-User-ID: <user_id DiddiFreeID de l'admin humain>
 Idempotency-Key: <cle stable de la commande>
 ```
 
 Le jeton de service doit avoir `aud=diddigo`, `role=service`,
 `token_type=service`, `status=active`, et le scope de la route. DiddiGo verifie
-egalement que `X-User-ID` correspond a un shadow user local actif avec
+Au moins un des deux en-tetes acteur est requis. Lorsqu'ils sont tous les deux
+presents, leurs valeurs doivent etre identiques. DiddiGo verifie egalement que
+l'identifiant correspond a un shadow user local actif avec
 `role=admin`. Une decision rejouee avec la meme cle et le meme contenu retourne
 la reponse memorisee; une reutilisation divergente retourne
 `409 IDEMPOTENCY_CONFLICT`.
@@ -567,11 +572,13 @@ fournir le secret S2S.
 
 Scope requis : `diddigo:drivers:write`.
 
-En-tetes obligatoires :
+En-tetes obligatoires, avec `X-Backoffice-Actor` canonique ou `X-User-ID` legacy :
 
 ```http
 Authorization: Bearer <service_access_token>
 X-Client-ID: backoffice-staging-diddigo
+X-Backoffice-Actor: <user_id DiddiFreeID de l'admin humain>
+# ou, pendant la migration
 X-User-ID: <user_id DiddiFreeID de l'admin humain>
 X-Request-ID: <uuid-de-correlation>
 Idempotency-Key: <cle stable de la commande>
