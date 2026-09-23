@@ -26,7 +26,15 @@ class FakeSummaryService:
             "date": day,
             "timezone": "Africa/Abidjan",
             "is_final": True,
-            "metrics": [{"name": "rides_requested", "label": "Courses demandees", "value": 1, "unit": "count"}],
+            "metrics": [
+                {"name": "rides_requested", "label": "Courses demandees", "value": 1, "unit": "count"},
+                {
+                    "name": "completed_fare_total_xof",
+                    "label": "Montant facture des courses terminees",
+                    "value": 3500,
+                    "unit": "XOF",
+                },
+            ],
             "calculated_at": "2026-09-19T00:00:00Z",
             "sources": [{"module": "diddigo", "record_type": "ride-summary"}],
             "deep_links": [],
@@ -61,6 +69,21 @@ def test_pilotage_daily_summary_route_returns_normalized_payload(summary_client)
 
     assert response.status_code == 200
     assert response.json()["contract_version"] == "pilotage.v1"
+
+
+@pytest.mark.unit
+def test_pilotage_finance_summary_exposes_only_financial_aggregate(summary_client) -> None:
+    response = summary_client.get("/internal/pilotage/finance-summary?date=2026-09-19")
+
+    assert response.status_code == 200
+    assert response.json()["metrics"] == [
+        {
+            "name": "completed_fare_total_xof",
+            "label": "Montant facture des courses terminees",
+            "value": 3500,
+            "unit": "XOF",
+        },
+    ]
 
 
 @pytest.mark.unit

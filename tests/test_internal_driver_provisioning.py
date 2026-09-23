@@ -171,6 +171,7 @@ async def test_internal_provision_route_requires_scope_and_replays_command(monke
         assert token == "service-token"
         assert audience == "diddigo"
         assert client_id == "backoffice-staging-diddigo"
+        assert expected_subject == "service:backoffice"
         scopes.append(required_scopes)
         return {"sub": "service:backoffice", "client_id": client_id}
 

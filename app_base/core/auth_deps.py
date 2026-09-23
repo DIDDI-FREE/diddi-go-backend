@@ -88,6 +88,15 @@ def require_identity_service_token(
     return _dependency
 
 
+def require_backoffice_service_token(*, required_scope: str):
+    """Authorize only the DiddiFree Backoffice service for a DiddiGo scope."""
+    return require_identity_service_token(
+        audience="diddigo",
+        required_scope=required_scope,
+        expected_subject="service:backoffice",
+    )
+
+
 async def get_current_user(
     request: Request,
     token: str | None = Depends(oauth2_scheme),
