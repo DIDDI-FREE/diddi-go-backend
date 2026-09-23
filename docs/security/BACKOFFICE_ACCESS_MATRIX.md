@@ -38,11 +38,14 @@ des scopes `diddigo:*` autorises par DiddiFreeID.
 
 Pour une decision KYC, le Backend Backoffice doit aussi transmettre :
 
-- `X-User-ID`: identifiant DiddiFreeID de l'admin humain ayant decide;
+- `X-Backoffice-Actor`: identifiant DiddiFreeID de l'admin humain ayant decide;
+- `X-User-ID`: alias legacy temporaire de `X-Backoffice-Actor`;
 - `X-Request-ID`: identifiant de correlation;
 - `Idempotency-Key`: cle stable lors des reprises de la meme commande.
 
-`X-User-ID` n'accorde aucun droit seul : DiddiGo charge son shadow user et exige
+Au moins un des deux en-tetes acteur est requis. Si les deux sont presents, ils
+doivent contenir le meme identifiant, sinon la commande est rejetee. Aucun de
+ces en-tetes n'accorde un droit seul : DiddiGo charge son shadow user et exige
 `role=admin` et `status=active`. Une cle d'idempotence reutilisee avec un contenu
 different est rejetee. La reponse d'une commande terminee est rejouee sans
 executer une seconde decision.
@@ -56,6 +59,7 @@ chauffeur eligible aux courses.
 ## Erreurs attendues
 
 - `401`: token absent, invalide ou expire;
+- `400`: en-tetes acteur canonique et legacy contradictoires;
 - `403`: role ou scope insuffisant;
 - `404`: ressource metier absente;
 - `409`: commande deja en cours ou cle d'idempotence reutilisee autrement;

@@ -109,7 +109,11 @@ async def test_s2s_actor_must_be_an_active_local_admin() -> None:
         status=UserStatus.ACTIVE,
     )
     with pytest.raises(ApiError) as forbidden:
-        await require_s2s_admin_actor(actor_user_id=actor_id, repo=FakeUserRepository(passenger))  # type: ignore[arg-type]
+        await require_s2s_admin_actor(
+            backoffice_actor_id=None,
+            actor_user_id=actor_id,
+            repo=FakeUserRepository(passenger),  # type: ignore[arg-type]
+        )
     assert forbidden.value.status_code == 403
     assert forbidden.value.code == "SERVICE_ACTOR_FORBIDDEN"
 
@@ -120,8 +124,47 @@ async def test_s2s_actor_must_be_an_active_local_admin() -> None:
         status=UserStatus.ACTIVE,
     )
     assert await require_s2s_admin_actor(
-        actor_user_id=actor_id, repo=FakeUserRepository(admin),  # type: ignore[arg-type]
+        backoffice_actor_id=None,
+        actor_user_id=actor_id,
+        repo=FakeUserRepository(admin),  # type: ignore[arg-type]
     ) == admin
+
+
+async def test_s2s_actor_accepts_canonical_header_and_rejects_header_mismatch() -> None:
+    actor_id = uuid4()
+    admin = User(
+        id=actor_id,
+        phone="+2250700000002",
+        role=UserRole.ADMIN,
+        status=UserStatus.ACTIVE,
+    )
+    repo = FakeUserRepository(admin)
+
+    assert await require_s2s_admin_actor(
+        backoffice_actor_id=actor_id,
+        actor_user_id=None,
+        repo=repo,  # type: ignore[arg-type]
+    ) == admin
+
+    with pytest.raises(ApiError) as mismatch:
+        await require_s2s_admin_actor(
+            backoffice_actor_id=actor_id,
+            actor_user_id=uuid4(),
+            repo=repo,  # type: ignore[arg-type]
+        )
+    assert mismatch.value.status_code == 400
+    assert mismatch.value.code == "SERVICE_ACTOR_HEADER_MISMATCH"
+
+
+async def test_s2s_actor_requires_one_actor_header() -> None:
+    with pytest.raises(ApiError) as missing:
+        await require_s2s_admin_actor(
+            backoffice_actor_id=None,
+            actor_user_id=None,
+            repo=FakeUserRepository(None),  # type: ignore[arg-type]
+        )
+    assert missing.value.status_code == 422
+    assert missing.value.code == "SERVICE_ACTOR_REQUIRED"
 
 
 async def test_s2s_kyc_reads_require_read_scope(kyc_api) -> None:
