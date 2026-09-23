@@ -67,3 +67,44 @@ class RideSummaryService:
             "completed_fare_total_xof": int(totals.completed_fare_total_xof),
             "calculated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
+
+    async def pilotage_daily_summary(self, day: str) -> dict:
+        """Return the normalized DiddiFree Pilotage v1 projection."""
+        summary = await self.daily_summary(day)
+        selected_day = date.fromisoformat(summary["date"])
+        today = datetime.now(ABIDJAN_TIMEZONE).date()
+        return {
+            "contract_version": "pilotage.v1",
+            "module": summary["module"],
+            "date": summary["date"],
+            "timezone": summary["timezone"],
+            "is_final": selected_day < today,
+            "metrics": [
+                {
+                    "name": "rides_requested",
+                    "label": "Courses demandees",
+                    "value": summary["rides_requested"],
+                    "unit": "count",
+                },
+                {
+                    "name": "rides_completed",
+                    "label": "Courses terminees",
+                    "value": summary["rides_completed"],
+                    "unit": "count",
+                },
+                {
+                    "name": "completed_fare_total_xof",
+                    "label": "Montant facture des courses terminees",
+                    "value": summary["completed_fare_total_xof"],
+                    "unit": "XOF",
+                },
+            ],
+            "calculated_at": summary["calculated_at"],
+            "sources": [{"module": "diddigo", "record_type": "ride-summary"}],
+            "deep_links": [
+                {
+                    "label": "Ouvrir les courses dans Backoffice",
+                    "href": "/backoffice/#diddigo-rides",
+                },
+            ],
+        }

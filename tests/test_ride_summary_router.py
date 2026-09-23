@@ -19,6 +19,19 @@ class FakeSummaryService:
             "calculated_at": "2026-09-19T00:00:00Z",
         }
 
+    async def pilotage_daily_summary(self, day: str) -> dict:
+        return {
+            "contract_version": "pilotage.v1",
+            "module": "diddigo",
+            "date": day,
+            "timezone": "Africa/Abidjan",
+            "is_final": True,
+            "metrics": [{"name": "rides_requested", "label": "Courses demandees", "value": 1, "unit": "count"}],
+            "calculated_at": "2026-09-19T00:00:00Z",
+            "sources": [{"module": "diddigo", "record_type": "ride-summary"}],
+            "deep_links": [],
+        }
+
 
 @pytest.fixture
 def summary_client():
@@ -40,6 +53,14 @@ def test_ride_summary_route_returns_internal_payload(summary_client) -> None:
 
     assert response.status_code == 200
     assert response.json()["completed_fare_total_xof"] == 3500
+
+
+@pytest.mark.unit
+def test_pilotage_daily_summary_route_returns_normalized_payload(summary_client) -> None:
+    response = summary_client.get("/internal/pilotage/daily-summary?date=2026-09-19")
+
+    assert response.status_code == 200
+    assert response.json()["contract_version"] == "pilotage.v1"
 
 
 @pytest.mark.unit

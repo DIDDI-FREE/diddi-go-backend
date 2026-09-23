@@ -66,6 +66,29 @@ async def test_empty_day_returns_zeros() -> None:
 
 
 @pytest.mark.asyncio
+async def test_pilotage_daily_summary_uses_normalized_v1_contract() -> None:
+    result = await RideSummaryService(FakeSummaryRepository(totals(3, 2, "4500"))).pilotage_daily_summary(
+        "2026-09-19",
+    )
+
+    assert result["contract_version"] == "pilotage.v1"
+    assert result["module"] == "diddigo"
+    assert result["is_final"] is True
+    assert result["metrics"] == [
+        {"name": "rides_requested", "label": "Courses demandees", "value": 3, "unit": "count"},
+        {"name": "rides_completed", "label": "Courses terminees", "value": 2, "unit": "count"},
+        {
+            "name": "completed_fare_total_xof",
+            "label": "Montant facture des courses terminees",
+            "value": 4500,
+            "unit": "XOF",
+        },
+    ]
+    assert result["sources"] == [{"module": "diddigo", "record_type": "ride-summary"}]
+    assert result["deep_links"][0]["href"] == "/backoffice/#diddigo-rides"
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("day", ["2026-02-30", "19-09-2026", "2026-09-19T00:00:00", "9999-12-31"])
 async def test_invalid_calendar_day_is_rejected(day: str) -> None:
     repository = FakeSummaryRepository(totals())
@@ -205,6 +228,20 @@ async def test_summary_route_returns_report_to_authorized_pilotage() -> None:
 
     assert response.status_code == 200
     assert response.json()["completed_fare_total_xof"] == 4500
+
+
+@pytest.mark.asyncio
+async def test_normalized_pilotage_route_returns_v1_contract() -> None:
+    repository = FakeSummaryRepository(totals(3, 2, "4500"))
+    app = summary_app(repository, authorized=True)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/internal/pilotage/daily-summary?date=2026-09-19")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["contract_version"] == "pilotage.v1"
+    assert payload["metrics"][2]["value"] == 4500
 
 
 @pytest.mark.asyncio
