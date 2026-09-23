@@ -53,9 +53,6 @@ class DriverProvisioningService:
             )
 
         profile = await self.drivers.create_profile(user_id=user_id, **profile_fields)
-        # The shadow user and profile share the request session; commit both
-        # before returning so a following Backoffice request sees the result.
-        await self.users.commit()
         log_event("driver.profile.s2s_provisioned", driver_id=profile["id"], user_id=user_id)
         return {"created": True, "profile": profile}
 

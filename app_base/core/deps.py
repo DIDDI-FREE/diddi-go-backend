@@ -32,6 +32,7 @@ from app_base.core.database import get_session
 from app_base.core.redis import get_redis  # noqa: F401 — re-exported
 from app_base.core.s2s_command_store import S2SCommandStore
 from app_base.core.settings import settings
+from app_base.modules.audit.infra.repositories import SqlAlchemyBackofficeAuditRepository
 from app_base.modules.auth.application.services import AuthService
 from app_base.modules.auth.infra.repositories import (
     SqlAlchemyOTPRepository,
@@ -133,6 +134,12 @@ async def user_repo(session: AsyncSession = Depends(session_dep)) -> SqlAlchemyU
 
 async def otp_repo(session: AsyncSession = Depends(session_dep)) -> SqlAlchemyOTPRepository:
     return SqlAlchemyOTPRepository(session)
+
+
+async def backoffice_audit_repo(
+    session: AsyncSession = Depends(session_dep),
+) -> SqlAlchemyBackofficeAuditRepository:
+    return SqlAlchemyBackofficeAuditRepository(session)
 
 
 async def ride_repo(session: AsyncSession = Depends(session_dep)) -> SqlAlchemyRideRepository:
@@ -340,6 +347,7 @@ __all__ = [
     "matching_service",
     "user_repo",
     "otp_repo",
+    "backoffice_audit_repo",
     "ride_repo",
     "driver_profile_repo",
     "vehicle_repo",

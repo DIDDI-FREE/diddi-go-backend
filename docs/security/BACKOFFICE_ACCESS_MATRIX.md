@@ -50,6 +50,14 @@ ces en-tetes n'accorde un droit seul : DiddiGo charge son shadow user et exige
 different est rejetee. La reponse d'une commande terminee est rejouee sans
 executer une seconde decision.
 
+Chaque mutation S2S terminee est aussi inscrite dans
+`audit.backoffice_events`, dans la meme transaction PostgreSQL que la mutation
+metier. L'audit conserve le client et le sujet du service, l'admin humain,
+l'action, la cible, `X-Request-ID`, `Idempotency-Key`, le motif et le resultat.
+La contrainte `(client_id, action, idempotency_key)` garantit qu'une reprise ne
+cree pas une seconde trace. Les logs applicatifs contiennent l'`audit_id` pour
+relier diagnostic technique et historique persistant.
+
 Pour le provisioning, le Backoffice doit d'abord rechercher et valider
 l'identite dans DiddiFreeID. DiddiGo fait confiance au contexte transmis par ce
 client S2S autorise et cree uniquement son shadow technique et son profil metier
