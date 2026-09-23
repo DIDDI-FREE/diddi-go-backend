@@ -15,7 +15,6 @@ attribuer le role admin.
 
 | Action | Route | Authentification | Permission cible |
 | --- | --- | --- | --- |
-| Lire le manifeste | `GET /internal/backoffice/v1/manifest` | JWT service Backoffice + `X-Client-ID` | `diddigo:operations:read` |
 | Lire la file KYC | `GET /internal/v1/drivers/kyc` | JWT service + `X-Client-ID` | `diddigo:kyc:read` |
 | Lire un dossier KYC | `GET /internal/v1/drivers/{id}/kyc` | JWT service + `X-Client-ID` | `diddigo:kyc:read` |
 | Decider un KYC | `POST /internal/v1/drivers/{id}/kyc/{approve,reject}` | JWT service + acteur/audit/idempotence | `diddigo:kyc:decide` |

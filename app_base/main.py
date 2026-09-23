@@ -25,7 +25,6 @@ from app_base.modules.payment.presentation.router import admin_payment_router, a
 from app_base.modules.payment.presentation.router import internal_router as payment_internal_router
 from app_base.modules.payment.presentation.router import return_router as payment_return_router
 from app_base.modules.payment.presentation.router import router as payment_router
-from app_base.modules.ride.presentation.backoffice_contract_router import router as backoffice_contract_router
 from app_base.modules.ride.presentation.capabilities_router import router as capabilities_router
 from app_base.modules.ride.presentation.driver_internal_router import router as driver_internal_router
 from app_base.modules.ride.presentation.driver_router import admin_vehicle_router
@@ -60,7 +59,6 @@ app.include_router(capabilities_router, prefix="/v1")
 app.include_router(places_router, prefix="/v1")
 app.include_router(ride_router, prefix="/v1")
 app.include_router(ride_summary_router)
-app.include_router(backoffice_contract_router)
 app.include_router(driver_internal_router)
 app.include_router(kyc_internal_router)
 app.include_router(driver_router, prefix="/v1")
