@@ -7,10 +7,11 @@ import pytest
 from fastapi import FastAPI
 
 from app_base.core.auth_deps import require_s2s_admin_actor
-from app_base.core.deps import driver_service, kyc_command_store
+from app_base.core.deps import backoffice_audit_repo, driver_service, kyc_command_store, session_dep
 from app_base.core.errors import ApiError, api_error_handler
 from app_base.core.s2s_command_store import S2SCommandStore
 from app_base.core.service_scopes import KYC_DECIDE, KYC_READ
+from app_base.modules.audit.domain.entities import BackofficeAuditEvent
 from app_base.modules.auth.domain.entities import User, UserRole, UserStatus
 from app_base.modules.ride.presentation.kyc_internal_router import router
 
@@ -32,6 +33,23 @@ class FakeRedis:
 
     async def delete(self, key: str):
         self.values.pop(key, None)
+
+
+class FakeAuditRepository:
+    def __init__(self) -> None:
+        self.events: list[BackofficeAuditEvent] = []
+
+    async def record(self, event: BackofficeAuditEvent) -> BackofficeAuditEvent:
+        self.events.append(event)
+        return event
+
+
+class FakeSession:
+    def __init__(self) -> None:
+        self.commits = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
 
 
 class FakeDriverService:
@@ -68,6 +86,8 @@ def kyc_api(monkeypatch):
     scopes: list[set[str]] = []
     service = FakeDriverService()
     commands = S2SCommandStore(FakeRedis(), namespace="kyc-command")  # type: ignore[arg-type]
+    audit = FakeAuditRepository()
+    session = FakeSession()
     actor = User(id=uuid4(), phone="+2250700000000", role=UserRole.ADMIN, status=UserStatus.ACTIVE)
 
     def decode(token, *, audience, required_scopes, client_id, expected_subject=None):
@@ -84,6 +104,10 @@ def kyc_api(monkeypatch):
     app.dependency_overrides[driver_service] = lambda: service
     app.dependency_overrides[require_s2s_admin_actor] = lambda: actor
     app.dependency_overrides[kyc_command_store] = lambda: commands
+    app.dependency_overrides[backoffice_audit_repo] = lambda: audit
+    app.dependency_overrides[session_dep] = lambda: session
+    app.state.audit = audit
+    app.state.fake_session = session
     return app, service, actor, scopes
 
 
@@ -215,6 +239,13 @@ async def test_s2s_kyc_decision_is_replayed_once_and_uses_decide_scope(kyc_api) 
     assert first.json() == replay.json()
     assert service.calls == [("approve", driver_id, actor.id, "conforme")]
     assert scopes[-1] == {KYC_DECIDE}
+    assert app.state.fake_session.commits == 1
+    assert len(app.state.audit.events) == 1
+    event = app.state.audit.events[0]
+    assert event.action == "driver.kyc.approve"
+    assert event.target_id == driver_id
+    assert event.actor_user_id == actor.id
+    assert event.reason == "conforme"
 
 
 async def test_s2s_kyc_rejects_divergent_reuse(kyc_api) -> None:

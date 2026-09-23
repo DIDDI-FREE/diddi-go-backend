@@ -26,6 +26,7 @@ from alembic import context
 # below. Order matters: Base must exist before the model modules are touched.
 from app_base.core.database import Base  # noqa: F401
 from app_base.core.settings import settings
+from app_base.modules.audit.infra import models as _audit_models  # noqa: F401
 
 # Force model registration — each import registers its SQLAlchemy models
 # onto Base.metadata so Alembic can see them for autogenerate.
@@ -49,7 +50,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 # Schemas managed by this project. Alembic will ignore anything outside.
-INCLUDE_SCHEMAS = {"auth", "ride", "payment", "notification", "partner"}
+INCLUDE_SCHEMAS = {"auth", "audit", "ride", "payment", "notification", "partner"}
 
 
 def include_object(obj, name, type_, reflected, compare_to):

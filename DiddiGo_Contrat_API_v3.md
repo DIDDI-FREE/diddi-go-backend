@@ -555,13 +555,19 @@ Idempotency-Key: <cle stable de la commande>
 ```
 
 Le jeton de service doit avoir `aud=diddigo`, `role=service`,
-`token_type=service`, `status=active`, et le scope de la route. DiddiGo verifie
-Au moins un des deux en-tetes acteur est requis. Lorsqu'ils sont tous les deux
+`token_type=service`, `status=active`, et le scope de la route. Au moins un des
+deux en-tetes acteur est requis. Lorsqu'ils sont tous les deux
 presents, leurs valeurs doivent etre identiques. DiddiGo verifie egalement que
 l'identifiant correspond a un shadow user local actif avec
 `role=admin`. Une decision rejouee avec la meme cle et le meme contenu retourne
 la reponse memorisee; une reutilisation divergente retourne
 `409 IDEMPOTENCY_CONFLICT`.
+
+Une decision terminee est journalisee durablement dans DiddiGo avec le client
+S2S, le sujet du service, l'admin humain, l'action, le chauffeur cible, le motif,
+`X-Request-ID` et `Idempotency-Key`. Cette trace est validee dans la meme
+transaction PostgreSQL que la decision KYC. Un rejeu idempotent ne cree pas une
+seconde trace d'audit.
 
 ### `POST /internal/v1/drivers/provision`
 
@@ -616,6 +622,11 @@ Un retry identique retourne le meme resultat sans creer un second profil. Si le
 profil existe deja avec exactement les memes informations, la route retourne
 `created=false`. Si un profil different existe pour cette identite, elle
 retourne `409 DRIVER_PROVISIONING_CONFLICT`.
+
+Le provisionnement termine produit egalement une trace d'audit persistante,
+atomique avec le shadow user et le profil chauffeur. La trace conserve notamment
+l'acteur humain, le client S2S, la cible, `X-Request-ID` et
+`Idempotency-Key`; un rejeu ne la duplique pas.
 
 DiddiGo cree si necessaire un shadow user purement technique pour respecter ses
 relations locales. Cela ne cree pas l'identite DiddiFreeID, n'active pas la

@@ -7,10 +7,16 @@ import pytest
 from fastapi import FastAPI
 
 from app_base.core.auth_deps import require_s2s_admin_actor
-from app_base.core.deps import driver_provisioning_command_store, driver_provisioning_service
+from app_base.core.deps import (
+    backoffice_audit_repo,
+    driver_provisioning_command_store,
+    driver_provisioning_service,
+    session_dep,
+)
 from app_base.core.errors import ApiError, api_error_handler
 from app_base.core.s2s_command_store import S2SCommandStore
 from app_base.core.service_scopes import DRIVERS_WRITE
+from app_base.modules.audit.domain.entities import BackofficeAuditEvent
 from app_base.modules.auth.domain.entities import User, UserRole, UserStatus
 from app_base.modules.ride.application.driver_provisioning_service import DriverProvisioningService
 from app_base.modules.ride.presentation.driver_internal_router import router
@@ -33,6 +39,23 @@ class FakeRedis:
 
     async def delete(self, key: str):
         self.values.pop(key, None)
+
+
+class FakeAuditRepository:
+    def __init__(self) -> None:
+        self.events: list[BackofficeAuditEvent] = []
+
+    async def record(self, event: BackofficeAuditEvent) -> BackofficeAuditEvent:
+        self.events.append(event)
+        return event
+
+
+class FakeSession:
+    def __init__(self) -> None:
+        self.commits = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
 
 
 class FakeUsers:
@@ -118,7 +141,7 @@ async def test_provision_creates_shadow_and_pending_driver_profile() -> None:
     assert result["profile"]["status"] == "pending_verification"
     assert users.items[user_id].role == UserRole.PASSENGER
     assert users.items[user_id].phone.startswith("+000")
-    assert users.commits == 1
+    assert users.commits == 0
 
 
 async def test_provision_is_idempotent_and_rejects_divergent_profile() -> None:
@@ -164,7 +187,11 @@ async def test_internal_provision_route_requires_scope_and_replays_command(monke
     app.dependency_overrides[require_s2s_admin_actor] = lambda: actor
     app.dependency_overrides[driver_provisioning_service] = lambda: Provisioner()
     commands = S2SCommandStore(FakeRedis(), namespace="driver-provision")  # type: ignore[arg-type]
+    audit = FakeAuditRepository()
+    session = FakeSession()
     app.dependency_overrides[driver_provisioning_command_store] = lambda: commands
+    app.dependency_overrides[backoffice_audit_repo] = lambda: audit
+    app.dependency_overrides[session_dep] = lambda: session
     headers = {
         "Authorization": "Bearer service-token",
         "X-Client-ID": "backoffice-staging-diddigo",
@@ -182,3 +209,9 @@ async def test_internal_provision_route_requires_scope_and_replays_command(monke
     assert first.json() == replay.json()
     assert calls == 1
     assert scopes == [{DRIVERS_WRITE}, {DRIVERS_WRITE}]
+    assert session.commits == 1
+    assert len(audit.events) == 1
+    assert audit.events[0].action == "driver.profile.provision"
+    assert audit.events[0].target_id == target_user_id
+    assert audit.events[0].actor_user_id == actor.id
+    assert audit.events[0].client_id == "backoffice-staging-diddigo"

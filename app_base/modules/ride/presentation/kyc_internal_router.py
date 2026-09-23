@@ -3,12 +3,15 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app_base.core.auth_deps import require_identity_service_token, require_s2s_admin_actor
-from app_base.core.deps import driver_service, kyc_command_store
+from app_base.core.deps import backoffice_audit_repo, driver_service, kyc_command_store, session_dep
 from app_base.core.observability import log_event
 from app_base.core.s2s_command_store import S2SCommandStore
 from app_base.core.service_scopes import DIDDIGO_AUDIENCE, KYC_DECIDE, KYC_READ
+from app_base.modules.audit.domain.entities import BackofficeAuditEvent
+from app_base.modules.audit.domain.interfaces import BackofficeAuditRepository
 from app_base.modules.auth.domain.entities import User
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.presentation.driver_schemas import DriverKycReviewRequest
@@ -44,11 +47,14 @@ async def _decide(
     driver_id: UUID,
     notes: str | None,
     request: Request,
+    request_id: UUID,
     idempotency_key: str,
     claims: dict,
     actor: User,
     service: DriverService,
     commands: S2SCommandStore,
+    audit: BackofficeAuditRepository,
+    session: AsyncSession,
 ) -> dict:
     client_id = request.headers["X-Client-ID"]
     reservation = await commands.reserve(
@@ -61,6 +67,21 @@ async def _decide(
     try:
         operation = service.approve_kyc if decision == "approve" else service.reject_kyc
         result = await operation(driver_id, reviewed_by_user_id=actor.id, notes=notes)
+        audit_event = await audit.record(
+            BackofficeAuditEvent(
+                client_id=client_id,
+                service_subject=str(claims.get("sub") or ""),
+                actor_user_id=actor.id,
+                action=f"driver.kyc.{decision}",
+                target_type="driver_profile",
+                target_id=driver_id,
+                request_id=request_id,
+                idempotency_key=idempotency_key,
+                reason=notes or "backoffice_kyc_decision",
+                context={"result_status": result.get("status")},
+            ),
+        )
+        await session.commit()
         await commands.complete(reservation, result)
     except Exception:
         await commands.release(reservation)
@@ -73,6 +94,7 @@ async def _decide(
         service_subject=claims.get("sub"),
         client_id=client_id,
         idempotency_key=idempotency_key,
+        audit_id=audit_event.id,
     )
     return result
 
@@ -82,16 +104,19 @@ async def approve_driver_kyc(
     driver_id: UUID,
     payload: DriverKycReviewRequest,
     request: Request,
-    _request_id: UUID = Header(alias="X-Request-ID"),
+    request_id: UUID = Header(alias="X-Request-ID"),
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=8, max_length=160),
     claims: dict = Depends(require_kyc_decide),
     actor: User = Depends(require_s2s_admin_actor),
     service: DriverService = Depends(driver_service),
     commands: S2SCommandStore = Depends(kyc_command_store),
+    audit: BackofficeAuditRepository = Depends(backoffice_audit_repo),
+    session: AsyncSession = Depends(session_dep),
 ) -> dict:
     return await _decide(
         decision="approve", driver_id=driver_id, notes=payload.notes, request=request,
-        idempotency_key=idempotency_key, claims=claims, actor=actor, service=service, commands=commands,
+        request_id=request_id, idempotency_key=idempotency_key, claims=claims, actor=actor,
+        service=service, commands=commands, audit=audit, session=session,
     )
 
 
@@ -100,14 +125,17 @@ async def reject_driver_kyc(
     driver_id: UUID,
     payload: DriverKycReviewRequest,
     request: Request,
-    _request_id: UUID = Header(alias="X-Request-ID"),
+    request_id: UUID = Header(alias="X-Request-ID"),
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=8, max_length=160),
     claims: dict = Depends(require_kyc_decide),
     actor: User = Depends(require_s2s_admin_actor),
     service: DriverService = Depends(driver_service),
     commands: S2SCommandStore = Depends(kyc_command_store),
+    audit: BackofficeAuditRepository = Depends(backoffice_audit_repo),
+    session: AsyncSession = Depends(session_dep),
 ) -> dict:
     return await _decide(
         decision="reject", driver_id=driver_id, notes=payload.notes, request=request,
-        idempotency_key=idempotency_key, claims=claims, actor=actor, service=service, commands=commands,
+        request_id=request_id, idempotency_key=idempotency_key, claims=claims, actor=actor,
+        service=service, commands=commands, audit=audit, session=session,
     )
