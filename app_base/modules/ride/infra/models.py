@@ -375,3 +375,60 @@ class EmergencyContactModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()"),
     )
+
+
+class DriverCapabilityProjectionStateModel(Base):
+    __tablename__ = "driver_capability_projection_states"
+    __table_args__ = {"schema": "ride"}
+
+    user_id: Mapped[UUID] = mapped_column(
+        _PG_UUID, ForeignKey("auth.users.id", ondelete="CASCADE"), primary_key=True,
+    )
+    projection_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    desired_operational_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    desired_actions: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    last_event_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    sync_status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending")
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_succeeded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )
+
+
+class DriverCapabilityProjectionEventModel(Base):
+    __tablename__ = "driver_capability_projection_events"
+    __table_args__ = (
+        UniqueConstraint("user_id", "projection_version", name="uq_driver_projection_user_version"),
+        UniqueConstraint("event_id", name="uq_driver_projection_event_id"),
+        Index("idx_driver_projection_due", "status", "next_attempt_at"),
+        {"schema": "ride"},
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        _PG_UUID, primary_key=True, server_default=text("uuid_generate_v4()"),
+    )
+    event_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    user_id: Mapped[UUID] = mapped_column(
+        _PG_UUID, ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False,
+    )
+    projection_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    operational_status: Mapped[str] = mapped_column(String(50), nullable=False)
+    actions: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    request_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )

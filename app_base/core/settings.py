@@ -60,6 +60,13 @@ class Settings(BaseSettings):
     identity_service_client_id: str | None = None
     identity_service_client_secret: str | None = None
     identity_service_timeout_seconds: float = 5.0
+    capability_projection_enabled: bool = True
+    capability_projection_delivery_interval_seconds: int = Field(default=5, ge=1, le=300)
+    capability_projection_reconciliation_interval_seconds: int = Field(default=30, ge=10, le=86400)
+    capability_projection_refresh_seconds: int = Field(default=45, ge=10, le=86400)
+    capability_projection_batch_size: int = Field(default=100, ge=1, le=1000)
+    capability_projection_retry_base_seconds: int = Field(default=5, ge=1, le=300)
+    capability_projection_retry_max_seconds: int = Field(default=300, ge=5, le=86400)
 
     push_enabled: bool = False
     fcm_project_id: str | None = None

@@ -21,6 +21,14 @@ _HELP = {
     "diddigo_http_request_duration_ms_count": "Total observed HTTP request durations.",
     "diddigo_http_request_duration_ms_sum": "Sum of observed HTTP request durations in milliseconds.",
     "diddigo_business_events_total": "Total business/domain events emitted by DiddiGo.",
+    "diddigo_capability_projection_events_total": "Capability projection delivery outcomes.",
+    "diddigo_capability_projection_reconciliations_total": "Capability projection reconciliation outcomes.",
+    "diddigo_capability_projection_backlog": "Current capability projection events by delivery status.",
+    "diddigo_capability_projection_last_success_age_seconds": "Age of the latest successful capability projection.",
+}
+_GAUGES = {
+    "diddigo_capability_projection_backlog",
+    "diddigo_capability_projection_last_success_age_seconds",
 }
 
 
@@ -55,6 +63,12 @@ def increment(name: str, labels: Mapping[str, Any] | None = None, amount: float 
         _STORE[key] += float(amount)
 
 
+def set_value(name: str, value: float, labels: Mapping[str, Any] | None = None) -> None:
+    key = (name, _labels_tuple(labels or {}))
+    with _LOCK:
+        _STORE[key] = float(value)
+
+
 def render_prometheus() -> str:
     with _LOCK:
         items = sorted(_STORE.items())
@@ -63,7 +77,7 @@ def render_prometheus() -> str:
     for (name, labels), value in items:
         if name not in emitted_headers:
             lines.append(f"# HELP {name} {_HELP.get(name, name)}")
-            lines.append(f"# TYPE {name} counter")
+            lines.append(f"# TYPE {name} {'gauge' if name in _GAUGES else 'counter'}")
             emitted_headers.add(name)
         lines.append(f"{name}{_format_labels(labels)} {_format_number(value)}")
     return "\n".join(lines) + ("\n" if lines else "")

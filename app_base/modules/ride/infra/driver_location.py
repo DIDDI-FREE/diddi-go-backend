@@ -112,6 +112,12 @@ class RedisDriverLocationService:
     async def is_available(self, driver_id: UUID) -> bool:
         return bool(await self.redis.exists(f"{AVAILABLE_KEY_PREFIX}{driver_id}"))
 
+    async def is_online_and_available(self, driver_id: UUID) -> bool:
+        pipe = self.redis.pipeline()
+        pipe.exists(f"{SEEN_KEY_PREFIX}{driver_id}")
+        pipe.exists(f"{AVAILABLE_KEY_PREFIX}{driver_id}")
+        return all(await pipe.execute())
+
     async def find_nearby(
         self,
         location: GeoPoint,
