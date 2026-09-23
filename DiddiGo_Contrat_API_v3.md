@@ -569,13 +569,10 @@ navigateur.
 Ces routes exigent egalement `sub=service:backoffice`. Un autre service
 interne possedant le meme scope reste refuse.
 
-Le manifeste machine-readable des operations disponibles est expose par :
-
-```http
-GET /internal/backoffice/v1/manifest
-```
-
-Il requiert `diddigo:operations:read` et retourne le contrat `backoffice.v1`.
+Le manifeste machine-readable des operations disponibles est le fichier
+`manifests/manifest.json`. Il suit le contrat `backoffice.v1` et doit etre
+importe par Diddi Admin lors du deploiement. Il n'existe volontairement aucun
+endpoint HTTP de manifeste dans DiddiGo.
 
 En-tetes communs :
 

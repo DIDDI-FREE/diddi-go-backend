@@ -1,0 +1,100 @@
+{
+  "contract_version": "backoffice.v1",
+  "modules": [
+    {
+      "module": "diddigo",
+      "display_name": "DiddiGo",
+      "version": "admin.v1",
+      "resources": [
+        {
+          "name": "driver_kyc",
+          "label": "Dossiers KYC chauffeurs",
+          "permissions": ["read", "approve", "reject"],
+          "supports_list": true,
+          "supports_detail": true,
+          "supports_history": false
+        },
+        {
+          "name": "driver_profiles",
+          "label": "Profils chauffeurs",
+          "permissions": ["read", "create"],
+          "supports_list": false,
+          "supports_detail": true,
+          "supports_history": false
+        }
+      ],
+      "commands": [
+        {
+          "module": "diddigo",
+          "name": "approve_driver_kyc",
+          "permission": "approve",
+          "description": "Valider le dossier KYC d'un chauffeur",
+          "method": "POST",
+          "path": "/internal/v1/drivers/{driver_id}/kyc/approve",
+          "reason_field": "notes",
+          "requires_reason": true,
+          "requires_idempotency": true,
+          "execution_mode": "queued",
+          "service_scope": "diddigo:kyc:decide",
+          "operator_from_requester": true,
+          "operator_header_aliases": ["X-User-ID"],
+          "operator_in_body": false,
+          "input_fields": []
+        },
+        {
+          "module": "diddigo",
+          "name": "reject_driver_kyc",
+          "permission": "reject",
+          "description": "Rejeter le dossier KYC d'un chauffeur",
+          "method": "POST",
+          "path": "/internal/v1/drivers/{driver_id}/kyc/reject",
+          "reason_field": "notes",
+          "requires_reason": true,
+          "requires_idempotency": true,
+          "execution_mode": "queued",
+          "service_scope": "diddigo:kyc:decide",
+          "operator_from_requester": true,
+          "operator_header_aliases": ["X-User-ID"],
+          "operator_in_body": false,
+          "input_fields": []
+        },
+        {
+          "module": "diddigo",
+          "name": "provision_driver",
+          "permission": "create",
+          "description": "Creer un profil chauffeur en attente pour une identite DiddiFreeID existante",
+          "method": "POST",
+          "path": "/internal/v1/drivers/provision",
+          "reason_field": "reason",
+          "requires_reason": false,
+          "requires_idempotency": true,
+          "execution_mode": "queued",
+          "service_scope": "diddigo:drivers:write",
+          "operator_from_requester": true,
+          "operator_header_aliases": ["X-User-ID"],
+          "operator_in_body": false,
+          "input_fields": [
+            {
+              "name": "user_id",
+              "label": "Identifiant utilisateur DiddiFreeID",
+              "type": "string",
+              "required": true
+            },
+            {
+              "name": "license_number",
+              "label": "Numero de permis",
+              "type": "string",
+              "required": true
+            },
+            {
+              "name": "full_name",
+              "label": "Nom complet",
+              "type": "string",
+              "required": false
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
