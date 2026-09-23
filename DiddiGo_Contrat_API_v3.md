@@ -2074,7 +2074,31 @@ Route admin. Termine l'assignation active du vehicule.
 
 ## 13. Resume quotidien interne pour Pilotage
 
+### `GET /internal/pilotage/daily-summary?date=YYYY-MM-DD`
+
+Route canonique conforme au contrat interne `pilotage.v1`. Elle utilise le meme
+calcul et les memes controles S2S que la route historique ci-dessous. La reponse
+contient `contract_version`, `is_final`, un tableau `metrics` avec les unites,
+`calculated_at`, `sources` et les liens profonds Backoffice. Les donnees sont
+recalculees a chaque appel. La fenetre de fraicheur attendue cote collecteur est
+de 60 secondes.
+
+Metriques :
+
+| Nom | Unite | Definition |
+| --- | --- | --- |
+| `rides_requested` | `count` | Courses dont `requested_at` appartient a la journee demandee en heure d'Abidjan. |
+| `rides_completed` | `count` | Courses terminees dont `completed_at` appartient a cette journee. |
+| `completed_fare_total_xof` | `XOF` | Somme du montant facture verrouille des memes courses terminees, frais d'attente inclus, avant remboursement ulterieur. |
+
+`is_final=false` pour la journee courante et `true` pour une journee passee. Une
+journee passee reste recalculee lors de chaque appel afin d'inclure une correction
+tardive eventuelle.
+
 ### `GET /internal/v1/ride-summary?date=YYYY-MM-DD`
+
+Route historique conservee sans changement de forme pendant la migration de
+Pilotage.
 
 Cette route serveur-a-serveur requiert un JWT DiddiFreeID signe (JWKS),
 `Authorization: Bearer <service_token>` et `X-Client-ID` identique au claim
