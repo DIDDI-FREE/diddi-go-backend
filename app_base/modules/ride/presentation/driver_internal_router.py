@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app_base.core.auth_deps import require_identity_service_token, require_s2s_admin_actor
+from app_base.core.auth_deps import require_backoffice_service_token, require_s2s_admin_actor
 from app_base.core.deps import (
     backoffice_audit_repo,
     driver_provisioning_command_store,
@@ -14,7 +14,7 @@ from app_base.core.deps import (
 )
 from app_base.core.observability import log_event
 from app_base.core.s2s_command_store import S2SCommandStore
-from app_base.core.service_scopes import DIDDIGO_AUDIENCE, DRIVERS_WRITE
+from app_base.core.service_scopes import DRIVERS_WRITE
 from app_base.modules.audit.domain.entities import BackofficeAuditEvent
 from app_base.modules.audit.domain.interfaces import BackofficeAuditRepository
 from app_base.modules.auth.domain.entities import User
@@ -22,10 +22,7 @@ from app_base.modules.ride.application.driver_provisioning_service import Driver
 from app_base.modules.ride.presentation.driver_schemas import DriverProvisionRequest
 
 router = APIRouter(prefix="/internal/v1/drivers", tags=["internal-drivers"])
-require_drivers_write = require_identity_service_token(
-    audience=DIDDIGO_AUDIENCE,
-    required_scope=DRIVERS_WRITE,
-)
+require_drivers_write = require_backoffice_service_token(required_scope=DRIVERS_WRITE)
 
 
 @router.post("/provision")

@@ -15,6 +15,7 @@ attribuer le role admin.
 
 | Action | Route | Authentification | Permission cible |
 | --- | --- | --- | --- |
+| Lire le manifeste | `GET /internal/backoffice/v1/manifest` | JWT service Backoffice + `X-Client-ID` | `diddigo:operations:read` |
 | Lire la file KYC | `GET /internal/v1/drivers/kyc` | JWT service + `X-Client-ID` | `diddigo:kyc:read` |
 | Lire un dossier KYC | `GET /internal/v1/drivers/{id}/kyc` | JWT service + `X-Client-ID` | `diddigo:kyc:read` |
 | Decider un KYC | `POST /internal/v1/drivers/{id}/kyc/{approve,reject}` | JWT service + acteur/audit/idempotence | `diddigo:kyc:decide` |
@@ -35,6 +36,8 @@ synchrones dans cette version.
 Le client S2S doit utiliser `aud=diddigo`, `role=service`, `token_type=service`,
 `status=active`, un `X-Client-ID` identique au claim `client_id`, et uniquement
 des scopes `diddigo:*` autorises par DiddiFreeID.
+
+Toutes les routes Backoffice S2S exigent aussi `sub=service:backoffice`.
 
 Pour une decision KYC, le Backend Backoffice doit aussi transmettre :
 

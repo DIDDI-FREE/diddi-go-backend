@@ -5,11 +5,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app_base.core.auth_deps import require_identity_service_token, require_s2s_admin_actor
+from app_base.core.auth_deps import require_backoffice_service_token, require_s2s_admin_actor
 from app_base.core.deps import backoffice_audit_repo, driver_service, kyc_command_store, session_dep
 from app_base.core.observability import log_event
 from app_base.core.s2s_command_store import S2SCommandStore
-from app_base.core.service_scopes import DIDDIGO_AUDIENCE, KYC_DECIDE, KYC_READ
+from app_base.core.service_scopes import KYC_DECIDE, KYC_READ
 from app_base.modules.audit.domain.entities import BackofficeAuditEvent
 from app_base.modules.audit.domain.interfaces import BackofficeAuditRepository
 from app_base.modules.auth.domain.entities import User
@@ -17,8 +17,8 @@ from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.presentation.driver_schemas import DriverKycReviewRequest
 
 router = APIRouter(prefix="/internal/v1/drivers", tags=["internal-driver-kyc"])
-require_kyc_read = require_identity_service_token(audience=DIDDIGO_AUDIENCE, required_scope=KYC_READ)
-require_kyc_decide = require_identity_service_token(audience=DIDDIGO_AUDIENCE, required_scope=KYC_DECIDE)
+require_kyc_read = require_backoffice_service_token(required_scope=KYC_READ)
+require_kyc_decide = require_backoffice_service_token(required_scope=KYC_DECIDE)
 
 
 @router.get("/kyc")

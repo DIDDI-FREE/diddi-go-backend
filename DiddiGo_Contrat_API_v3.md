@@ -566,6 +566,17 @@ navigateur.
 | `POST` | `/internal/v1/drivers/{driver_id}/kyc/approve` | `diddigo:kyc:decide` |
 | `POST` | `/internal/v1/drivers/{driver_id}/kyc/reject` | `diddigo:kyc:decide` |
 
+Ces routes exigent egalement `sub=service:backoffice`. Un autre service
+interne possedant le meme scope reste refuse.
+
+Le manifeste machine-readable des operations disponibles est expose par :
+
+```http
+GET /internal/backoffice/v1/manifest
+```
+
+Il requiert `diddigo:operations:read` et retourne le contrat `backoffice.v1`.
+
 En-tetes communs :
 
 ```http
@@ -2135,6 +2146,17 @@ Metriques :
 `is_final=false` pour la journee courante et `true` pour une journee passee. Une
 journee passee reste recalculee lors de chaque appel afin d'inclure une correction
 tardive eventuelle.
+
+### `GET /internal/pilotage/finance-summary?date=YYYY-MM-DD`
+
+Retourne uniquement l'agregat `completed_fare_total_xof`, sans donnees
+personnelles, avec le meme jeton et le meme scope Pilotage.
+
+### `GET /internal/pilotage/health-summary`
+
+Retourne l'etat agrege `available` ou `degraded`, l'etat PostgreSQL et Redis,
+`calculated_at` et une fenetre de fraicheur de 60 secondes. Une indisponibilite
+n'est jamais transformee en valeur metier egale a zero.
 
 ### `GET /internal/v1/ride-summary?date=YYYY-MM-DD`
 

@@ -94,6 +94,7 @@ def kyc_api(monkeypatch):
         assert token == "service-token"
         assert audience == "diddigo"
         assert client_id == "backoffice-staging-diddigo"
+        assert expected_subject == "service:backoffice"
         scopes.append(required_scopes)
         return {"sub": "service:backoffice", "client_id": client_id}
 
