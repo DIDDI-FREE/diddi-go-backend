@@ -300,6 +300,36 @@ emergency_reported
 cancel_reason_<reason>
 ```
 
+## 2.1 Projection chauffeur vers DiddiFreeID
+
+DiddiGo reste la source de verite du statut operationnel chauffeur. La projection
+`diddigo/driver` envoyee a DiddiFreeID est asynchrone et persistante : une panne
+reseau ou un redemarrage ne bloque pas la requete metier et ne perd pas l'evenement.
+
+Chaque publication contient :
+
+```json
+{
+  "operational_status": "online",
+  "actions": ["go_offline"],
+  "projection_version": 42,
+  "event_id": "diddigo:driver:<user_id>:42:<uuid>"
+}
+```
+
+Regles de synchronisation :
+
+- `projection_version` est strictement croissante par chauffeur et persistee en base ;
+- un retry reutilise exactement le meme `event_id` et la meme version ;
+- un conflit DiddiFreeID `409` est conserve et journalise, jamais rejoue aveuglement ;
+- une reconciliation periodique repare les projections absentes ou divergentes ;
+- une projection stable est republiee avant expiration de sa fraicheur ;
+- l'echec de projection n'annule pas l'action metier DiddiGo deja validee.
+
+Cette integration est strictement service-to-service. Elle utilise un jeton de
+service DiddiFreeID avec le scope `capabilities:write` et n'ajoute aucune route
+publique DiddiGo.
+
 ## 3. Driver KYC
 
 ### `POST /drivers/profile`

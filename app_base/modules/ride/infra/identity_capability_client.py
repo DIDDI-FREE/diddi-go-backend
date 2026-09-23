@@ -4,13 +4,27 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from uuid import UUID
 
 import httpx
 
-from app_base.core.observability import current_request_id, log_event
+from app_base.modules.ride.domain.capability_projection import DriverCapabilityProjectionEvent
 
 logger = logging.getLogger(__name__)
+
+
+class CapabilityDeliveryError(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        error_code: str | None = None,
+        conflict: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.error_code = error_code
+        self.conflict = conflict
 
 
 @dataclass
@@ -23,7 +37,6 @@ class IdentityCapabilityClient:
     _access_token: str | None = field(default=None, init=False, repr=False)
     _token_expires_at: float = field(default=0, init=False, repr=False)
     _token_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
-    _last_projection_version: int = field(default=0, init=False, repr=False)
 
     @property
     def configured(self) -> bool:
@@ -37,75 +50,47 @@ class IdentityCapabilityClient:
             )
         return self._client
 
-    async def publish_driver_status(
-        self,
-        user_id: UUID,
-        *,
-        operational_status: str,
-        actions: list[str],
-    ) -> bool:
+    async def send_driver_status(self, event: DriverCapabilityProjectionEvent) -> None:
         if not self.configured:
-            log_event(
-                "identity.capability.publish.skipped",
-                level="warning",
-                user_id=user_id,
-                service="diddigo",
-                capability_type="driver",
-                reason="identity_service_credentials_missing",
+            raise CapabilityDeliveryError(
+                "DiddiFreeID service credentials are missing",
+                error_code="IDENTITY_SERVICE_CREDENTIALS_MISSING",
             )
-            return False
-
-        version = max(time.time_ns() // 1_000_000, self._last_projection_version + 1)
-        self._last_projection_version = version
-        event_id = f"diddigo:driver:{user_id}:{version}:{operational_status}"
-        request_id = current_request_id()
         try:
             token = await self._service_token()
             headers = {
                 "Authorization": f"Bearer {token}",
                 "X-Client-ID": str(self.client_id),
             }
-            if request_id:
-                headers["X-Request-ID"] = request_id
+            if event.request_id:
+                headers["X-Request-ID"] = event.request_id
             response = await self._http().patch(
-                f"/identity/v1/pro/internal/users/{user_id}/capabilities/diddigo/driver/status",
+                f"/identity/v1/pro/internal/users/{event.user_id}/capabilities/diddigo/driver/status",
                 headers=headers,
                 json={
-                    "operational_status": operational_status,
-                    "actions": actions,
-                    "projection_version": version,
-                    "event_id": event_id,
+                    "operational_status": event.operational_status,
+                    "actions": event.actions,
+                    "projection_version": event.projection_version,
+                    "event_id": event.event_id,
                 },
             )
-            response.raise_for_status()
         except (httpx.HTTPError, ValueError, KeyError) as exc:
-            logger.warning(
-                "DiddiFreeID driver capability publication failed user_id=%s status=%s error=%s",
-                user_id,
-                operational_status,
-                exc,
+            if isinstance(exc, httpx.HTTPStatusError):
+                payload = _error_payload(exc.response)
+                raise CapabilityDeliveryError(
+                    f"DiddiFreeID returned HTTP {exc.response.status_code}",
+                    status_code=exc.response.status_code,
+                    error_code=payload,
+                    conflict=exc.response.status_code == 409,
+                ) from exc
+            raise CapabilityDeliveryError(str(exc), error_code=type(exc).__name__) from exc
+        if response.status_code >= 400:
+            raise CapabilityDeliveryError(
+                f"DiddiFreeID returned HTTP {response.status_code}",
+                status_code=response.status_code,
+                error_code=_error_payload(response),
+                conflict=response.status_code == 409,
             )
-            log_event(
-                "identity.capability.publish.failed",
-                level="error",
-                user_id=user_id,
-                service="diddigo",
-                capability_type="driver",
-                operational_status=operational_status,
-                error_type=type(exc).__name__,
-            )
-            return False
-
-        log_event(
-            "identity.capability.publish.succeeded",
-            user_id=user_id,
-            service="diddigo",
-            capability_type="driver",
-            operational_status=operational_status,
-            projection_version=version,
-            event_id=event_id,
-        )
-        return True
 
     async def _service_token(self) -> str:
         now = time.monotonic()
@@ -140,3 +125,14 @@ class IdentityCapabilityClient:
         if self._client is not None:
             await self._client.aclose()
             self._client = None
+
+
+def _error_payload(response: httpx.Response) -> str | None:
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if isinstance(error, dict):
+        return str(error.get("code") or "") or None
+    return str(payload.get("detail") or "") or None if isinstance(payload, dict) else None

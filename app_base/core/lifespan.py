@@ -28,6 +28,7 @@ from app_base.core.database import ping_db
 from app_base.core.redis import create_redis_pool
 from app_base.core.settings import settings
 from app_base.modules.payment.application.reconciliation import reconciliation_loop
+from app_base.modules.ride.application.capability_projection_worker import capability_projection_loop
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.infra.identity_capability_client import IdentityCapabilityClient
 from app_base.modules.ride.infra.routing_client import DiddiMapRoutingClient
@@ -63,15 +64,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             name="payment-reconciliation",
         )
 
+    app.state.capability_projection_task = None
+    if settings.capability_projection_enabled:
+        app.state.capability_projection_task = asyncio.create_task(
+            capability_projection_loop(app.state.identity_capabilities, app.state.driver_locations),
+            name="capability-projection",
+        )
+
     logger.info(
-        "lifespan startup complete (redis=%s, diddimap=%s, payment_reconciliation=%s)",
+        "lifespan startup complete (redis=%s, diddimap=%s, payment_reconciliation=%s, capability_projection=%s)",
         settings.redis_url,
         settings.diddimap_base_url,
         settings.payment_reconciliation_enabled,
+        settings.capability_projection_enabled,
     )
     try:
         yield
     finally:
+        capability_task: asyncio.Task | None = app.state.capability_projection_task
+        if capability_task is not None:
+            capability_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await capability_task
         task: asyncio.Task | None = app.state.payment_reconciliation_task
         if task is not None:
             task.cancel()

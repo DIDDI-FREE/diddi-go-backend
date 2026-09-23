@@ -7,8 +7,9 @@ import httpx
 import pytest
 
 from app_base.modules.ride.application.driver_service import _operational_status
+from app_base.modules.ride.domain.capability_projection import DriverCapabilityProjectionEvent
 from app_base.modules.ride.domain.entities import DriverProfile, DriverStatus, Vehicle, VehicleVerificationStatus
-from app_base.modules.ride.infra.identity_capability_client import IdentityCapabilityClient
+from app_base.modules.ride.infra.identity_capability_client import CapabilityDeliveryError, IdentityCapabilityClient
 
 pytestmark = pytest.mark.unit
 
@@ -39,27 +40,39 @@ async def test_publish_driver_status_gets_scoped_token_and_sends_projection() ->
             f"/identity/v1/pro/internal/users/{user_id}/capabilities/diddigo/driver/status"
         )
         assert request.headers["Authorization"] == "Bearer service-token"
+        assert request.headers["X-Request-ID"] == "request-123"
         payload = json.loads(request.content)
         expected_actions = {
             "online": ["go_offline"],
             "offline": ["go_online"],
         }
         assert payload["actions"] == expected_actions[payload["operational_status"]]
-        assert payload["projection_version"] >= 1
-        assert payload["event_id"].startswith(f"diddigo:driver:{user_id}:")
+        expected_versions = {"online": 41, "offline": 42}
+        assert payload["projection_version"] == expected_versions[payload["operational_status"]]
+        assert payload["event_id"] == f"evt-{payload['operational_status']}-{payload['projection_version']}"
         return httpx.Response(200, json={"operational_status": payload["operational_status"]})
 
     client = _client(handler)
     try:
-        assert await client.publish_driver_status(
-            user_id,
-            operational_status="online",
-            actions=["go_offline"],
+        await client.send_driver_status(
+            DriverCapabilityProjectionEvent(
+                user_id=user_id,
+                projection_version=41,
+                operational_status="online",
+                actions=["go_offline"],
+                event_id="evt-online-41",
+                request_id="request-123",
+            ),
         )
-        assert await client.publish_driver_status(
-            user_id,
-            operational_status="offline",
-            actions=["go_online"],
+        await client.send_driver_status(
+            DriverCapabilityProjectionEvent(
+                user_id=user_id,
+                projection_version=42,
+                operational_status="offline",
+                actions=["go_online"],
+                event_id="evt-offline-42",
+                request_id="request-123",
+            ),
         )
     finally:
         await client.close()
@@ -67,31 +80,56 @@ async def test_publish_driver_status_gets_scoped_token_and_sends_projection() ->
     assert len([request for request in requests if request.url.path.endswith("/auth/service/token")]) == 1
 
 
-async def test_publish_driver_status_is_non_blocking_when_identity_is_unavailable() -> None:
+async def test_send_driver_status_classifies_409_as_projection_conflict() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/auth/service/token"):
+            return httpx.Response(200, json={"access_token": "service-token", "expires_in": 600})
+        return httpx.Response(409, json={"error": {"code": "PROJECTION_VERSION_CONFLICT"}})
+
+    client = _client(handler)
+    try:
+        with pytest.raises(CapabilityDeliveryError) as conflict:
+            await client.send_driver_status(
+                DriverCapabilityProjectionEvent(
+                    user_id=uuid4(), projection_version=7, operational_status="offline",
+                    actions=["go_online"], event_id="evt-7",
+                ),
+            )
+    finally:
+        await client.close()
+
+    assert conflict.value.status_code == 409
+    assert conflict.value.error_code == "PROJECTION_VERSION_CONFLICT"
+    assert conflict.value.conflict is True
+
+
+async def test_send_driver_status_reports_identity_unavailable() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("offline", request=request)
 
     client = _client(handler)
     try:
-        result = await client.publish_driver_status(
-            uuid4(),
-            operational_status="unknown",
-            actions=[],
-        )
+        with pytest.raises(CapabilityDeliveryError):
+            await client.send_driver_status(
+                DriverCapabilityProjectionEvent(
+                    user_id=uuid4(), projection_version=1, operational_status="unknown",
+                    actions=[], event_id="evt-1",
+                ),
+            )
     finally:
         await client.close()
 
-    assert result is False
 
-
-async def test_publish_driver_status_skips_when_credentials_are_missing() -> None:
+async def test_send_driver_status_fails_when_credentials_are_missing() -> None:
     client = IdentityCapabilityClient(base_url="https://identity.test", client_id=None, client_secret=None)
 
-    assert await client.publish_driver_status(
-        uuid4(),
-        operational_status="offline",
-        actions=["go_online"],
-    ) is False
+    with pytest.raises(CapabilityDeliveryError):
+        await client.send_driver_status(
+            DriverCapabilityProjectionEvent(
+                user_id=uuid4(), projection_version=1, operational_status="offline",
+                actions=["go_online"], event_id="evt-1",
+            ),
+        )
 
 
 def test_driver_operational_status_remains_owned_by_diddigo() -> None:

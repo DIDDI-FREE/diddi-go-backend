@@ -48,6 +48,7 @@ from app_base.modules.payment.application.services import PaymentService
 from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentRepository
+from app_base.modules.ride.application.capability_projection import DurableDriverCapabilityPublisher
 from app_base.modules.ride.application.driver_provisioning_service import DriverProvisioningService
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.application.emergency_contact_service import EmergencyContactService
@@ -56,6 +57,9 @@ from app_base.modules.ride.application.matching_service import MatchingService
 from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.application.services import RideService
 from app_base.modules.ride.application.summary_service import RideSummaryService
+from app_base.modules.ride.infra.capability_projection_repository import (
+    SqlAlchemyDriverCapabilityProjectionRepository,
+)
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.infra.identity_capability_client import IdentityCapabilityClient
 from app_base.modules.ride.infra.offer_store import RedisOfferStore
@@ -124,6 +128,12 @@ _unconfigured_identity_capabilities = IdentityCapabilityClient(
 def get_identity_capabilities(request: Request) -> IdentityCapabilityClient:
     client: IdentityCapabilityClient | None = getattr(request.app.state, "identity_capabilities", None)
     return client or _unconfigured_identity_capabilities
+
+
+async def capability_projection_publisher(
+    session: AsyncSession = Depends(session_dep),
+) -> DurableDriverCapabilityPublisher:
+    return DurableDriverCapabilityPublisher(SqlAlchemyDriverCapabilityProjectionRepository(session))
 
 
 # --- repositories ----------------------------------------------------------
@@ -251,7 +261,7 @@ async def payment_return_context_store(redis: Redis = Depends(get_redis)) -> Pay
 async def driver_service(
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
     vehicle_repo_dep: SqlAlchemyVehicleRepository = Depends(vehicle_repo),
-    capability_publisher: IdentityCapabilityClient = Depends(get_identity_capabilities),
+    capability_publisher: DurableDriverCapabilityPublisher = Depends(capability_projection_publisher),
 ) -> DriverService:
     return DriverService(
         driver_repo=driver_repo_dep,
@@ -345,6 +355,7 @@ __all__ = [
     "device_service",
     "push_notification_service",
     "matching_service",
+    "capability_projection_publisher",
     "user_repo",
     "otp_repo",
     "backoffice_audit_repo",
