@@ -150,6 +150,20 @@ class SqlAlchemyDriverCapabilityProjectionRepository:
             state.updated_at = now
         await self._session.flush()
 
+    async def mark_dead_letter(self, event: DriverCapabilityProjectionEvent, *, now: datetime, error: str) -> None:
+        row, state = await self._locked(event)
+        row.status = "dead_letter"
+        row.attempts += 1
+        row.last_attempt_at = now
+        row.last_error = error[:2000]
+        row.updated_at = now
+        if state.last_event_id == event.event_id:
+            state.sync_status = "dead_letter"
+            state.last_attempt_at = now
+            state.last_error = error[:2000]
+            state.updated_at = now
+        await self._session.flush()
+
     async def schedule_stale_refresh(self, *, before: datetime, now: datetime, limit: int) -> int:
         states = (
             await self._session.execute(

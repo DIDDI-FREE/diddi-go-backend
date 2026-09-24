@@ -24,6 +24,7 @@ class FakeRepository:
         self.succeeded: list[str] = []
         self.retries: list[tuple[str, str]] = []
         self.conflicts: list[str] = []
+        self.dead_letters: list[tuple[str, str]] = []
         self.refreshes = 0
 
     async def enqueue(self, user_id, *, operational_status, actions, request_id):
@@ -51,6 +52,9 @@ class FakeRepository:
 
     async def mark_conflict(self, event, *, now, error):
         self.conflicts.append(event.event_id)
+
+    async def mark_dead_letter(self, event, *, now, error):
+        self.dead_letters.append((event.event_id, error))
 
     async def schedule_stale_refresh(self, *, before, now, limit):
         return self.refreshes
@@ -106,6 +110,35 @@ async def test_conflict_is_not_retried_blindly() -> None:
 
     assert repository.conflicts == ["evt-1"]
     assert repository.retries == []
+
+
+async def test_unknown_user_404_is_dead_lettered_not_retried() -> None:
+    repository = FakeRepository()
+    event = await repository.enqueue(uuid4(), operational_status="offline", actions=["go_online"], request_id=None)
+    client = RecordingClient(
+        CapabilityDeliveryError("DiddiFreeID returned HTTP 404", status_code=404, error_code="USER_NOT_FOUND"),
+    )
+    dispatcher = DriverCapabilityProjectionDispatcher(repository, client)  # type: ignore[arg-type]
+
+    await dispatcher.deliver_due(batch_size=10)
+
+    assert [item[0] for item in repository.dead_letters] == [event.event_id]
+    assert repository.retries == []
+    assert repository.conflicts == []
+
+
+async def test_server_error_5xx_still_retries() -> None:
+    repository = FakeRepository()
+    event = await repository.enqueue(uuid4(), operational_status="offline", actions=["go_online"], request_id=None)
+    client = RecordingClient(
+        CapabilityDeliveryError("DiddiFreeID returned HTTP 503", status_code=503),
+    )
+    dispatcher = DriverCapabilityProjectionDispatcher(repository, client)  # type: ignore[arg-type]
+
+    await dispatcher.deliver_due(batch_size=10)
+
+    assert [item[0] for item in repository.retries] == [event.event_id]
+    assert repository.dead_letters == []
 
 
 async def test_success_marks_exact_persisted_event() -> None:

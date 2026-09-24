@@ -39,7 +39,7 @@ async def capability_projection_loop(
                 )
                 await dispatcher.deliver_due(batch_size=settings.capability_projection_batch_size)
                 projection_metrics = await repository.projection_metrics(now=datetime.now(UTC))
-                for status in ("pending", "retry", "conflict", "succeeded"):
+                for status in ("pending", "retry", "conflict", "dead_letter", "succeeded"):
                     set_value("diddigo_capability_projection_backlog", 0, {"status": status})
                 for key, value in projection_metrics.items():
                     if key.startswith("status:"):

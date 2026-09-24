@@ -67,6 +67,11 @@ class DriverCapabilityProjectionDispatcher:
                 if exc.conflict:
                     await self.repository.mark_conflict(event, now=now, error=str(exc))
                     result = "conflict"
+                elif exc.status_code == 404:
+                    # The user does not exist in DiddiFreeID: retrying cannot
+                    # succeed, so park the event instead of retrying forever.
+                    await self.repository.mark_dead_letter(event, now=now, error=str(exc))
+                    result = "dead_letter"
                 else:
                     delay = min(self.retry_base_seconds * (2 ** min(event.attempts, 8)), self.retry_max_seconds)
                     await self.repository.mark_retry(
@@ -79,7 +84,7 @@ class DriverCapabilityProjectionDispatcher:
                 increment("diddigo_capability_projection_events_total", {"result": result})
                 log_event(
                     "identity.capability.projection.delivery_failed",
-                    level="error" if exc.conflict else "warning",
+                    level="warning" if result == "retry" else "error",
                     user_id=event.user_id,
                     event_id=event.event_id,
                     projection_version=event.projection_version,
