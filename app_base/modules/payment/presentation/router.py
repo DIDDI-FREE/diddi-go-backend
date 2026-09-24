@@ -193,8 +193,9 @@ async def diddipay_webhook(
         event_id_header=event_id,
         signature=signature,
     )
-    if result["status"] == "duplicate":
-        response.status_code = 200
+    # The injected Response starts with no status code; returning it as-is made
+    # the request crash after processing (500 sent to DiddiPay, event dead-lettered).
+    response.status_code = 200 if result["status"] == "duplicate" else 204
     return response
 
 

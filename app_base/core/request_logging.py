@@ -33,7 +33,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
-            status_code = response.status_code
+            if response.status_code is not None:
+                status_code = response.status_code
             response.headers["X-Request-ID"] = request_id
             return response
         finally:
