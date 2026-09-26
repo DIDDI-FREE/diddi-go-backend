@@ -8,6 +8,7 @@ Shape matches the API contract (`DiddiGo_Contrat_API.md` §2):
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
@@ -51,6 +52,18 @@ class RideCancelRequest(BaseModel):
 class RideRatingRequest(BaseModel):
     rating: int
     comment: str | None = None
+
+
+class RideStopCreateRequest(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    address: str | None = Field(default=None, max_length=500)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class RideSupplementCreateRequest(BaseModel):
+    amount: Decimal = Field(gt=0)
+    reason: str = Field(min_length=1, max_length=120)
 
 
 class RideLocationSamplePayload(BaseModel):

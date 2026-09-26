@@ -57,6 +57,8 @@ from app_base.modules.ride.presentation.schemas import (
     RideLocationSamplesRequest,
     RideRatingRequest,
     RideStatusUpdateRequest,
+    RideStopCreateRequest,
+    RideSupplementCreateRequest,
 )
 from app_base.modules.ride.presentation.websocket import manager
 from app_base.shared_kernel.types import GeoPoint
@@ -374,6 +376,59 @@ async def stop_waiting(
     await manager.broadcast_status_changed(ride_id, RideStatus.IN_PROGRESS.value)
     await manager.broadcast_waiting_changed(ride_id, result)
     return result
+
+
+@router.post("/{ride_id}/stops", status_code=201)
+async def add_ride_stop(
+    ride_id: UUID,
+    payload: RideStopCreateRequest,
+    service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    """Driver adds an extra stop mid-ride (SCRUM-524 #2)."""
+    return await service.add_stop(
+        ride_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        address=payload.address,
+        note=payload.note,
+    )
+
+
+@router.post("/{ride_id}/supplements", status_code=201)
+async def add_ride_supplement(
+    ride_id: UUID,
+    payload: RideSupplementCreateRequest,
+    service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    """Driver adds a commissionable fare supplement mid-ride (SCRUM-524 #2)."""
+    return await service.add_supplement(
+        ride_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        amount=payload.amount,
+        reason=payload.reason,
+    )
+
+
+@router.get("/{ride_id}/supplements")
+async def list_ride_supplements(
+    ride_id: UUID,
+    service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    """List a ride's fare supplements (SCRUM-524 #2)."""
+    return await service.list_supplements(
+        ride_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
 
 
 @router.post("/{ride_id}/cancel")

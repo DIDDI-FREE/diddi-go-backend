@@ -29,6 +29,8 @@ from app_base.modules.ride.domain.entities import (
     RideRoutePoint,
     RideStatus,
     RideStatusTransition,
+    RideStop,
+    RideSupplement,
     Vehicle,
     VehicleCategory,
     VehicleVerificationStatus,
@@ -178,6 +180,62 @@ class SqlAlchemyRideRepository:
             ),
         )
         return (result.scalar_one() or 0) > 0
+
+    async def add_stop(self, stop: RideStop) -> RideStop:
+        row = orm.RideStopModel(
+            id=stop.id,
+            ride_id=stop.ride_id,
+            sequence=stop.sequence,
+            latitude=stop.latitude,
+            longitude=stop.longitude,
+            address=stop.address,
+            note=stop.note,
+            created_at=stop.created_at or datetime.now(UTC),
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return stop
+
+    async def count_stops(self, ride_id: UUID) -> int:
+        result = await self._session.execute(
+            select(func.count(orm.RideStopModel.id)).where(
+                orm.RideStopModel.ride_id == ride_id,
+            ),
+        )
+        return int(result.scalar_one() or 0)
+
+    async def add_supplement(self, supplement: RideSupplement) -> RideSupplement:
+        row = orm.RideSupplementModel(
+            id=supplement.id,
+            ride_id=supplement.ride_id,
+            amount=supplement.amount,
+            reason=supplement.reason,
+            source=supplement.source,
+            created_by_user_id=supplement.created_by_user_id,
+            created_at=supplement.created_at or datetime.now(UTC),
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return supplement
+
+    async def list_supplements(self, ride_id: UUID) -> list[RideSupplement]:
+        result = await self._session.execute(
+            select(orm.RideSupplementModel)
+            .where(orm.RideSupplementModel.ride_id == ride_id)
+            .order_by(orm.RideSupplementModel.created_at.asc()),
+        )
+        return [
+            RideSupplement(
+                id=row.id,
+                ride_id=row.ride_id,
+                amount=Decimal(str(row.amount)),
+                reason=row.reason,
+                source=row.source,
+                created_by_user_id=row.created_by_user_id,
+                created_at=row.created_at,
+            )
+            for row in result.scalars().all()
+        ]
 
     async def save_route_points(self, points: list[RideRoutePoint]) -> None:
         for point in points:
@@ -352,6 +410,7 @@ class SqlAlchemyRideRepository:
         row.waiting_started_at = ride.waiting_started_at
         row.waiting_duration_seconds = ride.waiting_duration_seconds
         row.waiting_fee = ride.waiting_fee
+        row.supplements_total = ride.supplements_total
         row.waiting_rate_per_minute = ride.waiting_rate_per_minute
         row.currency = ride.currency
         row.distance_km = ride.distance_km
@@ -413,6 +472,7 @@ class SqlAlchemyRideRepository:
             waiting_started_at=row.waiting_started_at,
             waiting_duration_seconds=row.waiting_duration_seconds,
             waiting_fee=Decimal(str(row.waiting_fee)),
+            supplements_total=Decimal(str(row.supplements_total)),
             waiting_rate_per_minute=Decimal(str(row.waiting_rate_per_minute))
             if row.waiting_rate_per_minute is not None
             else None,
