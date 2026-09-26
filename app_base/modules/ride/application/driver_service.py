@@ -294,6 +294,52 @@ class DriverService:
         await self._publish_profile_status(profile)
         return _vehicle_payload(vehicle)
 
+    async def update_vehicle(
+        self,
+        *,
+        user_id: UUID,
+        plate_number: str,
+        make: str | None,
+        model: str | None,
+        color: str | None,
+        category: str,
+    ) -> dict:
+        """Edit the driver's active vehicle descriptive fields after KYC
+        (SCRUM-524 #1). Documents/KYV are unaffected -- they use the
+        kyv/resubmit flow. Verification status is preserved."""
+        if category not in {c.value for c in VehicleCategory}:
+            raise ApiError(
+                422, "INVALID_VEHICLE_CATEGORY", "Catégorie de véhicule invalide.",
+                {"field": "category"},
+            )
+        profile = await self._require_profile(user_id)
+        vehicle = await self.vehicle_repo.find_active_for_driver(profile.id)
+        if vehicle is None:
+            raise ApiError(
+                404, "VEHICLE_NOT_FOUND", "Aucun véhicule actif à modifier.",
+            )
+        vehicle.plate_number = plate_number.strip().upper()
+        vehicle.make = make
+        vehicle.model = model
+        vehicle.color = color
+        vehicle.category = VehicleCategory(category)
+        try:
+            await self.vehicle_repo.save(vehicle)
+        except Exception as exc:  # unique violation on plate_number
+            if "plate_number" in str(exc):
+                raise ApiError(
+                    409, "PLATE_ALREADY_REGISTERED", "Cette plaque est déjà enregistrée.",
+                ) from exc
+            raise
+        log_event(
+            "driver.vehicle.updated",
+            driver_id=profile.id,
+            user_id=user_id,
+            vehicle_id=vehicle.id,
+            category=vehicle.category.value,
+        )
+        return _vehicle_payload(vehicle)
+
     async def resubmit_vehicle_kyv(
         self,
         vehicle_id: UUID,
