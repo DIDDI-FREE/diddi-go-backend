@@ -489,6 +489,8 @@ class SqlAlchemyDriverProfileRepository:
         row.national_id_document_url = profile.national_id_document_url
         row.national_id_back_document_url = profile.national_id_back_document_url
         row.selfie_document_url = profile.selfie_document_url
+        row.license_expires_at = profile.license_expires_at
+        row.national_id_expires_at = profile.national_id_expires_at
         row.kyc_submitted_at = profile.kyc_submitted_at
         row.kyc_reviewed_at = profile.kyc_reviewed_at
         row.kyc_review_notes = profile.kyc_review_notes
@@ -554,6 +556,8 @@ class SqlAlchemyDriverProfileRepository:
             national_id_document_url=row.national_id_document_url,
             national_id_back_document_url=row.national_id_back_document_url,
             selfie_document_url=row.selfie_document_url,
+            license_expires_at=row.license_expires_at,
+            national_id_expires_at=row.national_id_expires_at,
             kyc_submitted_at=row.kyc_submitted_at,
             kyc_reviewed_at=row.kyc_reviewed_at,
             kyc_review_notes=row.kyc_review_notes,

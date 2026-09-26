@@ -75,6 +75,8 @@ class DriverProfileModel(Base):
     national_id_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     national_id_back_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     selfie_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    license_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    national_id_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     kyc_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     kyc_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     kyc_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)

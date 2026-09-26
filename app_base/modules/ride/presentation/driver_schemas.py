@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -23,6 +23,8 @@ class DriverProfileCreateRequest(BaseModel):
     national_id_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     national_id_back_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     selfie_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    license_expires_at: datetime | None = None
+    national_id_expires_at: datetime | None = None
 
 
 class DriverProvisionRequest(DriverProfileCreateRequest):
@@ -45,6 +47,8 @@ class DriverKycResubmitRequest(BaseModel):
     national_id_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     national_id_back_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     selfie_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    license_expires_at: datetime | None = None
+    national_id_expires_at: datetime | None = None
 
 
 class VehicleCreateRequest(BaseModel):

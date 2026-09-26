@@ -71,6 +71,8 @@ async def create_profile(
         national_id_document_url=payload.national_id_document_url,
         national_id_back_document_url=payload.national_id_back_document_url,
         selfie_document_url=payload.selfie_document_url,
+        license_expires_at=payload.license_expires_at,
+        national_id_expires_at=payload.national_id_expires_at,
     )
 
 
@@ -96,6 +98,8 @@ async def resubmit_kyc(
         national_id_document_url=payload.national_id_document_url,
         national_id_back_document_url=payload.national_id_back_document_url,
         selfie_document_url=payload.selfie_document_url,
+        license_expires_at=payload.license_expires_at,
+        national_id_expires_at=payload.national_id_expires_at,
     )
 
 

@@ -283,6 +283,8 @@ class DriverProfile:
     national_id_document_url: str | None = None
     national_id_back_document_url: str | None = None
     selfie_document_url: str | None = None
+    license_expires_at: datetime | None = None
+    national_id_expires_at: datetime | None = None
     kyc_submitted_at: datetime | None = None
     kyc_reviewed_at: datetime | None = None
     kyc_review_notes: str | None = None
