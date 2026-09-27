@@ -20,13 +20,15 @@ def upgrade() -> None:
     op.add_column(
         "driver_profiles",
         sa.Column("license_expires_at", sa.DateTime(timezone=True), nullable=True),
+        schema="ride",
     )
     op.add_column(
         "driver_profiles",
         sa.Column("national_id_expires_at", sa.DateTime(timezone=True), nullable=True),
+        schema="ride",
     )
 
 
 def downgrade() -> None:
-    op.drop_column("driver_profiles", "national_id_expires_at")
-    op.drop_column("driver_profiles", "license_expires_at")
+    op.drop_column("driver_profiles", "national_id_expires_at", schema="ride")
+    op.drop_column("driver_profiles", "license_expires_at", schema="ride")
