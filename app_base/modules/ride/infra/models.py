@@ -75,6 +75,8 @@ class DriverProfileModel(Base):
     national_id_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     national_id_back_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     selfie_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    license_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    national_id_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     kyc_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     kyc_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     kyc_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -205,6 +207,7 @@ class RideModel(Base):
     waiting_duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     waiting_fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal("0"))
     waiting_rate_per_minute: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    supplements_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal("0"))
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="XOF")
     distance_km: Mapped[Decimal | None] = mapped_column(Numeric(6, 2), nullable=True)  # from DiddiMap
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)  # from DiddiMap
@@ -346,6 +349,58 @@ class RideRatingModel(Base):
     )  # 'passenger' | 'driver'
     rating: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )
+
+
+class RideStopModel(Base):
+    """Extra stop added mid-ride (SCRUM-524 #2)."""
+
+    __tablename__ = "ride_stops"
+    __table_args__ = {"schema": "ride"}
+
+    id: Mapped[UUID] = mapped_column(
+        _PG_UUID, primary_key=True, server_default=text("uuid_generate_v4()"),
+    )
+    ride_id: Mapped[UUID] = mapped_column(
+        _PG_UUID,
+        ForeignKey("ride.rides.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    latitude: Mapped[float] = mapped_column(Numeric(9, 6), nullable=False)
+    longitude: Mapped[float] = mapped_column(Numeric(9, 6), nullable=False)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )
+
+
+class RideSupplementModel(Base):
+    """Fare add-on line item (SCRUM-524 #2). Commissionable; source manual|auto."""
+
+    __tablename__ = "ride_supplements"
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ride_supplements_amount_positive"),
+        {"schema": "ride"},
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        _PG_UUID, primary_key=True, server_default=text("uuid_generate_v4()"),
+    )
+    ride_id: Mapped[UUID] = mapped_column(
+        _PG_UUID,
+        ForeignKey("ride.rides.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    reason: Mapped[str] = mapped_column(String(120), nullable=False)
+    source: Mapped[str] = mapped_column(String(10), nullable=False, default="manual")
+    created_by_user_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()"),
     )

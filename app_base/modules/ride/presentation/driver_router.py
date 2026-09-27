@@ -40,6 +40,7 @@ from app_base.modules.ride.presentation.driver_schemas import (
     GoOnlineRequest,
     VehicleCreateRequest,
     VehicleKyvResubmitRequest,
+    VehicleUpdateRequest,
 )
 from app_base.shared_kernel.types import GeoPoint
 
@@ -70,6 +71,8 @@ async def create_profile(
         national_id_document_url=payload.national_id_document_url,
         national_id_back_document_url=payload.national_id_back_document_url,
         selfie_document_url=payload.selfie_document_url,
+        license_expires_at=payload.license_expires_at,
+        national_id_expires_at=payload.national_id_expires_at,
     )
 
 
@@ -95,6 +98,8 @@ async def resubmit_kyc(
         national_id_document_url=payload.national_id_document_url,
         national_id_back_document_url=payload.national_id_back_document_url,
         selfie_document_url=payload.selfie_document_url,
+        license_expires_at=payload.license_expires_at,
+        national_id_expires_at=payload.national_id_expires_at,
     )
 
 
@@ -132,6 +137,23 @@ async def register_vehicle(
         vehicle_left_photo_url=payload.vehicle_left_photo_url,
         vehicle_right_photo_url=payload.vehicle_right_photo_url,
         vehicle_interior_photo_url=payload.vehicle_interior_photo_url,
+    )
+
+
+@router.put("/me/vehicle")
+async def update_my_vehicle(
+    payload: VehicleUpdateRequest,
+    service: DriverService = Depends(driver_service),
+    current_user: UserModel = Depends(get_current_active_user),
+) -> dict:
+    """Edit the driver's active vehicle after KYC (SCRUM-524 #1)."""
+    return await service.update_vehicle(
+        user_id=current_user.id,
+        plate_number=payload.plate_number,
+        make=payload.make,
+        model=payload.model,
+        color=payload.color,
+        category=payload.category,
     )
 
 

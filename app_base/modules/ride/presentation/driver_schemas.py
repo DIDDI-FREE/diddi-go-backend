@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -23,6 +23,8 @@ class DriverProfileCreateRequest(BaseModel):
     national_id_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     national_id_back_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     selfie_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    license_expires_at: datetime | None = None
+    national_id_expires_at: datetime | None = None
 
 
 class DriverProvisionRequest(DriverProfileCreateRequest):
@@ -45,6 +47,8 @@ class DriverKycResubmitRequest(BaseModel):
     national_id_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     national_id_back_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     selfie_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    license_expires_at: datetime | None = None
+    national_id_expires_at: datetime | None = None
 
 
 class VehicleCreateRequest(BaseModel):
@@ -74,6 +78,17 @@ class VehicleCreateRequest(BaseModel):
     vehicle_left_photo_url: str | None = Field(default=None, min_length=1, max_length=1000)
     vehicle_right_photo_url: str | None = Field(default=None, min_length=1, max_length=1000)
     vehicle_interior_photo_url: str | None = Field(default=None, min_length=1, max_length=1000)
+
+
+class VehicleUpdateRequest(BaseModel):
+    """Edit a vehicle's descriptive fields after KYC (SCRUM-524 #1). Documents
+    go through the kyv/resubmit flow, not here."""
+
+    plate_number: str = Field(min_length=1, max_length=20)
+    make: str | None = Field(default=None, max_length=50)
+    model: str | None = Field(default=None, max_length=50)
+    color: str | None = Field(default=None, max_length=30)
+    category: str = Field(default="standard")
 
 
 class VehicleKyvResubmitRequest(BaseModel):

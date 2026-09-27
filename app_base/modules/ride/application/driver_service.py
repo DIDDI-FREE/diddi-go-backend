@@ -11,7 +11,7 @@ KYC note: `license_verified_at` is left NULL and `status` starts at
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 from app_base.core.error_codes import ErrorCode
@@ -56,6 +56,8 @@ class DriverService:
         national_id_document_url: str | None = None,
         national_id_back_document_url: str | None = None,
         selfie_document_url: str | None = None,
+        license_expires_at: datetime | None = None,
+        national_id_expires_at: datetime | None = None,
     ) -> dict:
         if not license_number or not license_number.strip():
             raise ApiError(
@@ -89,6 +91,8 @@ class DriverService:
             national_id_document_url=_blank_to_none(national_id_document_url),
             national_id_back_document_url=_blank_to_none(national_id_back_document_url),
             selfie_document_url=_blank_to_none(selfie_document_url),
+            license_expires_at=license_expires_at,
+            national_id_expires_at=national_id_expires_at,
             kyc_submitted_at=now,
             created_at=now,
             updated_at=now,
@@ -116,6 +120,8 @@ class DriverService:
         national_id_document_url: str | None = None,
         national_id_back_document_url: str | None = None,
         selfie_document_url: str | None = None,
+        license_expires_at: datetime | None = None,
+        national_id_expires_at: datetime | None = None,
     ) -> dict:
         profile = await self._require_profile(user_id)
         if license_number is not None:
@@ -143,6 +149,8 @@ class DriverService:
             national_id_document_url=national_id_document_url,
             national_id_back_document_url=national_id_back_document_url,
             selfie_document_url=selfie_document_url,
+            license_expires_at=license_expires_at,
+            national_id_expires_at=national_id_expires_at,
         )
         now = datetime.now(UTC)
         profile.status = DriverStatus.PENDING_VERIFICATION
@@ -292,6 +300,52 @@ class DriverService:
             verification_status=vehicle.verification_status.value,
         )
         await self._publish_profile_status(profile)
+        return _vehicle_payload(vehicle)
+
+    async def update_vehicle(
+        self,
+        *,
+        user_id: UUID,
+        plate_number: str,
+        make: str | None,
+        model: str | None,
+        color: str | None,
+        category: str,
+    ) -> dict:
+        """Edit the driver's active vehicle descriptive fields after KYC
+        (SCRUM-524 #1). Documents/KYV are unaffected -- they use the
+        kyv/resubmit flow. Verification status is preserved."""
+        if category not in {c.value for c in VehicleCategory}:
+            raise ApiError(
+                422, "INVALID_VEHICLE_CATEGORY", "Catégorie de véhicule invalide.",
+                {"field": "category"},
+            )
+        profile = await self._require_profile(user_id)
+        vehicle = await self.vehicle_repo.find_active_for_driver(profile.id)
+        if vehicle is None:
+            raise ApiError(
+                404, "VEHICLE_NOT_FOUND", "Aucun véhicule actif à modifier.",
+            )
+        vehicle.plate_number = plate_number.strip().upper()
+        vehicle.make = make
+        vehicle.model = model
+        vehicle.color = color
+        vehicle.category = VehicleCategory(category)
+        try:
+            await self.vehicle_repo.save(vehicle)
+        except Exception as exc:  # unique violation on plate_number
+            if "plate_number" in str(exc):
+                raise ApiError(
+                    409, "PLATE_ALREADY_REGISTERED", "Cette plaque est déjà enregistrée.",
+                ) from exc
+            raise
+        log_event(
+            "driver.vehicle.updated",
+            driver_id=profile.id,
+            user_id=user_id,
+            vehicle_id=vehicle.id,
+            category=vehicle.category.value,
+        )
         return _vehicle_payload(vehicle)
 
     async def resubmit_vehicle_kyv(
@@ -635,6 +689,13 @@ def _profile_payload(profile: DriverProfile) -> dict:
             "submitted_at": profile.kyc_submitted_at.isoformat() if profile.kyc_submitted_at else None,
             "reviewed_at": profile.kyc_reviewed_at.isoformat() if profile.kyc_reviewed_at else None,
             "review_notes": profile.kyc_review_notes,
+            "license_expires_at": profile.license_expires_at.isoformat()
+            if profile.license_expires_at
+            else None,
+            "national_id_expires_at": profile.national_id_expires_at.isoformat()
+            if profile.national_id_expires_at
+            else None,
+            "documents_expiry_status": _documents_expiry_status(profile),
         },
     }
 
@@ -655,6 +716,8 @@ def _update_optional_kyc_fields(
     national_id_document_url: str | None,
     national_id_back_document_url: str | None,
     selfie_document_url: str | None,
+    license_expires_at: datetime | None = None,
+    national_id_expires_at: datetime | None = None,
 ) -> None:
     if legal_name is not None:
         profile.legal_name = _blank_to_none(legal_name)
@@ -682,6 +745,27 @@ def _update_optional_kyc_fields(
         profile.national_id_back_document_url = _blank_to_none(national_id_back_document_url)
     if selfie_document_url is not None:
         profile.selfie_document_url = _blank_to_none(selfie_document_url)
+    if license_expires_at is not None:
+        profile.license_expires_at = license_expires_at
+    if national_id_expires_at is not None:
+        profile.national_id_expires_at = national_id_expires_at
+
+
+def _documents_expiry_status(profile: DriverProfile) -> str:
+    """SCRUM-524 #3: valid / expiring_soon / expired from the soonest known
+    document expiry. 'valid' when no expiry dates are recorded yet."""
+    dates = [
+        d for d in (profile.license_expires_at, profile.national_id_expires_at) if d is not None
+    ]
+    if not dates:
+        return "valid"
+    now = datetime.now(UTC)
+    soonest = min(d if d.tzinfo else d.replace(tzinfo=UTC) for d in dates)
+    if soonest <= now:
+        return "expired"
+    if soonest <= now + timedelta(days=30):
+        return "expiring_soon"
+    return "valid"
 
 
 def _ensure_kyc_documents_complete(profile: DriverProfile) -> None:

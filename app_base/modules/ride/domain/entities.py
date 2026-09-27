@@ -151,6 +151,7 @@ class Ride:
     waiting_duration_seconds: int = 0
     waiting_fee: Decimal = Decimal("0")
     waiting_rate_per_minute: Decimal | None = None
+    supplements_total: Decimal = Decimal("0")
     currency: str = "XOF"
     distance_km: Decimal | None = None
     duration_seconds: int | None = None
@@ -283,6 +284,8 @@ class DriverProfile:
     national_id_document_url: str | None = None
     national_id_back_document_url: str | None = None
     selfie_document_url: str | None = None
+    license_expires_at: datetime | None = None
+    national_id_expires_at: datetime | None = None
     kyc_submitted_at: datetime | None = None
     kyc_reviewed_at: datetime | None = None
     kyc_review_notes: str | None = None
@@ -372,6 +375,37 @@ class RideRoutePoint:
     accuracy_m: Decimal | None = None
     source: str = "driver"
     extra: dict | None = None
+
+
+@dataclass
+class RideStop:
+    """An extra stop added mid-ride (SCRUM-524 #2). Route metadata; in the
+    manual pricing model it carries no fare on its own -- the driver adds a
+    RideSupplement to charge for it."""
+
+    id: UUID
+    ride_id: UUID
+    sequence: int
+    latitude: float
+    longitude: float
+    address: str | None = None
+    note: str | None = None
+    created_at: datetime | None = None
+
+
+@dataclass
+class RideSupplement:
+    """A fare add-on line item (SCRUM-524 #2). source='manual' for a
+    driver-entered amount; 'auto' is reserved for routing-based pricing
+    (SCRUM-537). Commissionable -- included in the ride total at completion."""
+
+    id: UUID
+    ride_id: UUID
+    amount: Decimal
+    reason: str
+    source: str = "manual"
+    created_by_user_id: UUID | None = None
+    created_at: datetime | None = None
 
 
 @dataclass

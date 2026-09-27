@@ -8,7 +8,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
@@ -26,6 +26,8 @@ from app_base.modules.ride.domain.entities import (
     RideRating,
     RideRoutePoint,
     RideStatus,
+    RideStop,
+    RideSupplement,
     VehicleCategory,
 )
 from app_base.modules.ride.domain.interfaces import (
@@ -329,7 +331,7 @@ class RideService:
             ) from exc
         if new_status is RideStatus.COMPLETED:
             base_fare = ride.final_fare or ride.estimated_fare or Decimal("0")
-            ride.final_fare = base_fare + ride.waiting_fee
+            ride.final_fare = base_fare + ride.waiting_fee + ride.supplements_total
             ride.platform_commission = (ride.final_fare * ride.commission_rate).quantize(Decimal("1"))
             ride.driver_payout_estimate = ride.final_fare - ride.platform_commission
         await self.ride_repo.save(ride)
@@ -422,6 +424,79 @@ class RideService:
 
     async def _persist_waiting_change(self, ride: Ride) -> None:
         await self.ride_repo.save(ride)
+
+    async def _require_active_ride_for_driver(
+        self, ride_id: UUID, *, actor_user_id: UUID, actor_role: str, action: str
+    ) -> Ride:
+        ride = await self.load_ride(ride_id)
+        if actor_role != "admin" and not await self._is_assigned_driver(ride, actor_user_id):
+            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", f"Seul le chauffeur assigne peut {action}.")
+        if ride.status not in {RideStatus.IN_PROGRESS, RideStatus.WAITING}:
+            raise ApiError(409, "RIDE_NOT_ACTIVE", "Action possible uniquement pendant la course.")
+        return ride
+
+    async def add_stop(
+        self,
+        ride_id: UUID,
+        *,
+        actor_user_id: UUID,
+        actor_role: str,
+        latitude: float,
+        longitude: float,
+        address: str | None = None,
+        note: str | None = None,
+    ) -> dict:
+        ride = await self._require_active_ride_for_driver(
+            ride_id, actor_user_id=actor_user_id, actor_role=actor_role, action="ajouter un arret",
+        )
+        sequence = await self.ride_repo.count_stops(ride.id)
+        stop = RideStop(
+            id=uuid4(), ride_id=ride.id, sequence=sequence,
+            latitude=latitude, longitude=longitude, address=address, note=note,
+            created_at=datetime.now(UTC),
+        )
+        await self.ride_repo.add_stop(stop)
+        log_event("ride.stop.added", ride_id=ride.id, actor_user_id=actor_user_id, sequence=sequence)
+        return _stop_payload(stop)
+
+    async def add_supplement(
+        self,
+        ride_id: UUID,
+        *,
+        actor_user_id: UUID,
+        actor_role: str,
+        amount: Decimal,
+        reason: str,
+    ) -> dict:
+        ride = await self._require_active_ride_for_driver(
+            ride_id, actor_user_id=actor_user_id, actor_role=actor_role, action="ajouter un supplement",
+        )
+        if amount <= 0:
+            raise ApiError(422, "INVALID_SUPPLEMENT_AMOUNT", "Le montant du supplement doit etre positif.")
+        supplement = RideSupplement(
+            id=uuid4(), ride_id=ride.id, amount=amount, reason=reason,
+            source="manual", created_by_user_id=actor_user_id, created_at=datetime.now(UTC),
+        )
+        await self.ride_repo.add_supplement(supplement)
+        ride.supplements_total += amount
+        await self.ride_repo.save(ride)
+        log_event(
+            "ride.supplement.added", ride_id=ride.id, actor_user_id=actor_user_id,
+            amount=str(amount), reason=reason,
+        )
+        return _supplement_payload(supplement)
+
+    async def list_supplements(
+        self, ride_id: UUID, *, actor_user_id: UUID, actor_role: str
+    ) -> dict:
+        ride = await self.load_ride(ride_id)
+        if actor_role != "admin" and not await self._is_assigned_driver(ride, actor_user_id):
+            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Acces reserve au chauffeur assigne.")
+        items = await self.ride_repo.list_supplements(ride.id)
+        return {
+            "items": [_supplement_payload(s) for s in items],
+            "supplements_total": int(ride.supplements_total),
+        }
         for transition in ride.status_history:
             await self.ride_repo.record_status_transition(transition)
 
@@ -836,6 +911,33 @@ def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -
         "matched_at": iso_utc(ride.matched_at),
         "started_at": iso_utc(ride.started_at),
         "completed_at": iso_utc(ride.completed_at),
+    }
+
+
+def _stop_payload(stop: RideStop) -> dict:
+    return {
+        "id": str(stop.id),
+        "ride_id": str(stop.ride_id),
+        "sequence": stop.sequence,
+        "latitude": float(stop.latitude),
+        "longitude": float(stop.longitude),
+        "address": stop.address,
+        "note": stop.note,
+        "created_at": iso_utc(stop.created_at) if stop.created_at else None,
+    }
+
+
+def _supplement_payload(supplement: RideSupplement) -> dict:
+    return {
+        "id": str(supplement.id),
+        "ride_id": str(supplement.ride_id),
+        "amount": int(supplement.amount),
+        "reason": supplement.reason,
+        "source": supplement.source,
+        "created_by_user_id": str(supplement.created_by_user_id)
+        if supplement.created_by_user_id
+        else None,
+        "created_at": iso_utc(supplement.created_at) if supplement.created_at else None,
     }
 
 
