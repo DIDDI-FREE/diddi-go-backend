@@ -10,7 +10,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_file_based_backoffice_manifest_declares_supported_s2s_commands() -> None:
-    path = Path(__file__).parents[1] / "manifests" / "manifest.json"
+    path = Path(__file__).parents[1] / "docs" / "diddigo.admin.v1.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
 
     assert payload["contract_version"] == "backoffice.v1"
