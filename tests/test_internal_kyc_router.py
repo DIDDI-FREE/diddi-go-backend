@@ -119,7 +119,7 @@ def _headers(*, actor_id: UUID | None = None, idempotency_key: str | None = None
         "X-Request-ID": str(uuid4()),
     }
     if actor_id:
-        headers["X-User-ID"] = str(actor_id)
+        headers["X-Backoffice-Actor"] = str(actor_id)
     if idempotency_key:
         headers["Idempotency-Key"] = idempotency_key
     return headers
@@ -135,8 +135,7 @@ async def test_s2s_actor_must_be_an_active_local_admin() -> None:
     )
     with pytest.raises(ApiError) as forbidden:
         await require_s2s_admin_actor(
-            backoffice_actor_id=None,
-            actor_user_id=actor_id,
+            backoffice_actor_id=actor_id,
             repo=FakeUserRepository(passenger),  # type: ignore[arg-type]
         )
     assert forbidden.value.status_code == 403
@@ -149,13 +148,12 @@ async def test_s2s_actor_must_be_an_active_local_admin() -> None:
         status=UserStatus.ACTIVE,
     )
     assert await require_s2s_admin_actor(
-        backoffice_actor_id=None,
-        actor_user_id=actor_id,
+        backoffice_actor_id=actor_id,
         repo=FakeUserRepository(admin),  # type: ignore[arg-type]
     ) == admin
 
 
-async def test_s2s_actor_accepts_canonical_header_and_rejects_header_mismatch() -> None:
+async def test_s2s_actor_accepts_canonical_header() -> None:
     actor_id = uuid4()
     admin = User(
         id=actor_id,
@@ -167,25 +165,14 @@ async def test_s2s_actor_accepts_canonical_header_and_rejects_header_mismatch() 
 
     assert await require_s2s_admin_actor(
         backoffice_actor_id=actor_id,
-        actor_user_id=None,
         repo=repo,  # type: ignore[arg-type]
     ) == admin
 
-    with pytest.raises(ApiError) as mismatch:
-        await require_s2s_admin_actor(
-            backoffice_actor_id=actor_id,
-            actor_user_id=uuid4(),
-            repo=repo,  # type: ignore[arg-type]
-        )
-    assert mismatch.value.status_code == 400
-    assert mismatch.value.code == "SERVICE_ACTOR_HEADER_MISMATCH"
 
-
-async def test_s2s_actor_requires_one_actor_header() -> None:
+async def test_s2s_actor_requires_the_canonical_actor_header() -> None:
     with pytest.raises(ApiError) as missing:
         await require_s2s_admin_actor(
             backoffice_actor_id=None,
-            actor_user_id=None,
             repo=FakeUserRepository(None),  # type: ignore[arg-type]
         )
     assert missing.value.status_code == 422

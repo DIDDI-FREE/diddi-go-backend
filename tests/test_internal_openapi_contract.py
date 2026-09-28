@@ -5,7 +5,7 @@ from app_base.main import app
 pytestmark = pytest.mark.unit
 
 
-def test_s2s_mutations_document_canonical_and_legacy_admin_actor_headers() -> None:
+def test_s2s_mutations_document_canonical_actor_header_only() -> None:
     schema = app.openapi()
 
     mutation_paths = (
@@ -15,9 +15,9 @@ def test_s2s_mutations_document_canonical_and_legacy_admin_actor_headers() -> No
     )
     for path in mutation_paths:
         parameters = schema["paths"][path]["post"]["parameters"]
+        names = {parameter["name"] for parameter in parameters}
+        assert "X-Backoffice-Actor" in names
+        # Legacy alias retired after the Backoffice migration (SCRUM-485).
+        assert "X-User-ID" not in names
         canonical = next(parameter for parameter in parameters if parameter["name"] == "X-Backoffice-Actor")
-        legacy = next(parameter for parameter in parameters if parameter["name"] == "X-User-ID")
-        assert canonical["in"] == legacy["in"] == "header"
-        assert canonical["required"] is False
-        assert legacy["required"] is False
-        assert legacy["deprecated"] is True
+        assert canonical["in"] == "header"

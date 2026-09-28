@@ -196,7 +196,7 @@ async def test_internal_provision_route_requires_scope_and_replays_command(monke
     headers = {
         "Authorization": "Bearer service-token",
         "X-Client-ID": "backoffice-staging-diddigo",
-        "X-User-ID": str(actor.id),
+        "X-Backoffice-Actor": str(actor.id),
         "X-Request-ID": str(uuid4()),
         "Idempotency-Key": "driver-provision-001",
     }

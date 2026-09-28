@@ -137,29 +137,16 @@ async def require_s2s_admin_actor(
         alias="X-Backoffice-Actor",
         description="Identifiant DiddiFreeID canonique de l'operateur Backoffice authentifie.",
     ),
-    actor_user_id: UUID | None = Header(
-        default=None,
-        alias="X-User-ID",
-        description="Alias legacy de X-Backoffice-Actor, conserve pendant la migration Backoffice.",
-        deprecated=True,
-    ),
     repo: SqlAlchemyUserRepository = Depends(user_repo),
 ) -> User:
-    if backoffice_actor_id is None and actor_user_id is None:
+    if backoffice_actor_id is None:
         raise ApiError(
             422,
             ErrorCode.SERVICE_ACTOR_REQUIRED,
-            "X-Backoffice-Actor ou X-User-ID est requis.",
-        )
-    if backoffice_actor_id is not None and actor_user_id is not None and backoffice_actor_id != actor_user_id:
-        raise ApiError(
-            400,
-            ErrorCode.SERVICE_ACTOR_HEADER_MISMATCH,
-            "X-Backoffice-Actor et X-User-ID doivent identifier le meme operateur.",
+            "X-Backoffice-Actor est requis.",
         )
 
-    resolved_actor_id = backoffice_actor_id or actor_user_id
-    actor = await repo.find_by_id(resolved_actor_id)
+    actor = await repo.find_by_id(backoffice_actor_id)
     if actor is None or actor.role != UserRole.ADMIN or actor.status != UserStatus.ACTIVE:
         raise ApiError(403, ErrorCode.SERVICE_ACTOR_FORBIDDEN, "L'acteur humain doit etre un administrateur actif.")
     return actor
