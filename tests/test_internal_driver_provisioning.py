@@ -9,8 +9,10 @@ from fastapi import FastAPI
 from app_base.core.auth_deps import require_s2s_admin_actor
 from app_base.core.deps import (
     backoffice_audit_repo,
+    driver_profile_command_store,
     driver_provisioning_command_store,
     driver_provisioning_service,
+    driver_service,
     session_dep,
 )
 from app_base.core.errors import ApiError, api_error_handler
@@ -110,6 +112,7 @@ def _fields(license_number: str = "CI-123456") -> dict:
         "national_id_document_file_id": None,
         "national_id_back_document_file_id": None,
         "selfie_document_file_id": None,
+        "profile_photo_file_id": None,
         "license_document_url": None,
         "license_back_document_url": None,
         "national_id_document_url": None,
@@ -214,5 +217,63 @@ async def test_internal_provision_route_requires_scope_and_replays_command(monke
     assert len(audit.events) == 1
     assert audit.events[0].action == "driver.profile.provision"
     assert audit.events[0].target_id == target_user_id
+    assert audit.events[0].actor_user_id == actor.id
+    assert audit.events[0].client_id == "backoffice-staging-diddigo"
+
+
+async def test_internal_profile_photo_route_requires_scope_and_replays_command(monkeypatch) -> None:
+    scopes: list[set[str]] = []
+    calls = 0
+    driver_id = uuid4()
+    file_id = uuid4()
+    actor = User(id=uuid4(), phone="+2250700000098", role=UserRole.ADMIN, status=UserStatus.ACTIVE)
+
+    def decode(token, *, audience, required_scopes, client_id, expected_subject=None):
+        assert token == "service-token"
+        assert audience == "diddigo"
+        assert client_id == "backoffice-staging-diddigo"
+        assert expected_subject == "service:backoffice"
+        scopes.append(required_scopes)
+        return {"sub": "service:backoffice", "client_id": client_id}
+
+    class FakeDriverService:
+        async def update_profile_photo(self, driver_id, *, profile_photo_file_id):
+            nonlocal calls
+            calls += 1
+            return {"id": str(driver_id), "profile_photo_file_id": str(profile_photo_file_id)}
+
+    monkeypatch.setattr("app_base.core.auth_deps.decode_identity_service_token", decode)
+    app = FastAPI()
+    app.add_exception_handler(ApiError, api_error_handler)
+    app.include_router(router)
+    app.dependency_overrides[require_s2s_admin_actor] = lambda: actor
+    app.dependency_overrides[driver_service] = lambda: FakeDriverService()
+    commands = S2SCommandStore(FakeRedis(), namespace="driver-profile")  # type: ignore[arg-type]
+    audit = FakeAuditRepository()
+    session = FakeSession()
+    app.dependency_overrides[driver_profile_command_store] = lambda: commands
+    app.dependency_overrides[backoffice_audit_repo] = lambda: audit
+    app.dependency_overrides[session_dep] = lambda: session
+    headers = {
+        "Authorization": "Bearer service-token",
+        "X-Client-ID": "backoffice-staging-diddigo",
+        "X-User-ID": str(actor.id),
+        "X-Request-ID": str(uuid4()),
+        "Idempotency-Key": "driver-profile-photo-001",
+    }
+    body = {"profile_photo_file_id": str(file_id)}
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        first = await client.patch(f"/internal/v1/drivers/{driver_id}/profile-photo", headers=headers, json=body)
+        replay = await client.patch(f"/internal/v1/drivers/{driver_id}/profile-photo", headers=headers, json=body)
+
+    assert first.status_code == replay.status_code == 200
+    assert first.json() == replay.json()
+    assert calls == 1
+    assert scopes == [{DRIVERS_WRITE}, {DRIVERS_WRITE}]
+    assert session.commits == 1
+    assert len(audit.events) == 1
+    assert audit.events[0].action == "driver.profile_photo.update"
+    assert audit.events[0].target_id == driver_id
     assert audit.events[0].actor_user_id == actor.id
     assert audit.events[0].client_id == "backoffice-staging-diddigo"

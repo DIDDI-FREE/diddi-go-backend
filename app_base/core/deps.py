@@ -128,6 +128,14 @@ async def driver_provisioning_command_store(redis: Redis = Depends(get_redis)) -
     )
 
 
+async def driver_profile_command_store(redis: Redis = Depends(get_redis)) -> S2SCommandStore:
+    return S2SCommandStore(
+        redis,
+        namespace="driver-profile",
+        ttl_seconds=settings.driver_provisioning_idempotency_ttl_seconds,
+    )
+
+
 _unconfigured_identity_capabilities = IdentityCapabilityClient(
     base_url=None,
     client_id=None,

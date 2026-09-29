@@ -37,6 +37,7 @@ from app_base.modules.ride.presentation.driver_schemas import (
     DriverKycResubmitRequest,
     DriverKycReviewRequest,
     DriverProfileCreateRequest,
+    DriverProfilePhotoUpdateRequest,
     GoOnlineRequest,
     VehicleCreateRequest,
     VehicleKyvResubmitRequest,
@@ -139,6 +140,19 @@ async def register_vehicle(
         vehicle_left_photo_url=payload.vehicle_left_photo_url,
         vehicle_right_photo_url=payload.vehicle_right_photo_url,
         vehicle_interior_photo_url=payload.vehicle_interior_photo_url,
+    )
+
+
+@router.patch("/me/profile-photo")
+async def update_my_profile_photo(
+    payload: DriverProfilePhotoUpdateRequest,
+    service: DriverService = Depends(driver_service),
+    current_user: UserModel = Depends(get_current_active_user),
+) -> dict:
+    """Self-service photo change. Does not touch KYC status."""
+    return await service.update_my_profile_photo(
+        user_id=current_user.id,
+        profile_photo_file_id=payload.profile_photo_file_id,
     )
 
 
