@@ -1,6 +1,6 @@
 """driver priority engine — ledger + dispatch config (SCRUM-63 Phase 3)
 
-Revision ID: b7c8d9e0f1a2
+Revision ID: 2f1e9c7a5b3d
 Revises: f4a5b6c7d8e9
 Create Date: 2026-09-29 12:00:00.000000
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision = "b7c8d9e0f1a2"
+revision = "2f1e9c7a5b3d"
 down_revision = "f4a5b6c7d8e9"
 branch_labels = None
 depends_on = None
