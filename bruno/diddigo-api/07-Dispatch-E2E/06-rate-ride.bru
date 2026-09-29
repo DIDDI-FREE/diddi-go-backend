@@ -1,0 +1,38 @@
+meta {
+  name: 06 Rate Ride (passenger)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/rides/{{e2e_ride_id}}/rating
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "stars": 5,
+    "comment": "e2e smoke"
+  }
+}
+
+tests {
+  test("rating accepted", function () {
+    expect([200, 201]).to.include(res.status);
+  });
+}
+
+docs {
+  Closes the happy-path dispatch smoke: request → offer (WS) → accept → in_progress
+  → completed → rating. For ranking / priority-cap / budget assertions (which need
+  controlled config + WS observation), run the Python suite `pytest -m e2e tests/e2e`.
+}

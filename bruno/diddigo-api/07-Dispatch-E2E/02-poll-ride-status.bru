@@ -1,0 +1,30 @@
+meta {
+  name: 02 Poll Ride Status
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/rides/{{e2e_ride_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("ride is being dispatched or already matched", function () {
+    expect(["requested", "matched", "driver_en_route"]).to.include(res.body.status);
+  });
+}
+
+docs {
+  Re-send this until `status` becomes `matched` (the driver accepted the pushed
+  offer). If it lands on `no_driver_found`, no eligible driver was online near the
+  pickup — check 04-Driver-Availability/01 ran for a driver at ~5.3364,-4.0267.
+}

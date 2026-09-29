@@ -1,0 +1,26 @@
+meta {
+  name: 03 Driver Accept
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/rides/{{e2e_ride_id}}/accept
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  The driver accepts the offer it received over the WebSocket. First-accept-wins:
+  a second driver accepting the same wave gets 409 OFFER_EXPIRED / 403 OFFER_NOT_YOURS.
+}

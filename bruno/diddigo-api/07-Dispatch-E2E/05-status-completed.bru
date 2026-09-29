@@ -1,0 +1,38 @@
+meta {
+  name: 05 Status Completed (driver)
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{base_url}}/rides/{{e2e_ride_id}}/status
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "status": "completed"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Completing the ride is also what writes the driver's RIDE_COMPLETED priority
+  ledger event (SCRUM-63 Phase 3). Verify it via the S2S admin route
+  GET /internal/v1/admin/dispatch/drivers/{driver_id}/priority (see the Python
+  suite — it needs an S2S token, out of scope for this browser smoke folder).
+}

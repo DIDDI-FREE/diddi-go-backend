@@ -1,0 +1,54 @@
+meta {
+  name: 01 Request Ride (passenger)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/rides
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{passenger_access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "pickup": { "lat": 5.3364, "lng": -4.0267 },
+    "dropoff": { "lat": 5.3599, "lng": -4.0083 },
+    "vehicle_category": "standard",
+    "comfort_level": "standard",
+    "payment_method": "cash"
+  }
+}
+
+script:post-response {
+  if (res.status === 201 || res.status === 200) {
+    bru.setVar("e2e_ride_id", res.body.id);
+  }
+}
+
+tests {
+  test("ride created", function () {
+    expect([200, 201]).to.include(res.status);
+    expect(res.body).to.have.property("id");
+  });
+}
+
+docs {
+  Dispatch happy-path smoke. Prerequisites (run these folders first so the shared
+  vars are set): 01-Auth (passenger + driver OTP verify → tokens), 02-Driver-Onboarding
+  + 03-Admin-KYC (driver profile + vehicle, both approved), 04-Driver-Availability/01
+  (driver go online near the pickup 5.3364,-4.0267).
+
+  The offer itself is PUSHED to the driver over the WebSocket (`/v1/ws?token=…`,
+  event `ride.new_request`) — Bruno can't observe that, so the next request polls
+  the ride's status instead. For the assertion of WHICH driver is offered / ranking,
+  use the Python suite in `tests/e2e/`.
+}

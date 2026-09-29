@@ -63,4 +63,8 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 markers = [
     "unit: fast tests that do not require Postgres, Redis, or Docker",
+    "e2e: hits the LIVE staging API — deselected by default; run explicitly with `-m e2e`",
 ]
+# e2e tests talk to the network and need credentials; never run them implicitly.
+# `pytest -m e2e` overrides this (pytest uses the last -m), so an explicit run works.
+addopts = "-m 'not e2e'"

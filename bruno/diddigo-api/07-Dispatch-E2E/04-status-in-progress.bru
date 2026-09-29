@@ -1,0 +1,31 @@
+meta {
+  name: 04 Status In Progress (driver)
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{base_url}}/rides/{{e2e_ride_id}}/status
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{driver_access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "status": "in_progress"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
