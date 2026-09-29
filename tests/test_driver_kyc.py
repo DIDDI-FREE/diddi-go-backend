@@ -186,6 +186,52 @@ async def test_driver_can_resubmit_rejected_kyc() -> None:
 
 
 @pytest.mark.asyncio
+async def test_active_driver_can_change_profile_photo_without_kyc_reset() -> None:
+    repo = FakeDriverRepo()
+    service = DriverService(driver_repo=repo, vehicle_repo=FakeVehicleRepo())
+    user_id = uuid4()
+    admin_id = uuid4()
+    new_photo_file_id = uuid4()
+
+    created = await service.create_profile(user_id=user_id, license_number="CI-123456", **full_kyc_documents())
+    await service.approve_kyc(driver_id=UUID(created["id"]), reviewed_by_user_id=admin_id, notes="Documents OK")
+
+    payload = await service.update_my_profile_photo(user_id=user_id, profile_photo_file_id=new_photo_file_id)
+
+    assert payload["status"] == "active"
+    assert payload["profile_photo_file_id"] == str(new_photo_file_id)
+    assert repo.profile.license_verified_at is not None
+    assert repo.profile.kyc_review_notes == "Documents OK (reviewed_by=" + str(admin_id) + ")"
+
+
+@pytest.mark.asyncio
+async def test_admin_can_change_driver_profile_photo_by_driver_id() -> None:
+    repo = FakeDriverRepo()
+    service = DriverService(driver_repo=repo, vehicle_repo=FakeVehicleRepo())
+    user_id = uuid4()
+    new_photo_file_id = uuid4()
+
+    created = await service.create_profile(user_id=user_id, license_number="CI-123456", **full_kyc_documents())
+
+    payload = await service.update_profile_photo(UUID(created["id"]), profile_photo_file_id=new_photo_file_id)
+
+    assert payload["profile_photo_file_id"] == str(new_photo_file_id)
+    assert payload["status"] == "pending_verification"
+
+
+@pytest.mark.asyncio
+async def test_update_profile_photo_404_for_unknown_driver() -> None:
+    repo = FakeDriverRepo()
+    service = DriverService(driver_repo=repo, vehicle_repo=FakeVehicleRepo())
+
+    with pytest.raises(ApiError) as exc_info:
+        await service.update_profile_photo(uuid4(), profile_photo_file_id=uuid4())
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.code == "DRIVER_PROFILE_NOT_FOUND"
+
+
+@pytest.mark.asyncio
 async def test_admin_can_list_kyc_queue() -> None:
     repo = FakeDriverRepo()
     service = DriverService(driver_repo=repo, vehicle_repo=FakeVehicleRepo())

@@ -210,6 +210,27 @@ class DriverService:
         await self._publish_profile_status(profile)
         return _profile_payload(profile)
 
+    async def update_my_profile_photo(self, *, user_id: UUID, profile_photo_file_id: UUID) -> dict:
+        """Driver self-service photo change. Unlike resubmit_kyc, this never
+        touches KYC status -- an active driver stays active."""
+        profile = await self._require_profile(user_id)
+        profile.profile_photo_file_id = profile_photo_file_id
+        profile.updated_at = datetime.now(UTC)
+        await self.driver_repo.save(profile)
+        log_event("driver.profile_photo.updated", driver_id=profile.id, user_id=user_id)
+        return _profile_payload(profile)
+
+    async def update_profile_photo(self, driver_id: UUID, *, profile_photo_file_id: UUID) -> dict:
+        """Admin/backoffice photo change for an existing driver, by driver_id."""
+        profile = await self.driver_repo.find_by_id(driver_id)
+        if profile is None:
+            raise ApiError(404, "DRIVER_PROFILE_NOT_FOUND", "Aucun profil chauffeur pour cet identifiant.")
+        profile.profile_photo_file_id = profile_photo_file_id
+        profile.updated_at = datetime.now(UTC)
+        await self.driver_repo.save(profile)
+        log_event("driver.profile_photo.updated", driver_id=profile.id, user_id=profile.user_id, actor="backoffice")
+        return _profile_payload(profile)
+
     async def register_vehicle(
         self,
         *,

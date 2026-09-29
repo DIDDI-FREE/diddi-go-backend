@@ -33,6 +33,10 @@ class DriverProvisionRequest(DriverProfileCreateRequest):
     full_name: str | None = Field(default=None, min_length=1, max_length=120)
 
 
+class DriverProfilePhotoUpdateRequest(BaseModel):
+    profile_photo_file_id: UUID
+
+
 class DriverKycResubmitRequest(BaseModel):
     license_number: str | None = Field(default=None, min_length=1, max_length=50)
     legal_name: str | None = Field(default=None, min_length=1, max_length=160)
