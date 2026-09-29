@@ -18,6 +18,7 @@ class DriverProfileCreateRequest(BaseModel):
     national_id_document_file_id: UUID | None = None
     national_id_back_document_file_id: UUID | None = None
     selfie_document_file_id: UUID | None = None
+    profile_photo_file_id: UUID | None = None
     license_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     license_back_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     national_id_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
@@ -42,6 +43,7 @@ class DriverKycResubmitRequest(BaseModel):
     national_id_document_file_id: UUID | None = None
     national_id_back_document_file_id: UUID | None = None
     selfie_document_file_id: UUID | None = None
+    profile_photo_file_id: UUID | None = None
     license_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     license_back_document_url: str | None = Field(default=None, min_length=1, max_length=1000)
     national_id_document_url: str | None = Field(default=None, min_length=1, max_length=1000)

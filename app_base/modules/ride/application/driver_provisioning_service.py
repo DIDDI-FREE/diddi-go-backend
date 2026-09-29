@@ -69,6 +69,7 @@ def _matches_requested_profile(profile: dict[str, Any], requested: dict[str, Any
         "national_id_document_file_id": kyc.get("national_id_document_file_id"),
         "national_id_back_document_file_id": kyc.get("national_id_back_document_file_id"),
         "selfie_document_file_id": kyc.get("selfie_document_file_id"),
+        "profile_photo_file_id": profile.get("profile_photo_file_id"),
         "license_document_url": kyc.get("license_document_url"),
         "license_back_document_url": kyc.get("license_back_document_url"),
         "national_id_document_url": kyc.get("national_id_document_url"),

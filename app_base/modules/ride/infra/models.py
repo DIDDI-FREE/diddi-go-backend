@@ -70,6 +70,7 @@ class DriverProfileModel(Base):
     national_id_document_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     national_id_back_document_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     selfie_document_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    profile_photo_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     license_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     license_back_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     national_id_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)

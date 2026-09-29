@@ -41,3 +41,8 @@ Thumbs.db
 graphify-out/
 outputs/qa/workbook-build/
 outputs/**/*.preview.png
+
+# Local AI/agent tooling scratch — never part of the service
+.codex/
+AGENTS.md
+promp recap.txt

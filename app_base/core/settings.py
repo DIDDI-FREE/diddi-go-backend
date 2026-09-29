@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     fcm_service_account_json: str | None = None
     fcm_service_account_file: str | None = None
 
+    diddifiles_base_url: str | None = None
+    diddifiles_service_client_id: str | None = None
+    diddifiles_service_client_secret: str | None = None
+    diddifiles_timeout_seconds: float = 5.0
+
     diddipay_base_url: str | None = None
     diddipay_client_id: str = "diddigo"
     diddipay_service_key: str | None = None

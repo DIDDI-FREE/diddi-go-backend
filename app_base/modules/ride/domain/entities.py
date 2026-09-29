@@ -279,6 +279,9 @@ class DriverProfile:
     national_id_document_file_id: UUID | None = None
     national_id_back_document_file_id: UUID | None = None
     selfie_document_file_id: UUID | None = None
+    # Distinct from selfie_document_file_id: a display photo shown to
+    # passengers (public-read purpose), never the private KYC selfie.
+    profile_photo_file_id: UUID | None = None
     license_document_url: str | None = None
     license_back_document_url: str | None = None
     national_id_document_url: str | None = None

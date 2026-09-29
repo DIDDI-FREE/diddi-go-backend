@@ -51,6 +51,7 @@ class DriverService:
         national_id_document_file_id: UUID | None = None,
         national_id_back_document_file_id: UUID | None = None,
         selfie_document_file_id: UUID | None = None,
+        profile_photo_file_id: UUID | None = None,
         license_document_url: str | None = None,
         license_back_document_url: str | None = None,
         national_id_document_url: str | None = None,
@@ -86,6 +87,7 @@ class DriverService:
             national_id_document_file_id=national_id_document_file_id,
             national_id_back_document_file_id=national_id_back_document_file_id,
             selfie_document_file_id=selfie_document_file_id,
+            profile_photo_file_id=profile_photo_file_id,
             license_document_url=_blank_to_none(license_document_url),
             license_back_document_url=_blank_to_none(license_back_document_url),
             national_id_document_url=_blank_to_none(national_id_document_url),
@@ -115,6 +117,7 @@ class DriverService:
         national_id_document_file_id: UUID | None = None,
         national_id_back_document_file_id: UUID | None = None,
         selfie_document_file_id: UUID | None = None,
+        profile_photo_file_id: UUID | None = None,
         license_document_url: str | None = None,
         license_back_document_url: str | None = None,
         national_id_document_url: str | None = None,
@@ -144,6 +147,7 @@ class DriverService:
             national_id_document_file_id=national_id_document_file_id,
             national_id_back_document_file_id=national_id_back_document_file_id,
             selfie_document_file_id=selfie_document_file_id,
+            profile_photo_file_id=profile_photo_file_id,
             license_document_url=license_document_url,
             license_back_document_url=license_back_document_url,
             national_id_document_url=national_id_document_url,
@@ -662,6 +666,7 @@ def _profile_payload(profile: DriverProfile) -> dict:
         "status": profile.status.value,
         "rating_avg": float(profile.rating_avg) if profile.rating_avg is not None else None,
         "rating_count": profile.rating_count,
+        "profile_photo_file_id": str(profile.profile_photo_file_id) if profile.profile_photo_file_id else None,
         "kyc": {
             "legal_name": profile.legal_name,
             "birth_date": profile.birth_date.isoformat() if profile.birth_date else None,
@@ -711,6 +716,7 @@ def _update_optional_kyc_fields(
     national_id_document_file_id: UUID | None,
     national_id_back_document_file_id: UUID | None,
     selfie_document_file_id: UUID | None,
+    profile_photo_file_id: UUID | None,
     license_document_url: str | None,
     license_back_document_url: str | None,
     national_id_document_url: str | None,
@@ -735,6 +741,8 @@ def _update_optional_kyc_fields(
         profile.national_id_back_document_file_id = national_id_back_document_file_id
     if selfie_document_file_id is not None:
         profile.selfie_document_file_id = selfie_document_file_id
+    if profile_photo_file_id is not None:
+        profile.profile_photo_file_id = profile_photo_file_id
     if license_document_url is not None:
         profile.license_document_url = _blank_to_none(license_document_url)
     if license_back_document_url is not None:
