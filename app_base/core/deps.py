@@ -338,6 +338,7 @@ async def matching_service(
     partner_service_dep: PartnerService = Depends(partner_service),
     locations: RedisDriverLocationService = Depends(get_driver_locations),
     offers: RedisOfferStore = Depends(get_offer_store),
+    diddimap: DiddiMapRoutingClient = Depends(get_diddimap),
 ) -> MatchingService:
     return MatchingService(
         ride_repo=ride_repo_dep,
@@ -347,6 +348,7 @@ async def matching_service(
         locations=locations,
         offers=offers,
         payment_repo=payment_repo_dep,
+        routing=diddimap,
     )
 
 

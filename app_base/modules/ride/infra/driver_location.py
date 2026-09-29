@@ -222,6 +222,21 @@ class RedisDriverLocationService:
         lng, lat = positions[0]
         return GeoPoint(lat=float(lat), lng=float(lng))
 
+    async def coordinates_for(self, user_ids: list[UUID]) -> dict[UUID, GeoPoint]:
+        """Last known position of each driver, in one GEOPOS round-trip.
+
+        Drivers without a known position are omitted from the result."""
+        if not user_ids:
+            return {}
+        positions = await self.redis.geopos(POSITIONS_KEY, *[str(user_id) for user_id in user_ids])
+        result: dict[UUID, GeoPoint] = {}
+        for user_id, position in zip(user_ids, positions, strict=False):
+            if position is None:
+                continue
+            lng, lat = position
+            result[user_id] = GeoPoint(lat=float(lat), lng=float(lng))
+        return result
+
     async def go_offline(self, driver_id: UUID) -> None:
         """Drop a driver from matching immediately (app closed, shift ended).
 
