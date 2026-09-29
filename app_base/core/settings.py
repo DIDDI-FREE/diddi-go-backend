@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     matching_eta_ranking_enabled: bool = True
     matching_eta_shortlist_size: int = 10
 
+    # Dispatch wave dynamics (SCRUM-63): widen the search radius on each new
+    # wave (UC-280), cap it, and abandon the whole search after a wall-clock
+    # budget (UC-282) so a ride never spins forever hunting for a driver.
+    matching_search_radius_step_km: float = 2.0
+    matching_search_radius_max_km: float = 15.0
+    matching_search_budget_seconds: int = 120
+
     # Internal Pilotage reports are intentionally bounded to a recent window
     # so a service caller cannot turn a daily endpoint into an unbounded scan.
     ride_summary_max_age_days: int = Field(default=31, ge=0, le=3660)

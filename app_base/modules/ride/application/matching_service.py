@@ -97,6 +97,17 @@ class MatchingService:
         if ride.status != RideStatus.REQUESTED:
             logger.info("matching_skip ride_id=%s reason=status_not_requested status=%s", ride.id, ride.status.value)
             return MatchingDispatch([], new_wave=False)
+        if self._search_budget_exceeded(ride):
+            logger.warning("matching_give_up ride_id=%s reason=search_budget_exceeded", ride.id)
+            log_event(
+                "ride.matching.search_budget_exceeded",
+                level="warning",
+                ride_id=ride.id,
+                requested_at=ride.requested_at.isoformat() if ride.requested_at else None,
+                budget_seconds=settings.matching_search_budget_seconds,
+            )
+            await self._give_up(ride)
+            return MatchingDispatch([], new_wave=True, no_driver_found=True)
         max_commission = Decimal(settings.driver_max_estimated_commission)
         if max_commission > 0 and ride.platform_commission is not None and ride.platform_commission > max_commission:
             logger.warning(
@@ -334,33 +345,72 @@ class MatchingService:
                 profile.user_id,
             )
 
+    def _search_budget_exceeded(self, ride: Ride) -> bool:
+        """UC-282: has the whole search run past its wall-clock budget?
+
+        Measured from `ride.requested_at`. A budget of 0 disables the cap. The
+        gate is checked on every wave (initial and each expiry-driven advance),
+        so a ride that cannot be filled is failed as NO_DRIVER_FOUND instead of
+        cycling waves indefinitely.
+        """
+        budget = settings.matching_search_budget_seconds
+        if budget <= 0 or ride.requested_at is None:
+            return False
+        started = ride.requested_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=UTC)
+        return (datetime.now(UTC) - started).total_seconds() > budget
+
     async def _next_candidates(self, ride: Ride) -> list[UUID]:
         if ride.pickup_location is None:
             logger.info("matching_no_candidate ride_id=%s reason=no_pickup_location", ride.id)
             return []
 
+        tried = await self.offers.already_tried(ride.id)
+        # UC-280: widen the search radius on each successive wave. The wave
+        # number is derived from how many drivers have already been solicited,
+        # so no extra state is needed; the radius is capped so it never grows
+        # without bound.
+        wave_number = len(tried) // OFFER_WAVE_SIZE
+        radius_km = min(
+            SEARCH_RADIUS_KM + settings.matching_search_radius_step_km * wave_number,
+            settings.matching_search_radius_max_km,
+        )
+
         nearby = await self.locations.find_available_nearby(
             ride.pickup_location,
-            radius_km=SEARCH_RADIUS_KM,
+            radius_km=radius_km,
             limit=MAX_CANDIDATES,
         )
         logger.info(
-            "matching_nearby_candidates ride_id=%s count=%s candidates=%s",
+            "matching_nearby_candidates ride_id=%s count=%s radius_km=%s wave_number=%s candidates=%s",
             ride.id,
             len(nearby),
+            radius_km,
+            wave_number,
             [str(user_id) for user_id in nearby],
         )
         log_event(
             "ride.matching.candidates_found",
             ride_id=ride.id,
             candidates_count=len(nearby),
-            radius_km=SEARCH_RADIUS_KM,
+            radius_km=radius_km,
+            wave_number=wave_number,
         )
         if not nearby:
-            logger.info("matching_no_candidate ride_id=%s reason=no_available_nearby", ride.id)
+            # UC-287: no free driver within the (widened) radius — don't open a
+            # wave at all; the caller turns this into NO_DRIVER_FOUND.
+            logger.info(
+                "matching_no_candidate ride_id=%s reason=no_available_nearby radius_km=%s", ride.id, radius_km,
+            )
+            log_event(
+                "ride.matching.no_available_nearby",
+                ride_id=ride.id,
+                radius_km=radius_km,
+                wave_number=wave_number,
+            )
             return []
 
-        tried = await self.offers.already_tried(ride.id)
         # Gather a nearest-first shortlist of eligible drivers (larger than one
         # wave) so ETA ranking has room to reorder before we cut to the wave.
         shortlist_size = max(OFFER_WAVE_SIZE, settings.matching_eta_shortlist_size)
