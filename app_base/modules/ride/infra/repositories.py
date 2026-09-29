@@ -544,6 +544,7 @@ class SqlAlchemyDriverProfileRepository:
         row.national_id_document_file_id = profile.national_id_document_file_id
         row.national_id_back_document_file_id = profile.national_id_back_document_file_id
         row.selfie_document_file_id = profile.selfie_document_file_id
+        row.profile_photo_file_id = profile.profile_photo_file_id
         row.license_document_url = profile.license_document_url
         row.license_back_document_url = profile.license_back_document_url
         row.national_id_document_url = profile.national_id_document_url
@@ -611,6 +612,7 @@ class SqlAlchemyDriverProfileRepository:
             national_id_document_file_id=row.national_id_document_file_id,
             national_id_back_document_file_id=row.national_id_back_document_file_id,
             selfie_document_file_id=row.selfie_document_file_id,
+            profile_photo_file_id=row.profile_photo_file_id,
             license_document_url=row.license_document_url,
             license_back_document_url=row.license_back_document_url,
             national_id_document_url=row.national_id_document_url,

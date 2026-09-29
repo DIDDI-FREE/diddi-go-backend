@@ -70,6 +70,7 @@ from app_base.modules.ride.infra.repositories import (
     SqlAlchemyRideRepository,
     SqlAlchemyVehicleRepository,
 )
+from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
 from app_base.modules.ride.infra.routing_client import DiddiMapRoutingClient
 from app_base.modules.ride.infra.summary_repository import SqlAlchemyRideSummaryRepository
 
@@ -89,6 +90,15 @@ def get_diddimap(request: Request) -> DiddiMapRoutingClient:
     client: DiddiMapRoutingClient | None = getattr(request.app.state, "diddimap", None)
     if client is None:
         raise RuntimeError("DiddiMap client not initialized — lifespan may not have run.")
+    return client
+
+
+def get_diddifiles(request: Request) -> DiddiFilesClient:
+    """FastAPI dependency — returns the DiddiFiles HTTP client mounted on
+    app.state by the lifespan."""
+    client: DiddiFilesClient | None = getattr(request.app.state, "diddifiles", None)
+    if client is None:
+        raise RuntimeError("DiddiFiles client not initialized — lifespan may not have run.")
     return client
 
 
@@ -211,6 +221,7 @@ async def ride_service(
     vehicle_repo_dep: SqlAlchemyVehicleRepository = Depends(vehicle_repo),
     user_repo_dep: SqlAlchemyUserRepository = Depends(user_repo),
     emergency_contact_repo_dep: SqlAlchemyEmergencyContactRepository = Depends(emergency_contact_repo),
+    diddifiles: DiddiFilesClient = Depends(get_diddifiles),
 ) -> RideService:
     return RideService(
         ride_repo=ride_repo_dep,
@@ -221,6 +232,7 @@ async def ride_service(
         user_repo=user_repo_dep,
         emergency_contact_repo=emergency_contact_repo_dep,
         emergency_notifications=EmergencyNotificationService(),
+        diddifiles=diddifiles,
     )
 
 

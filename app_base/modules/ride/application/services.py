@@ -16,6 +16,7 @@ from app_base.core.observability import log_event
 from app_base.core.settings import settings
 from app_base.modules.auth.domain.interfaces import UserRepository
 from app_base.modules.ride.application.emergency_notifications import EmergencyNotificationService
+from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
 from app_base.modules.ride.domain.entities import (
     VALID_CANCEL_REASONS,
     CancelReason,
@@ -69,6 +70,7 @@ class RideService:
     user_repo: UserRepository | None = None
     emergency_contact_repo: EmergencyContactRepository | None = None
     emergency_notifications: EmergencyNotificationService | None = None
+    diddifiles: DiddiFilesClient | None = None
 
     async def estimate_pricing(
         self,
@@ -206,11 +208,15 @@ class RideService:
             if user is not None:
                 full_name = user.full_name
                 phone = user.phone
+        photo_url = None
+        if self.diddifiles is not None:
+            photo_url = await self.diddifiles.resolve_public_url(profile.profile_photo_file_id)
         return {
             "id": str(profile.id),
             "full_name": full_name,
             "rating_avg": float(profile.rating_avg) if profile.rating_avg is not None else None,
             "phone": phone,
+            "photo_url": photo_url,
             "vehicle": {
                 "make": vehicle.make,
                 "model": vehicle.model,

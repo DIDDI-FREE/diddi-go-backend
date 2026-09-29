@@ -29,6 +29,7 @@ from app_base.core.redis import create_redis_pool
 from app_base.core.settings import settings
 from app_base.modules.payment.application.reconciliation import reconciliation_loop
 from app_base.modules.ride.application.capability_projection_worker import capability_projection_loop
+from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.infra.identity_capability_client import IdentityCapabilityClient
 from app_base.modules.ride.infra.routing_client import DiddiMapRoutingClient
@@ -55,6 +56,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         client_id=settings.identity_service_client_id,
         client_secret=settings.identity_service_client_secret,
         timeout_seconds=settings.identity_service_timeout_seconds,
+    )
+    app.state.diddifiles = DiddiFilesClient(
+        base_url=settings.diddifiles_base_url,
+        identity_base_url=settings.identity_base_url,
+        client_id=settings.diddifiles_service_client_id,
+        client_secret=settings.diddifiles_service_client_secret,
+        timeout_seconds=settings.diddifiles_timeout_seconds,
     )
 
     app.state.payment_reconciliation_task = None
@@ -95,5 +103,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await diddimap.close()
         identity_capabilities: IdentityCapabilityClient = app.state.identity_capabilities  # type: ignore[assignment]
         await identity_capabilities.close()
+        diddifiles: DiddiFilesClient = app.state.diddifiles  # type: ignore[assignment]
+        await diddifiles.close()
         await app.state.redis.aclose()
         logger.info("lifespan shutdown complete")
