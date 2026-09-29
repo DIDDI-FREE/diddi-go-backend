@@ -574,6 +574,16 @@ class SqlAlchemyDriverProfileRepository:
             return None
         return self._to_domain(row)
 
+    async def profile_ids_for_users(self, user_ids: list[UUID]) -> dict[UUID, UUID]:
+        if not user_ids:
+            return {}
+        result = await self._session.execute(
+            select(orm.DriverProfileModel.user_id, orm.DriverProfileModel.id).where(
+                orm.DriverProfileModel.user_id.in_(user_ids),
+            ),
+        )
+        return {user_id: profile_id for user_id, profile_id in result.all()}
+
     async def list_by_status(
         self,
         statuses: list[DriverStatus],

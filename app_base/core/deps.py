@@ -54,15 +54,19 @@ from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.application.emergency_contact_service import EmergencyContactService
 from app_base.modules.ride.application.emergency_notifications import EmergencyNotificationService
 from app_base.modules.ride.application.matching_service import MatchingService
+from app_base.modules.ride.application.priority_service import DriverPriorityService, PriorityLedger
 from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.application.services import RideService
 from app_base.modules.ride.application.summary_service import RideSummaryService
 from app_base.modules.ride.infra.capability_projection_repository import (
     SqlAlchemyDriverCapabilityProjectionRepository,
 )
+from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
+from app_base.modules.ride.infra.dispatch_config_store import SqlAlchemyDispatchConfigStore
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.infra.identity_capability_client import IdentityCapabilityClient
 from app_base.modules.ride.infra.offer_store import RedisOfferStore
+from app_base.modules.ride.infra.priority_repository import SqlAlchemyPriorityLedgerRepository
 from app_base.modules.ride.infra.repositories import (
     SqlAlchemyDriverProfileRepository,
     SqlAlchemyEmergencyContactRepository,
@@ -70,7 +74,6 @@ from app_base.modules.ride.infra.repositories import (
     SqlAlchemyRideRepository,
     SqlAlchemyVehicleRepository,
 )
-from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
 from app_base.modules.ride.infra.routing_client import DiddiMapRoutingClient
 from app_base.modules.ride.infra.summary_repository import SqlAlchemyRideSummaryRepository
 
@@ -194,6 +197,18 @@ async def pricing_rule_repo(
     return SqlAlchemyPricingRuleRepository(session)
 
 
+async def priority_ledger_repo(
+    session: AsyncSession = Depends(session_dep),
+) -> SqlAlchemyPriorityLedgerRepository:
+    return SqlAlchemyPriorityLedgerRepository(session)
+
+
+async def dispatch_config_store(
+    session: AsyncSession = Depends(session_dep),
+) -> SqlAlchemyDispatchConfigStore:
+    return SqlAlchemyDispatchConfigStore(session, settings)
+
+
 async def payment_repo(session: AsyncSession = Depends(session_dep)) -> SqlAlchemyPaymentRepository:
     return SqlAlchemyPaymentRepository(session)
 
@@ -230,6 +245,8 @@ async def ride_service(
     user_repo_dep: SqlAlchemyUserRepository = Depends(user_repo),
     emergency_contact_repo_dep: SqlAlchemyEmergencyContactRepository = Depends(emergency_contact_repo),
     diddifiles: DiddiFilesClient = Depends(get_diddifiles),
+    priority_ledger_repo_dep: SqlAlchemyPriorityLedgerRepository = Depends(priority_ledger_repo),
+    config_store: SqlAlchemyDispatchConfigStore = Depends(dispatch_config_store),
 ) -> RideService:
     return RideService(
         ride_repo=ride_repo_dep,
@@ -241,6 +258,7 @@ async def ride_service(
         emergency_contact_repo=emergency_contact_repo_dep,
         emergency_notifications=EmergencyNotificationService(),
         diddifiles=diddifiles,
+        priority_ledger=PriorityLedger(priority_ledger_repo_dep, await config_store.load()),
     )
 
 
@@ -347,7 +365,10 @@ async def matching_service(
     locations: RedisDriverLocationService = Depends(get_driver_locations),
     offers: RedisOfferStore = Depends(get_offer_store),
     diddimap: DiddiMapRoutingClient = Depends(get_diddimap),
+    priority_ledger_repo_dep: SqlAlchemyPriorityLedgerRepository = Depends(priority_ledger_repo),
+    config_store: SqlAlchemyDispatchConfigStore = Depends(dispatch_config_store),
 ) -> MatchingService:
+    config = await config_store.load()
     return MatchingService(
         ride_repo=ride_repo_dep,
         driver_repo=driver_repo_dep,
@@ -357,6 +378,8 @@ async def matching_service(
         offers=offers,
         payment_repo=payment_repo_dep,
         routing=diddimap,
+        priority=DriverPriorityService(priority_ledger_repo_dep, config),
+        config=config,
     )
 
 

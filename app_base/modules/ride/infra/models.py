@@ -488,3 +488,56 @@ class DriverCapabilityProjectionEventModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()"),
     )
+
+
+class DriverPriorityEventModel(Base):
+    """Append-only driver priority ledger (SCRUM-63 Phase 3). Keyed by
+    driver_profile id; summed over a sliding window at dispatch time."""
+
+    __tablename__ = "driver_priority_events"
+    __table_args__ = (
+        Index("idx_driver_priority_events_driver_created", "driver_id", "created_at"),
+        {"schema": "ride"},
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        _PG_UUID, primary_key=True, server_default=text("uuid_generate_v4()"),
+    )
+    driver_id: Mapped[UUID] = mapped_column(
+        _PG_UUID, ForeignKey("ride.driver_profiles.id", ondelete="CASCADE"), nullable=False,
+    )
+    ride_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    zone_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    points: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DispatchConfigModel(Base):
+    """Editable dispatch tunables (UC-288). A single effective row; settings
+    seed the defaults."""
+
+    __tablename__ = "dispatch_config"
+    __table_args__ = {"schema": "ride"}
+
+    id: Mapped[UUID] = mapped_column(
+        _PG_UUID, primary_key=True, server_default=text("uuid_generate_v4()"),
+    )
+    search_radius_km: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    search_radius_step_km: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    search_radius_max_km: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    offer_wave_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    search_budget_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    eta_shortlist_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    priority_window_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    priority_cap_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    priority_seconds_per_point: Mapped[int] = mapped_column(Integer, nullable=False)
+    points_ride_completed: Mapped[int] = mapped_column(Integer, nullable=False)
+    points_ride_cancelled_by_driver: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+    )

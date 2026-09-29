@@ -16,7 +16,7 @@ from app_base.core.observability import log_event
 from app_base.core.settings import settings
 from app_base.modules.auth.domain.interfaces import UserRepository
 from app_base.modules.ride.application.emergency_notifications import EmergencyNotificationService
-from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
+from app_base.modules.ride.application.priority_service import PriorityLedger
 from app_base.modules.ride.domain.entities import (
     VALID_CANCEL_REASONS,
     CancelReason,
@@ -38,6 +38,7 @@ from app_base.modules.ride.domain.interfaces import (
     RideRepository,
     VehicleRepository,
 )
+from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
 from app_base.shared_kernel.contracts.routing import RoutingProvider
 from app_base.shared_kernel.types import GeoPoint
 
@@ -71,6 +72,14 @@ class RideService:
     emergency_contact_repo: EmergencyContactRepository | None = None
     emergency_notifications: EmergencyNotificationService | None = None
     diddifiles: DiddiFilesClient | None = None
+    priority_ledger: PriorityLedger | None = None
+
+    async def _record_priority_outcome(self, ride: Ride) -> None:
+        """Append the terminal-ride priority fact (SCRUM-63). No-op unless a
+        ledger is wired and the ride is a completed / driver-cancelled one —
+        so the call sites stay one-liners with no point logic of their own."""
+        if self.priority_ledger is not None:
+            await self.priority_ledger.record_ride_outcome(ride)
 
     async def estimate_pricing(
         self,
@@ -343,6 +352,7 @@ class RideService:
         await self.ride_repo.save(ride)
         for transition in ride.status_history:
             await self.ride_repo.record_status_transition(transition)
+        await self._record_priority_outcome(ride)
         log_event(
             "ride.status_changed",
             ride_id=ride.id,
@@ -531,6 +541,7 @@ class RideService:
         ride.transition(new_status, metadata={"reason": reason})
         ride.cancellation_reason = reason
         await self.ride_repo.save(ride)
+        await self._record_priority_outcome(ride)
         log_event(
             "ride.cancelled",
             ride_id=ride.id,
