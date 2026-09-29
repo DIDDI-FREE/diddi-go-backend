@@ -12,6 +12,7 @@ driver_profile before assigning a ride.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -38,6 +39,7 @@ from app_base.modules.ride.domain.interfaces import (
     RideRepository,
     VehicleRepository,
 )
+from app_base.shared_kernel.contracts.routing import RoutingProvider
 
 # Uvicorn wires this logger to the Docker console.
 logger = logging.getLogger("uvicorn.error")
@@ -45,6 +47,8 @@ logger = logging.getLogger("uvicorn.error")
 SEARCH_RADIUS_KM = 5.0
 MAX_CANDIDATES = 25
 OFFER_WAVE_SIZE = 5
+# DiddiGo VTC profile, mirrors RideService's routing calls.
+ROUTING_PROFILE = "palh_vtc"
 
 
 @dataclass(frozen=True)
@@ -63,6 +67,7 @@ class MatchingService:
     offers: OfferStore
     partner_service: object | None = None
     payment_repo: PaymentRepository | None = None
+    routing: RoutingProvider | None = None
 
     async def try_match(self, ride: Ride) -> MatchingDispatch:
         """Offer `ride` to the next suitable wave of drivers.
@@ -356,7 +361,10 @@ class MatchingService:
             return []
 
         tried = await self.offers.already_tried(ride.id)
-        selected: list[UUID] = []
+        # Gather a nearest-first shortlist of eligible drivers (larger than one
+        # wave) so ETA ranking has room to reorder before we cut to the wave.
+        shortlist_size = max(OFFER_WAVE_SIZE, settings.matching_eta_shortlist_size)
+        eligible: list[UUID] = []
         for user_id in nearby:
             if user_id in tried:
                 logger.info(
@@ -368,9 +376,8 @@ class MatchingService:
 
             can_take, reason = await self._can_take_ride(user_id, ride)
             if can_take:
-                logger.info("matching_candidate_selected ride_id=%s driver_user_id=%s", ride.id, user_id)
-                selected.append(user_id)
-                if len(selected) >= OFFER_WAVE_SIZE:
+                eligible.append(user_id)
+                if len(eligible) >= shortlist_size:
                     break
                 continue
 
@@ -387,6 +394,11 @@ class MatchingService:
                 reason=reason,
             )
 
+        ranked = await self._rank_by_eta(ride, eligible)
+        selected = ranked[:OFFER_WAVE_SIZE]
+        for user_id in selected:
+            logger.info("matching_candidate_selected ride_id=%s driver_user_id=%s", ride.id, user_id)
+
         if not selected:
             logger.info("matching_no_candidate ride_id=%s reason=all_candidates_rejected", ride.id)
         log_event(
@@ -396,6 +408,63 @@ class MatchingService:
             wave_size=len(selected),
         )
         return selected
+
+    async def _rank_by_eta(self, ride: Ride, eligible: list[UUID]) -> list[UUID]:
+        """Re-rank the eligible shortlist by real ETA to the pickup (UC-283).
+
+        Falls back to the incoming nearest-first (distance) order whenever ETA
+        is unavailable — routing not wired, disabled, no pickup, no known
+        driver positions, or DiddiMap failing — so ranking never blocks
+        dispatch. Drivers whose ETA could not be computed keep their distance
+        rank at the tail.
+        """
+        if (
+            self.routing is None
+            or not settings.matching_eta_ranking_enabled
+            or len(eligible) <= 1
+            or ride.pickup_location is None
+        ):
+            return eligible
+
+        try:
+            positions = await self.locations.coordinates_for(eligible)
+        except Exception:  # noqa: BLE001 — location lookup must never break dispatch
+            logger.warning("matching_eta_positions_failed ride_id=%s — keeping distance order", ride.id)
+            return eligible
+
+        async def _eta(user_id: UUID) -> int | None:
+            origin = positions.get(user_id)
+            if origin is None:
+                return None
+            estimate = await self.routing.estimate(
+                origin=origin, destination=ride.pickup_location, profile=ROUTING_PROFILE,
+            )
+            return int(estimate.duration_seconds)
+
+        results = await asyncio.gather(*[_eta(user_id) for user_id in eligible], return_exceptions=True)
+
+        timed: list[tuple[UUID, int]] = []
+        untimed: list[UUID] = []
+        for user_id, result in zip(eligible, results, strict=True):
+            if isinstance(result, int):
+                timed.append((user_id, result))
+            else:
+                untimed.append(user_id)
+
+        if not timed:
+            logger.warning("matching_eta_unavailable ride_id=%s — keeping distance order", ride.id)
+            return eligible
+
+        # Stable sort by ETA; ties keep their original (distance) order.
+        timed.sort(key=lambda item: item[1])
+        ranked = [user_id for user_id, _ in timed] + untimed
+        log_event(
+            "ride.matching.eta_ranked",
+            ride_id=ride.id,
+            timed_count=len(timed),
+            untimed_count=len(untimed),
+        )
+        return ranked
 
     async def _can_take_ride(self, user_id: UUID, ride: Ride) -> tuple[bool, str | None]:
         profile = await self.driver_repo.find_by_user_id(user_id)

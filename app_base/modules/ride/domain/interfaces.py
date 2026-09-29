@@ -168,6 +168,12 @@ class DriverLocationService(Protocol):
 
     async def get_position(self, driver_id: UUID) -> GeoPoint | None: ...
 
+    async def coordinates_for(self, user_ids: list[UUID]) -> dict[UUID, GeoPoint]:
+        """Last known position for each given driver, for ETA ranking.
+
+        Missing drivers are simply absent from the returned mapping."""
+        ...
+
     async def go_offline(self, driver_id: UUID) -> None: ...
 
 
