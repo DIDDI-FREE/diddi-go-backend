@@ -29,6 +29,7 @@ from app_base.core.redis import create_redis_pool
 from app_base.core.settings import settings
 from app_base.modules.payment.application.reconciliation import reconciliation_loop
 from app_base.modules.ride.application.capability_projection_worker import capability_projection_loop
+from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.infra.identity_capability_client import IdentityCapabilityClient
@@ -64,6 +65,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         client_secret=settings.diddifiles_service_client_secret,
         timeout_seconds=settings.diddifiles_timeout_seconds,
     )
+    # Bare (uses its own settings-derived dataclass defaults) — mounted on app.state, not
+    # constructed per-request, so the S2S token cache (SCRUM-504) actually caches across requests.
+    app.state.diddipay = DiddiPayClient()
 
     app.state.payment_reconciliation_task = None
     if settings.payment_reconciliation_enabled:

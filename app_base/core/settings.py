@@ -104,6 +104,10 @@ class Settings(BaseSettings):
     diddipay_base_url: str | None = None
     diddipay_client_id: str = "diddigo"
     diddipay_service_key: str | None = None
+    # S2S migration (SCRUM-504): set to switch DiddiPayClient from X-Service-Key to a real
+    # DiddiFreeID service token, mirroring diddifiles_service_client_secret. Unset = unchanged
+    # legacy behavior.
+    diddipay_service_client_secret: str | None = None
     diddipay_callback_secret: str | None = None
     diddipay_http_timeout_seconds: float = 15.0
     diddigo_payment_callback_url: str | None = None

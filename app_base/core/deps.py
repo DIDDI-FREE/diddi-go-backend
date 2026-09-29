@@ -96,6 +96,15 @@ def get_diddimap(request: Request) -> DiddiMapRoutingClient:
     return client
 
 
+def get_diddipay(request: Request) -> DiddiPayClient:
+    """FastAPI dependency — returns the DiddiPay HTTP client mounted on
+    app.state by the lifespan (keeps its S2S token cache alive across requests)."""
+    client: DiddiPayClient | None = getattr(request.app.state, "diddipay", None)
+    if client is None:
+        raise RuntimeError("DiddiPay client not initialized — lifespan may not have run.")
+    return client
+
+
 def get_diddifiles(request: Request) -> DiddiFilesClient:
     """FastAPI dependency — returns the DiddiFiles HTTP client mounted on
     app.state by the lifespan."""
@@ -266,11 +275,12 @@ async def payment_service(
     payment_repo_dep: SqlAlchemyPaymentRepository = Depends(payment_repo),
     ride_repo_dep: SqlAlchemyRideRepository = Depends(ride_repo),
     redis: Redis = Depends(get_redis),
+    diddipay: DiddiPayClient = Depends(get_diddipay),
 ) -> PaymentService:
     return PaymentService(
         payment_repo=payment_repo_dep,
         ride_repo=ride_repo_dep,
-        diddipay=DiddiPayClient(),
+        diddipay=diddipay,
         return_contexts=PaymentReturnContextStore(
             redis, ttl_seconds=settings.payment_return_context_ttl_seconds,
         ),
@@ -281,11 +291,12 @@ async def driver_wallet_service(
     payment_repo_dep: SqlAlchemyPaymentRepository = Depends(payment_repo),
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
     redis: Redis = Depends(get_redis),
+    diddipay: DiddiPayClient = Depends(get_diddipay),
 ) -> DriverWalletService:
     return DriverWalletService(
         payment_repo=payment_repo_dep,
         driver_repo=driver_repo_dep,
-        diddipay=DiddiPayClient(),
+        diddipay=diddipay,
         return_contexts=PaymentReturnContextStore(
             redis, ttl_seconds=settings.payment_return_context_ttl_seconds,
         ),
