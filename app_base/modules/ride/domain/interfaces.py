@@ -26,6 +26,11 @@ from app_base.modules.ride.domain.entities import (
     Vehicle,
     VehicleCategory,
 )
+from app_base.modules.ride.domain.priority import (
+    DispatchConfig,
+    PriorityEvent,
+    PriorityScore,
+)
 from app_base.modules.ride.domain.summary import RideSummaryTotals
 from app_base.shared_kernel.types import GeoPoint
 
@@ -93,6 +98,13 @@ class DriverProfileRepository(Protocol):
     async def find_by_user_id(self, user_id: UUID) -> DriverProfile | None: ...
 
     async def find_by_id(self, profile_id: UUID) -> DriverProfile | None: ...
+
+    async def profile_ids_for_users(self, user_ids: list[UUID]) -> dict[UUID, UUID]:
+        """Map auth user_ids -> driver_profile ids in one query.
+
+        Lets the matcher translate its user-id shortlist to the profile ids the
+        priority ledger is keyed by, without an N+1."""
+        ...
 
     async def list_by_status(
         self,
@@ -221,3 +233,47 @@ class EmergencyContactRepository(Protocol):
     async def release_claim(self, ride_id: UUID) -> None: ...
 
     async def clear(self, ride_id: UUID) -> None: ...
+
+
+class PriorityLedgerPort(Protocol):
+    """Append-only driver priority ledger (keyed by driver_profile_id)."""
+
+    async def append(self, event: PriorityEvent) -> None: ...
+
+    async def windowed_points(
+        self,
+        driver_ids: list[UUID],
+        *,
+        since: datetime,
+        zone_id: UUID,
+        now: datetime,
+    ) -> dict[UUID, int]:
+        """Sum of live points per driver over the window, for the given zone or
+        global (zone_id NULL), excluding expired temp boosts. One query."""
+        ...
+
+    async def recent_events(self, driver_id: UUID, *, limit: int = 50) -> list[PriorityEvent]:
+        """A driver's recent ledger entries, newest first (admin view, UC-110)."""
+        ...
+
+    async def active_rules(self, *, now: datetime) -> list[PriorityEvent]:
+        """Currently-active explicit rules (unexpired temp boosts), UC-110."""
+        ...
+
+
+class PriorityProvider(Protocol):
+    """Matcher-facing read port: windowed scores + the point→seconds bonus."""
+
+    async def scores_for(
+        self, driver_ids: list[UUID], *, zone_id: UUID, at: datetime,
+    ) -> dict[UUID, PriorityScore]: ...
+
+    def bonus_seconds(self, points: int) -> int: ...
+
+
+class DispatchConfigStore(Protocol):
+    """DB-backed dispatch configuration (UC-288), settings as seed defaults."""
+
+    async def load(self) -> DispatchConfig: ...
+
+    async def save(self, config: DispatchConfig) -> DispatchConfig: ...

@@ -62,6 +62,15 @@ class Settings(BaseSettings):
     matching_search_radius_max_km: float = 15.0
     matching_search_budget_seconds: int = 120
 
+    # Driver priority engine (SCRUM-63 Phase 3). Points accrue on a sliding
+    # window and nudge dispatch ranking, capped so proximity stays dominant
+    # (UC-284). These seed the DB-backed dispatch_config (editable per UC-288).
+    matching_priority_window_days: int = 7
+    matching_priority_cap_seconds: int = 120
+    matching_priority_seconds_per_point: int = 10
+    matching_priority_points_ride_completed: int = 1
+    matching_priority_points_ride_cancelled_by_driver: int = -3
+
     # Internal Pilotage reports are intentionally bounded to a recent window
     # so a service caller cannot turn a daily endpoint into an unbounded scan.
     ride_summary_max_age_days: int = Field(default=31, ge=0, le=3660)

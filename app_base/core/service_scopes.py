@@ -17,6 +17,8 @@ PARTNERS_READ = "diddigo:partners:read"
 PARTNERS_WRITE = "diddigo:partners:write"
 OPERATIONS_READ = "diddigo:operations:read"
 RIDE_SUMMARY_READ = "diddigo:ride-summary:read"
+DISPATCH_READ = "diddigo:dispatch:read"
+DISPATCH_WRITE = "diddigo:dispatch:write"
 
 KNOWN_SCOPES = frozenset(
     {
@@ -33,6 +35,8 @@ KNOWN_SCOPES = frozenset(
         PARTNERS_WRITE,
         OPERATIONS_READ,
         RIDE_SUMMARY_READ,
+        DISPATCH_READ,
+        DISPATCH_WRITE,
     }
 )
 

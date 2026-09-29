@@ -26,6 +26,11 @@ from app_base.core.errors import ApiError
 from app_base.core.observability import log_event
 from app_base.core.settings import settings
 from app_base.modules.payment.domain.interfaces import PaymentRepository
+from app_base.modules.ride.application.dispatch_config import (  # noqa: F401 — re-exported for callers/tests
+    OFFER_WAVE_SIZE,
+    SEARCH_RADIUS_KM,
+    dispatch_config_from_settings,
+)
 from app_base.modules.ride.domain.entities import (
     ComfortLevel,
     DriverStatus,
@@ -36,17 +41,19 @@ from app_base.modules.ride.domain.interfaces import (
     DriverLocationService,
     DriverProfileRepository,
     OfferStore,
+    PriorityProvider,
     RideRepository,
     VehicleRepository,
 )
+from app_base.modules.ride.domain.priority import DEFAULT_ZONE_ID, DispatchConfig
 from app_base.shared_kernel.contracts.routing import RoutingProvider
 
 # Uvicorn wires this logger to the Docker console.
 logger = logging.getLogger("uvicorn.error")
 
-SEARCH_RADIUS_KM = 5.0
+# SEARCH_RADIUS_KM / OFFER_WAVE_SIZE are the seed defaults (see dispatch_config);
+# re-exported here so callers and tests keep importing them from this module.
 MAX_CANDIDATES = 25
-OFFER_WAVE_SIZE = 5
 # DiddiGo VTC profile, mirrors RideService's routing calls.
 ROUTING_PROFILE = "palh_vtc"
 
@@ -68,6 +75,14 @@ class MatchingService:
     partner_service: object | None = None
     payment_repo: PaymentRepository | None = None
     routing: RoutingProvider | None = None
+    priority: PriorityProvider | None = None
+    config: DispatchConfig | None = None
+
+    @property
+    def _cfg(self) -> DispatchConfig:
+        """Effective dispatch tunables — the injected DB-backed config, or the
+        settings-seeded defaults when none is wired (unit tests, bootstrap)."""
+        return self.config or dispatch_config_from_settings(settings)
 
     async def try_match(self, ride: Ride) -> MatchingDispatch:
         """Offer `ride` to the next suitable wave of drivers.
@@ -104,7 +119,7 @@ class MatchingService:
                 level="warning",
                 ride_id=ride.id,
                 requested_at=ride.requested_at.isoformat() if ride.requested_at else None,
-                budget_seconds=settings.matching_search_budget_seconds,
+                budget_seconds=self._cfg.search_budget_seconds,
             )
             await self._give_up(ride)
             return MatchingDispatch([], new_wave=True, no_driver_found=True)
@@ -353,7 +368,7 @@ class MatchingService:
         so a ride that cannot be filled is failed as NO_DRIVER_FOUND instead of
         cycling waves indefinitely.
         """
-        budget = settings.matching_search_budget_seconds
+        budget = self._cfg.search_budget_seconds
         if budget <= 0 or ride.requested_at is None:
             return False
         started = ride.requested_at
@@ -366,15 +381,16 @@ class MatchingService:
             logger.info("matching_no_candidate ride_id=%s reason=no_pickup_location", ride.id)
             return []
 
+        cfg = self._cfg
         tried = await self.offers.already_tried(ride.id)
         # UC-280: widen the search radius on each successive wave. The wave
         # number is derived from how many drivers have already been solicited,
         # so no extra state is needed; the radius is capped so it never grows
         # without bound.
-        wave_number = len(tried) // OFFER_WAVE_SIZE
+        wave_number = len(tried) // cfg.offer_wave_size
         radius_km = min(
-            SEARCH_RADIUS_KM + settings.matching_search_radius_step_km * wave_number,
-            settings.matching_search_radius_max_km,
+            cfg.search_radius_km + cfg.search_radius_step_km * wave_number,
+            cfg.search_radius_max_km,
         )
 
         nearby = await self.locations.find_available_nearby(
@@ -413,7 +429,7 @@ class MatchingService:
 
         # Gather a nearest-first shortlist of eligible drivers (larger than one
         # wave) so ETA ranking has room to reorder before we cut to the wave.
-        shortlist_size = max(OFFER_WAVE_SIZE, settings.matching_eta_shortlist_size)
+        shortlist_size = max(cfg.offer_wave_size, cfg.eta_shortlist_size)
         eligible: list[UUID] = []
         for user_id in nearby:
             if user_id in tried:
@@ -445,7 +461,7 @@ class MatchingService:
             )
 
         ranked = await self._rank_by_eta(ride, eligible)
-        selected = ranked[:OFFER_WAVE_SIZE]
+        selected = ranked[:cfg.offer_wave_size]
         for user_id in selected:
             logger.info("matching_candidate_selected ride_id=%s driver_user_id=%s", ride.id, user_id)
 
@@ -505,16 +521,47 @@ class MatchingService:
             logger.warning("matching_eta_unavailable ride_id=%s — keeping distance order", ride.id)
             return eligible
 
-        # Stable sort by ETA; ties keep their original (distance) order.
-        timed.sort(key=lambda item: item[1])
+        # UC-283/284: rank by ETA adjusted by a CAPPED priority bonus. A
+        # reliable/boosted driver can move up, a frequent canceller moves down,
+        # but the cap keeps a far driver from ever outranking a nearer one.
+        # Bonus is empty (no effect) whenever priority is unavailable.
+        bonuses = await self._priority_bonuses(ride, [user_id for user_id, _ in timed])
+        timed.sort(key=lambda item: item[1] - bonuses.get(item[0], 0))
         ranked = [user_id for user_id, _ in timed] + untimed
         log_event(
             "ride.matching.eta_ranked",
             ride_id=ride.id,
             timed_count=len(timed),
             untimed_count=len(untimed),
+            priority_applied=bool(bonuses),
         )
         return ranked
+
+    async def _priority_bonuses(self, ride: Ride, user_ids: list[UUID]) -> dict[UUID, int]:
+        """Capped per-driver ETA-seconds bonus from the priority ledger
+        (UC-106/108/109/285), keyed by the matcher's auth user_ids.
+
+        Empty (no effect) whenever priority is unavailable — priority must never
+        break dispatch, and the cap (UC-284) keeps proximity dominant. The
+        ledger is keyed by driver_profile id, so user_ids are translated in one
+        batched lookup."""
+        if self.priority is None or not user_ids:
+            return {}
+        try:
+            profile_ids = await self.driver_repo.profile_ids_for_users(user_ids)
+            scores = await self.priority.scores_for(
+                list(profile_ids.values()), zone_id=DEFAULT_ZONE_ID, at=datetime.now(UTC),
+            )
+        except Exception:  # noqa: BLE001 — priority must never break dispatch
+            logger.warning("matching_priority_unavailable ride_id=%s — ranking by ETA only", ride.id)
+            return {}
+        cap = self._cfg.priority_cap_seconds
+        bonuses: dict[UUID, int] = {}
+        for user_id, profile_id in profile_ids.items():
+            score = scores.get(profile_id)
+            if score is not None:
+                bonuses[user_id] = min(self.priority.bonus_seconds(score.points), cap)
+        return bonuses
 
     async def _can_take_ride(self, user_id: UUID, ride: Ride) -> tuple[bool, str | None]:
         profile = await self.driver_repo.find_by_user_id(user_id)
