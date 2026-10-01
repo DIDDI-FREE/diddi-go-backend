@@ -28,8 +28,8 @@ from app_base.core.database import ping_db
 from app_base.core.redis import create_redis_pool
 from app_base.core.settings import settings
 from app_base.modules.payment.application.reconciliation import reconciliation_loop
-from app_base.modules.ride.application.capability_projection_worker import capability_projection_loop
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
+from app_base.modules.ride.application.capability_projection_worker import capability_projection_loop
 from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.infra.identity_capability_client import IdentityCapabilityClient
@@ -47,6 +47,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         access_token=settings.diddimap_access_token,
         service_client_id=settings.diddimap_service_client_id,
         service_token=settings.diddimap_service_token,
+        service_client_secret=settings.diddimap_service_client_secret,
+        service_audience=settings.diddimap_service_audience,
+        service_token_url=settings.diddimap_service_token_url,
     )
     app.state.driver_locations = RedisDriverLocationService(
         redis=app.state.redis,

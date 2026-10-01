@@ -281,8 +281,12 @@ services de course le rÃ©cupÃ¨rent ensuite via l'injection `get_diddimap`.
 
 Configuration recommandÃ©e :
 - staging / Portainer : `DIDDIMAP_BASE_URL=http://abidjanmaps-backend-staging.diddifree.com`
-- staging / Portainer, traces GPS : `DIDDIMAP_SERVICE_CLIENT_ID=diddigo-staging`
-- staging / Portainer, traces GPS : `DIDDIMAP_SERVICE_TOKEN=<token-service-brut>`
+- staging / Portainer : `DIDDIMAP_SERVICE_CLIENT_ID=diddigo-staging`
+- staging / Portainer : `DIDDIMAP_SERVICE_CLIENT_SECRET=<secret-DiddiFreeID>`
+- staging / Portainer : `DIDDIMAP_SERVICE_AUDIENCE=diddimap`
+- staging / Portainer :
+  `DIDDIMAP_SERVICE_TOKEN_URL=https://auth-staging.diddifree.com/identity/v1/auth/service/token`
+- migration uniquement : `DIDDIMAP_SERVICE_TOKEN=<token-service-statique>`
 - ancien fallback temporaire : `DIDDIMAP_ACCESS_TOKEN=<jwt-diddimap-utilisateur>`
 - local : garder la mÃªme URL staging, sauf si un DiddiMap local tourne vraiment
   sur la machine de dev
@@ -290,6 +294,13 @@ Configuration recommandÃ©e :
   `DIDDIMAP_BASE_URL=http://localhost:4000`
 - docker compose avec DiddiMap dans le mÃªme rÃ©seau : utiliser son vrai nom de
   service, par exemple `DIDDIMAP_BASE_URL=http://abidjanmaps-backend:4000`
+
+Quand les quatre variables S2S sont configurees, DiddiGo demande a DiddiFreeID
+un jeton court distinct pour chaque scope DiddiMap, le garde en cache jusqu'a
+son renouvellement et n'utilise pas le token statique. Si l'obtention du jeton
+S2S echoue, l'erreur est explicite : il n'existe aucun fallback silencieux vers
+le secret legacy. Lorsque le secret S2S est absent, le token statique reste
+accepte temporairement pour permettre une migration progressive.
 
 Si DiddiMap Core est indisponible, DiddiGo retourne une erreur explicite
 `DIDDIMAP_UNAVAILABLE`. Il n'y a pas de fallback silencieux par coordonnÃ©es :

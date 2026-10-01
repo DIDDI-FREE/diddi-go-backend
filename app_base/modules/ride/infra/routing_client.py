@@ -8,6 +8,7 @@ silent fallback distance, duration, or geocode result.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -28,6 +29,10 @@ logger = logging.getLogger(__name__)
 # supports "car", so we translate until it exposes a dedicated VTC profile.
 DEFAULT_PROFILE = "palh_vtc"
 DEFAULT_TIMEOUT_SECONDS = 3.0
+ROUTE_READ_SCOPE = "diddimap:routes:read"
+PLACES_READ_SCOPE = "diddimap:places:read"
+TRACE_WRITE_SCOPE = "diddimap:map-traces:write"
+TRACE_ANALYZE_SCOPE = "diddimap:map-traces:analyze"
 
 
 @dataclass(frozen=True)
@@ -64,8 +69,13 @@ class DiddiMapRoutingClient:
     access_token: str | None = None
     service_client_id: str | None = None
     service_token: str | None = None
+    service_client_secret: str | None = None
+    service_audience: str = "diddimap"
+    service_token_url: str | None = None
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
     _client: httpx.AsyncClient | None = field(default=None, init=False, repr=False)
+    _service_tokens: dict[str, tuple[str, float]] = field(default_factory=dict, init=False, repr=False)
+    _token_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
 
     def _http(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -75,11 +85,24 @@ class DiddiMapRoutingClient:
             )
         return self._client
 
-    def _auth_headers(self) -> dict[str, str]:
+    @property
+    def _s2s_configured(self) -> bool:
+        return bool(
+            self.service_client_id
+            and self.service_client_secret
+            and self.service_token_url
+            and self.service_audience
+        )
+
+    async def _auth_headers(self, scope: str) -> dict[str, str]:
         headers: dict[str, str] = {}
         request_id = current_request_id()
         if request_id:
             headers["X-Request-ID"] = request_id
+        if self._s2s_configured:
+            headers["Authorization"] = f"Bearer {await self._service_access_token(scope)}"
+            headers["X-Client-ID"] = str(self.service_client_id)
+            return headers
         if self.service_token:
             headers["Authorization"] = f"Bearer {self.service_token}"
             if self.service_client_id:
@@ -90,9 +113,58 @@ class DiddiMapRoutingClient:
         return headers
 
     def _trace_path(self, path: str) -> str:
-        if self.service_token:
+        if self._s2s_configured or self.service_token:
             return f"/api/v1/integrations/diddigo{path}"
         return f"/api/v1{path}"
+
+    async def _service_access_token(self, scope: str) -> str:
+        now = time.monotonic()
+        cached = self._service_tokens.get(scope)
+        if cached and now < cached[1]:
+            return cached[0]
+
+        async with self._token_lock:
+            now = time.monotonic()
+            cached = self._service_tokens.get(scope)
+            if cached and now < cached[1]:
+                return cached[0]
+            try:
+                response = await self._http().post(
+                    str(self.service_token_url),
+                    headers={"X-Client-ID": str(self.service_client_id)},
+                    data={
+                        "grant_type": "client_credentials",
+                        "client_id": self.service_client_id,
+                        "client_secret": self.service_client_secret,
+                        "audience": self.service_audience,
+                        "scope": scope,
+                    },
+                )
+                response.raise_for_status()
+                payload = response.json()
+                token = payload["access_token"]
+                if not isinstance(token, str) or not token:
+                    raise ValueError("DiddiFreeID token response has no access_token")
+                expires_in = max(int(payload.get("expires_in", 600)), 1)
+            except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+                log_event(
+                    "diddimap.service_token.failed",
+                    level="error",
+                    scope=scope,
+                    error_type=type(exc).__name__,
+                )
+                raise ApiError(
+                    502,
+                    ErrorCode.DIDDIMAP_AUTHENTICATION_FAILED,
+                    "Impossible d'authentifier DiddiGo aupres de DiddiMap.",
+                ) from exc
+
+            self._service_tokens[scope] = (
+                token,
+                time.monotonic() + max(expires_in - 30, 1),
+            )
+            log_event("diddimap.service_token.acquired", scope=scope, expires_in=expires_in)
+            return token
 
     async def estimate(
         self,
@@ -108,7 +180,9 @@ class DiddiMapRoutingClient:
         started = time.perf_counter()
         try:
             response = await self._http().post(
-                "/api/v1/route", json=request_payload, headers=self._auth_headers()
+                "/api/v1/route",
+                json=request_payload,
+                headers=await self._auth_headers(ROUTE_READ_SCOPE),
             )
             response.raise_for_status()
             payload = response.json()
@@ -161,7 +235,9 @@ class DiddiMapRoutingClient:
         started = time.perf_counter()
         try:
             response = await self._http().get(
-                "/api/v1/geocoding/search", params=params, headers=self._auth_headers()
+                "/api/v1/geocoding/search",
+                params=params,
+                headers=await self._auth_headers(PLACES_READ_SCOPE),
             )
             response.raise_for_status()
             payload = response.json()
@@ -221,6 +297,7 @@ class DiddiMapRoutingClient:
         response_payload = await self._post_json(
             self._trace_path("/map-traces/start"),
             payload,
+            scope=TRACE_WRITE_SCOPE,
             unavailable_message="DiddiMap trace start unavailable",
         )
         trace_id = response_payload.get("id") if isinstance(response_payload, dict) else None
@@ -250,6 +327,7 @@ class DiddiMapRoutingClient:
         await self._post_json(
             self._trace_path(f"/map-traces/{trace_id}/positions"),
             payload,
+            scope=TRACE_WRITE_SCOPE,
             unavailable_message="DiddiMap trace positions unavailable",
             tolerated_conflict_codes={"trace_already_finished", "trace_not_accepting_positions"},
         )
@@ -258,6 +336,7 @@ class DiddiMapRoutingClient:
         await self._post_json(
             self._trace_path(f"/map-traces/{trace_id}/finish"),
             {"finished_at": _iso(finished_at)},
+            scope=TRACE_WRITE_SCOPE,
             unavailable_message="DiddiMap trace finish unavailable",
             tolerated_conflict_codes={"trace_already_finished"},
         )
@@ -266,6 +345,7 @@ class DiddiMapRoutingClient:
         payload = await self._post_json(
             self._trace_path(f"/map-traces/{trace_id}/analyze"),
             {},
+            scope=TRACE_ANALYZE_SCOPE,
             unavailable_message="DiddiMap trace analyze unavailable",
         )
         if not isinstance(payload, dict):
@@ -311,12 +391,17 @@ class DiddiMapRoutingClient:
         path: str,
         payload: dict,
         *,
+        scope: str,
         unavailable_message: str,
         tolerated_conflict_codes: set[str] | None = None,
     ) -> object:
         started = time.perf_counter()
         try:
-            response = await self._http().post(path, json=payload, headers=self._auth_headers())
+            response = await self._http().post(
+                path,
+                json=payload,
+                headers=await self._auth_headers(scope),
+            )
             response.raise_for_status()
             result = response.json()
             log_event(

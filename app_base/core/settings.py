@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     diddimap_access_token: str | None = None
     diddimap_service_client_id: str | None = None
     diddimap_service_token: str | None = None
+    diddimap_service_client_secret: str | None = None
+    diddimap_service_audience: str = "diddimap"
+    diddimap_service_token_url: str | None = None
 
     # Dispatch ranking (SCRUM-63 / UC-283): among the nearest-first eligible
     # drivers, re-rank a bounded shortlist by real DiddiMap ETA to the pickup.
