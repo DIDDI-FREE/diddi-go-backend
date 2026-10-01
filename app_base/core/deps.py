@@ -148,6 +148,14 @@ async def driver_profile_command_store(redis: Redis = Depends(get_redis)) -> S2S
     )
 
 
+async def partner_command_store(redis: Redis = Depends(get_redis)) -> S2SCommandStore:
+    return S2SCommandStore(
+        redis,
+        namespace="partner-command",
+        ttl_seconds=settings.kyc_command_idempotency_ttl_seconds,
+    )
+
+
 _unconfigured_identity_capabilities = IdentityCapabilityClient(
     base_url=None,
     client_id=None,
