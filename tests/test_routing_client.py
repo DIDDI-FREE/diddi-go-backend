@@ -11,6 +11,7 @@ import json
 from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
+from urllib.parse import parse_qs
 
 import httpx
 import pytest
@@ -55,7 +56,93 @@ def service_client_with(handler) -> DiddiMapRoutingClient:
     return client
 
 
+def s2s_client_with(handler, *, legacy_token: str | None = None) -> DiddiMapRoutingClient:
+    client = DiddiMapRoutingClient(
+        base_url="http://diddimap.test",
+        service_client_id="diddigo-staging",
+        service_token=legacy_token,
+        service_client_secret="client-secret",
+        service_audience="diddimap",
+        service_token_url="http://identity.test/identity/v1/auth/service/token",
+    )
+    client._client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="http://diddimap.test",
+    )
+    return client
+
+
 # --- /route ----------------------------------------------------------------
+
+
+@pytest.mark.unit
+async def test_s2s_route_requests_scoped_token_and_caches_it() -> None:
+    token_requests = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal token_requests
+        if request.url.host == "identity.test":
+            token_requests += 1
+            form = parse_qs(request.content.decode())
+            assert request.url.path == "/identity/v1/auth/service/token"
+            assert request.headers["x-client-id"] == "diddigo-staging"
+            assert form == {
+                "grant_type": ["client_credentials"],
+                "client_id": ["diddigo-staging"],
+                "client_secret": ["client-secret"],
+                "audience": ["diddimap"],
+                "scope": ["diddimap:routes:read"],
+            }
+            return httpx.Response(200, json={"access_token": "short-lived-token", "expires_in": 600})
+        assert request.headers["authorization"] == "Bearer short-lived-token"
+        assert request.headers["x-client-id"] == "diddigo-staging"
+        return httpx.Response(200, json={"distance_km": 8.4, "duration_seconds": 1140})
+
+    client = s2s_client_with(handler)
+    await client.estimate(ORIGIN, DESTINATION)
+    await client.estimate(ORIGIN, DESTINATION)
+
+    assert token_requests == 1
+
+
+@pytest.mark.unit
+async def test_s2s_tokens_are_cached_separately_by_scope() -> None:
+    requested_scopes: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "identity.test":
+            scope = parse_qs(request.content.decode())["scope"][0]
+            requested_scopes.append(scope)
+            return httpx.Response(200, json={"access_token": f"token-{scope}", "expires_in": 600})
+        if request.url.path == "/api/v1/route":
+            return httpx.Response(200, json={"distance_km": 1, "duration_seconds": 60})
+        return httpx.Response(200, json={"results": []})
+
+    client = s2s_client_with(handler)
+    await client.estimate(ORIGIN, DESTINATION)
+    await client.geocode("Plateau")
+    await client.estimate(ORIGIN, DESTINATION)
+
+    assert requested_scopes == ["diddimap:routes:read", "diddimap:places:read"]
+
+
+@pytest.mark.unit
+async def test_configured_s2s_failure_never_falls_back_to_legacy_token() -> None:
+    diddimap_called = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal diddimap_called
+        if request.url.host == "identity.test":
+            return httpx.Response(401, json={"error": {"code": "INVALID_CLIENT"}})
+        diddimap_called = True
+        return httpx.Response(200, json={"distance_km": 1, "duration_seconds": 60})
+
+    client = s2s_client_with(handler, legacy_token="must-not-be-used")
+    with pytest.raises(ApiError) as exc_info:
+        await client.estimate(ORIGIN, DESTINATION)
+
+    assert exc_info.value.code == "DIDDIMAP_AUTHENTICATION_FAILED"
+    assert diddimap_called is False
 
 @pytest.mark.unit
 async def test_estimate_parses_the_native_shape() -> None:

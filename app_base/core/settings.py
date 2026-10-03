@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     diddimap_access_token: str | None = None
     diddimap_service_client_id: str | None = None
     diddimap_service_token: str | None = None
+    diddimap_service_client_secret: str | None = None
+    diddimap_service_audience: str = "diddimap"
+    diddimap_service_token_url: str | None = None
 
     # Dispatch ranking (SCRUM-63 / UC-283): among the nearest-first eligible
     # drivers, re-rank a bounded shortlist by real DiddiMap ETA to the pickup.
@@ -74,6 +77,8 @@ class Settings(BaseSettings):
     # Internal Pilotage reports are intentionally bounded to a recent window
     # so a service caller cannot turn a daily endpoint into an unbounded scan.
     ride_summary_max_age_days: int = Field(default=31, ge=0, le=3660)
+    pilotage_breakdown_current_ttl_seconds: int = Field(default=300, ge=1, le=3600)
+    pilotage_breakdown_final_ttl_seconds: int = Field(default=86400, ge=60, le=604800)
 
     identity_base_url: str | None = None
     identity_jwks_url: str | None = None

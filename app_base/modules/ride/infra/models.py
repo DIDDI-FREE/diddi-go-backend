@@ -185,6 +185,7 @@ class RideModel(Base):
     # every value in the enum with headroom for the future `payment_pending`
     # status the API contract reserves.
     status: Mapped[str] = mapped_column(String(30), nullable=False, index=True, default="requested")
+    vehicle_category: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")
     comfort_level: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")
     # -- Spatial columns: WGS84 geography (degrees); distances computed in meters on the sphere.
     pickup_location = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=False)

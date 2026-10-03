@@ -393,6 +393,7 @@ class SqlAlchemyRideRepository:
     def _apply(row: orm.RideModel, ride: Ride) -> None:
         row.passenger_user_id = ride.passenger_user_id
         row.status = ride.status.value
+        row.vehicle_category = ride.vehicle_category.value
         row.comfort_level = ride.comfort_level.value
         row.pickup_location = _to_orm_geo(ride.pickup_location) if ride.pickup_location else row.pickup_location  # type: ignore[assignment]
         row.pickup_address = ride.pickup_address
@@ -451,10 +452,7 @@ class SqlAlchemyRideRepository:
             id=row.id,
             passenger_user_id=row.passenger_user_id,
             status=RideStatus(row.status),
-            # `ride.rides` has no vehicle_category column in the spec — the
-            # category belongs to the assigned vehicle, so it is only known
-            # once a driver is matched.
-            vehicle_category=VehicleCategory.STANDARD,
+            vehicle_category=VehicleCategory(row.vehicle_category),
             comfort_level=ComfortLevel(row.comfort_level),
             pickup_location=_from_orm_geo(row.pickup_location) if row.pickup_location is not None else None,
             pickup_address=row.pickup_address,

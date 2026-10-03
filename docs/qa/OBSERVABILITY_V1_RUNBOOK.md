@@ -66,7 +66,29 @@ diddigo_http_requests_total
 diddigo_http_request_duration_ms_count
 diddigo_http_request_duration_ms_sum
 diddigo_business_events_total
+diddigo_pilotage_breakdown_requests_total
+diddigo_pilotage_breakdown_cache_total
+diddigo_pilotage_breakdown_duration_ms_count
+diddigo_pilotage_breakdown_duration_ms_sum
 ```
+
+Pour le reporting Pilotage, filtrer les logs JSON sur :
+
+```text
+pilotage.breakdown.requested
+pilotage.breakdown.cache_hit
+pilotage.breakdown.cache_miss
+pilotage.breakdown.cache_error
+pilotage.breakdown.succeeded
+pilotage.breakdown.rejected
+pilotage.breakdown.database_error
+pilotage.breakdown.integrity_error
+```
+
+Les metriques n'utilisent que `dimension`, `metric`, `status` et
+`cache_status` comme labels. Elles ne contiennent ni identifiant utilisateur,
+ni identifiant de course, afin d'eviter les donnees personnelles et les labels
+a forte cardinalite.
 
 ## Dashboard Grafana optionnel
 

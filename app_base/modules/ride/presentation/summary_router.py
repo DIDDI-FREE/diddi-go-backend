@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from app_base.core.auth_deps import require_identity_service_token
 from app_base.core.database import database_ready
-from app_base.core.deps import ride_summary_service
+from app_base.core.deps import ride_breakdown_service, ride_summary_service
 from app_base.core.service_scopes import DIDDIGO_AUDIENCE, RIDE_SUMMARY_READ
+from app_base.modules.ride.application.breakdown_service import RideBreakdownService
 from app_base.modules.ride.application.summary_service import RideSummaryService
 
 router = APIRouter(tags=["internal-ride-summary"])
@@ -47,6 +48,17 @@ async def get_pilotage_finance_summary(
     summary["metrics"] = [fare]
     summary["sources"] = [{"module": "diddigo", "record_type": "ride-finance-summary"}]
     return summary
+
+
+@router.get("/internal/pilotage/breakdown")
+async def get_pilotage_breakdown(
+    day: str = Query(alias="date"),
+    dimension: str = Query(),
+    metric: str = Query(),
+    _claims: dict = Depends(require_pilotage),
+    service: RideBreakdownService = Depends(ride_breakdown_service),
+) -> dict:
+    return await service.breakdown(day, dimension, metric)
 
 
 @router.get("/internal/pilotage/health-summary")
