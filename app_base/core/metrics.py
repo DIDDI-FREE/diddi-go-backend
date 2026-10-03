@@ -25,6 +25,10 @@ _HELP = {
     "diddigo_capability_projection_reconciliations_total": "Capability projection reconciliation outcomes.",
     "diddigo_capability_projection_backlog": "Current capability projection events by delivery status.",
     "diddigo_capability_projection_last_success_age_seconds": "Age of the latest successful capability projection.",
+    "diddigo_pilotage_breakdown_requests_total": "Pilotage breakdown requests by outcome.",
+    "diddigo_pilotage_breakdown_cache_total": "Pilotage breakdown cache outcomes.",
+    "diddigo_pilotage_breakdown_duration_ms_count": "Observed Pilotage breakdown durations.",
+    "diddigo_pilotage_breakdown_duration_ms_sum": "Sum of Pilotage breakdown durations in milliseconds.",
 }
 _GAUGES = {
     "diddigo_capability_projection_backlog",

@@ -13,6 +13,12 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app_base.modules.ride.domain.breakdown import (
+    BreakdownDimension,
+    BreakdownItem,
+    BreakdownMetric,
+    RideBreakdown,
+)
 from app_base.modules.ride.domain.entities import (
     DriverProfile,
     DriverStatus,
@@ -37,6 +43,30 @@ from app_base.shared_kernel.types import GeoPoint
 
 class RideSummaryRepository(Protocol):
     async def summarize_period(self, start: datetime, end: datetime) -> RideSummaryTotals: ...
+
+
+class RideBreakdownRepository(Protocol):
+    async def aggregate(
+        self,
+        start: datetime,
+        end: datetime,
+        dimension: BreakdownDimension,
+        metric: BreakdownMetric,
+    ) -> tuple[BreakdownItem, ...]: ...
+
+
+class RideBreakdownCache(Protocol):
+    async def get(self, day: str, dimension: str, metric: str) -> RideBreakdown | None: ...
+
+    async def set(
+        self,
+        day: str,
+        dimension: str,
+        metric: str,
+        breakdown: RideBreakdown,
+        *,
+        ttl_seconds: int,
+    ) -> None: ...
 
 
 class RideRepository(Protocol):

@@ -48,6 +48,7 @@ from app_base.modules.payment.application.services import PaymentService
 from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentRepository
+from app_base.modules.ride.application.breakdown_service import RideBreakdownService
 from app_base.modules.ride.application.capability_projection import DurableDriverCapabilityPublisher
 from app_base.modules.ride.application.driver_provisioning_service import DriverProvisioningService
 from app_base.modules.ride.application.driver_service import DriverService
@@ -58,6 +59,8 @@ from app_base.modules.ride.application.priority_service import DriverPrioritySer
 from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.application.services import RideService
 from app_base.modules.ride.application.summary_service import RideSummaryService
+from app_base.modules.ride.infra.breakdown_cache import RedisRideBreakdownCache
+from app_base.modules.ride.infra.breakdown_repository import SqlAlchemyRideBreakdownRepository
 from app_base.modules.ride.infra.capability_projection_repository import (
     SqlAlchemyDriverCapabilityProjectionRepository,
 )
@@ -196,6 +199,16 @@ async def ride_repo(session: AsyncSession = Depends(session_dep)) -> SqlAlchemyR
 
 async def ride_summary_service(session: AsyncSession = Depends(session_dep)) -> RideSummaryService:
     return RideSummaryService(SqlAlchemyRideSummaryRepository(session))
+
+
+async def ride_breakdown_service(
+    session: AsyncSession = Depends(session_dep),
+    redis: Redis = Depends(get_redis),
+) -> RideBreakdownService:
+    return RideBreakdownService(
+        SqlAlchemyRideBreakdownRepository(session),
+        RedisRideBreakdownCache(redis),
+    )
 
 
 async def driver_profile_repo(
