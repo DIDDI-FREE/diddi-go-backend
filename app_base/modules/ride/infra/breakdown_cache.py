@@ -51,4 +51,3 @@ class RedisRideBreakdownCache:
             separators=(",", ":"),
         )
         await self._redis.set(self.key(day, dimension, metric), payload, ex=ttl_seconds)
-
