@@ -13,7 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app_base.core.deps import ride_summary_service
 from app_base.core.errors import ApiError, api_error_handler
 from app_base.modules.ride.application.summary_service import RideSummaryService
-from app_base.modules.ride.domain.summary import RideSummaryTotals
+from app_base.modules.ride.domain.summary import RideFinanceSummaryTotals, RideSummaryTotals
 from app_base.modules.ride.infra.summary_repository import SqlAlchemyRideSummaryRepository
 from app_base.modules.ride.presentation.summary_router import require_pilotage, router
 
@@ -21,13 +21,18 @@ pytestmark = pytest.mark.unit
 
 
 class FakeSummaryRepository:
-    def __init__(self, totals: RideSummaryTotals) -> None:
+    def __init__(self, totals: RideSummaryTotals, finance=None) -> None:
         self.totals = totals
+        self.finance = finance
         self.period = None
 
     async def summarize_period(self, start, end) -> RideSummaryTotals:
         self.period = (start, end)
         return self.totals
+
+    async def summarize_finance_period(self, start, end) -> RideFinanceSummaryTotals:
+        self.period = (start, end)
+        return self.finance or finance_totals()
 
 
 def totals(
@@ -37,6 +42,28 @@ def totals(
     missing_fare: int = 0,
 ) -> RideSummaryTotals:
     return RideSummaryTotals(requested, completed, Decimal(fare), missing_fare)
+
+
+def finance_totals(**overrides) -> RideFinanceSummaryTotals:
+    values = {
+        "completed_fare_total_xof": Decimal("100000"),
+        "digital_payments_xof": Decimal("60000"),
+        "cash_payments_xof": Decimal("40000"),
+        "platform_commission_xof": Decimal("20000"),
+        "driver_earnings_xof": Decimal("80000"),
+        "driver_amount_paid_xof": Decimal("65000"),
+        "refunds_xof": Decimal("0"),
+        "driver_topups_requested_count": 5,
+        "driver_topups_requested_xof": Decimal("25000"),
+        "driver_topups_succeeded_count": 2,
+        "driver_topups_succeeded_xof": Decimal("10000"),
+        "driver_topups_pending_count": 2,
+        "driver_topups_pending_xof": Decimal("10000"),
+        "driver_topups_failed_count": 1,
+        "driver_topups_failed_xof": Decimal("5000"),
+    }
+    values.update(overrides)
+    return RideFinanceSummaryTotals(**values)
 
 
 @pytest.mark.asyncio
@@ -86,6 +113,53 @@ async def test_pilotage_daily_summary_uses_normalized_v1_contract() -> None:
     ]
     assert result["sources"] == [{"module": "diddigo", "record_type": "ride-summary"}]
     assert result["deep_links"][0]["href"] == "/backoffice/#diddigo-rides"
+
+
+@pytest.mark.asyncio
+async def test_pilotage_finance_summary_exposes_accounting_controls_and_topups() -> None:
+    repository = FakeSummaryRepository(totals(), finance_totals())
+
+    result = await RideSummaryService(repository).pilotage_finance_summary("2026-09-19")
+
+    metrics = {metric["name"]: metric["value"] for metric in result["metrics"]}
+    assert result["contract_version"] == "pilotage.v1"
+    assert result["sources"] == [{"module": "diddigo", "record_type": "ride-finance-summary"}]
+    assert metrics["platform_commission_xof"] + metrics["driver_earnings_xof"] == 100000
+    assert metrics["driver_amount_paid_xof"] + metrics["driver_amount_outstanding_xof"] == 80000
+    assert metrics["driver_topups_requested_count"] == 5
+    assert metrics["driver_topups_succeeded_xof"] == 10000
+    assert metrics["driver_topups_pending_xof"] == 10000
+    assert metrics["driver_topups_failed_xof"] == 5000
+
+
+@pytest.mark.asyncio
+async def test_pilotage_finance_summary_rejects_payment_allocation_mismatch() -> None:
+    repository = FakeSummaryRepository(totals(), finance_totals(cash_payments_xof=Decimal("39999")))
+
+    with pytest.raises(ApiError) as error:
+        await RideSummaryService(repository).pilotage_finance_summary("2026-09-19")
+
+    assert error.value.code == "PAYMENT_ALLOCATION_MISMATCH"
+
+
+@pytest.mark.asyncio
+async def test_pilotage_finance_summary_rejects_fare_allocation_mismatch() -> None:
+    repository = FakeSummaryRepository(totals(), finance_totals(platform_commission_xof=Decimal("19999")))
+
+    with pytest.raises(ApiError) as error:
+        await RideSummaryService(repository).pilotage_finance_summary("2026-09-19")
+
+    assert error.value.code == "FARE_ALLOCATION_MISMATCH"
+
+
+@pytest.mark.asyncio
+async def test_pilotage_finance_summary_rejects_overpaid_driver() -> None:
+    repository = FakeSummaryRepository(totals(), finance_totals(driver_amount_paid_xof=Decimal("80001")))
+
+    with pytest.raises(ApiError) as error:
+        await RideSummaryService(repository).pilotage_finance_summary("2026-09-19")
+
+    assert error.value.code == "DRIVER_PAYMENT_MISMATCH"
 
 
 @pytest.mark.asyncio
@@ -157,6 +231,37 @@ async def test_repository_aggregates_in_one_sql_statement() -> None:
     assert "completed_at >=" in sql and "completed_at <" in sql
     assert "status =" in sql and "currency =" in sql
     assert result == totals(3, 2, "4500", 1)
+
+
+class FakeFinanceSession:
+    def __init__(self) -> None:
+        self.statements = []
+
+    async def execute(self, statement):
+        self.statements.append(statement)
+        return SimpleNamespace(
+            one=lambda: SimpleNamespace(
+                **vars(finance_totals()),
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_finance_repository_uses_completion_creation_and_paid_periods() -> None:
+    session = FakeFinanceSession()
+
+    result = await SqlAlchemyRideSummaryRepository(session).summarize_finance_period(
+        datetime(2026, 9, 19, tzinfo=UTC),
+        datetime(2026, 9, 20, tzinfo=UTC),
+    )
+
+    sql = str(session.statements[0].compile(dialect=postgresql.dialect()))
+    assert len(session.statements) == 1
+    assert "completed_at >=" in sql and "completed_at <" in sql
+    assert "driver_topups.created_at >=" in sql
+    assert "driver_topups.paid_at >=" in sql
+    assert "transactions.status" in sql
+    assert result == finance_totals()
 
 
 def summary_app(repository: FakeSummaryRepository, *, authorized: bool = False) -> FastAPI:

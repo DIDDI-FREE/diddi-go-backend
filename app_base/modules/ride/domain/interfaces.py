@@ -37,12 +37,14 @@ from app_base.modules.ride.domain.priority import (
     PriorityEvent,
     PriorityScore,
 )
-from app_base.modules.ride.domain.summary import RideSummaryTotals
+from app_base.modules.ride.domain.summary import RideFinanceSummaryTotals, RideSummaryTotals
 from app_base.shared_kernel.types import GeoPoint
 
 
 class RideSummaryRepository(Protocol):
     async def summarize_period(self, start: datetime, end: datetime) -> RideSummaryTotals: ...
+
+    async def summarize_finance_period(self, start: datetime, end: datetime) -> RideFinanceSummaryTotals: ...
 
 
 class RideBreakdownRepository(Protocol):
