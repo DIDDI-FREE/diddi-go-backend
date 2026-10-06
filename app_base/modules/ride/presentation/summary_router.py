@@ -10,6 +10,7 @@ from app_base.core.deps import ride_breakdown_service, ride_summary_service
 from app_base.core.service_scopes import DIDDIGO_AUDIENCE, RIDE_SUMMARY_READ
 from app_base.modules.ride.application.breakdown_service import RideBreakdownService
 from app_base.modules.ride.application.summary_service import RideSummaryService
+from app_base.modules.ride.presentation.summary_schemas import PilotageFinanceSummaryResponse
 
 router = APIRouter(tags=["internal-ride-summary"])
 require_pilotage = require_identity_service_token(
@@ -37,17 +38,13 @@ async def get_pilotage_daily_summary(
     return await service.pilotage_daily_summary(day)
 
 
-@router.get("/internal/pilotage/finance-summary")
+@router.get("/internal/pilotage/finance-summary", response_model=PilotageFinanceSummaryResponse)
 async def get_pilotage_finance_summary(
     day: str = Query(alias="date"),
     _claims: dict = Depends(require_pilotage),
     service: RideSummaryService = Depends(ride_summary_service),
-) -> dict:
-    summary = await service.pilotage_daily_summary(day)
-    fare = next(metric for metric in summary["metrics"] if metric["name"] == "completed_fare_total_xof")
-    summary["metrics"] = [fare]
-    summary["sources"] = [{"module": "diddigo", "record_type": "ride-finance-summary"}]
-    return summary
+) -> PilotageFinanceSummaryResponse:
+    return PilotageFinanceSummaryResponse.model_validate(await service.pilotage_finance_summary(day))
 
 
 @router.get("/internal/pilotage/breakdown")

@@ -40,6 +40,21 @@ class FakeSummaryService:
             "deep_links": [],
         }
 
+    async def pilotage_finance_summary(self, day: str) -> dict:
+        return {
+            "contract_version": "pilotage.v1",
+            "module": "diddigo",
+            "date": day,
+            "timezone": "Africa/Abidjan",
+            "is_final": True,
+            "metrics": [
+                {"name": "completed_fare_total_xof", "value": 3500, "unit": "XOF"},
+                {"name": "cash_payments_xof", "value": 3500, "unit": "XOF"},
+            ],
+            "calculated_at": "2026-09-19T00:00:00Z",
+            "sources": [{"module": "diddigo", "record_type": "ride-finance-summary"}],
+        }
+
 
 @pytest.fixture
 def summary_client():
@@ -72,18 +87,22 @@ def test_pilotage_daily_summary_route_returns_normalized_payload(summary_client)
 
 
 @pytest.mark.unit
-def test_pilotage_finance_summary_exposes_only_financial_aggregate(summary_client) -> None:
+def test_pilotage_finance_summary_exposes_typed_financial_aggregates(summary_client) -> None:
     response = summary_client.get("/internal/pilotage/finance-summary?date=2026-09-19")
 
     assert response.status_code == 200
     assert response.json()["metrics"] == [
-        {
-            "name": "completed_fare_total_xof",
-            "label": "Montant facture des courses terminees",
-            "value": 3500,
-            "unit": "XOF",
-        },
+        {"name": "completed_fare_total_xof", "value": 3500, "unit": "XOF"},
+        {"name": "cash_payments_xof", "value": 3500, "unit": "XOF"},
     ]
+
+
+@pytest.mark.unit
+def test_pilotage_finance_summary_openapi_is_typed() -> None:
+    operation = app.openapi()["paths"]["/internal/pilotage/finance-summary"]["get"]
+
+    schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    assert schema["$ref"].endswith("/PilotageFinanceSummaryResponse")
 
 
 @pytest.mark.unit

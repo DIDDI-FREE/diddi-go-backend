@@ -10,3 +10,22 @@ class RideSummaryTotals:
     rides_completed: int
     completed_fare_total_xof: Decimal
     completed_rides_without_fare: int
+
+
+@dataclass(frozen=True)
+class RideFinanceSummaryTotals:
+    completed_fare_total_xof: Decimal
+    digital_payments_xof: Decimal
+    cash_payments_xof: Decimal
+    platform_commission_xof: Decimal
+    driver_earnings_xof: Decimal
+    driver_amount_paid_xof: Decimal
+    refunds_xof: Decimal
+    driver_topups_requested_count: int
+    driver_topups_requested_xof: Decimal
+    driver_topups_succeeded_count: int
+    driver_topups_succeeded_xof: Decimal
+    driver_topups_pending_count: int
+    driver_topups_pending_xof: Decimal
+    driver_topups_failed_count: int
+    driver_topups_failed_xof: Decimal
