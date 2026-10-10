@@ -36,6 +36,12 @@ TEST_DSN_ASYNC = f"postgresql+asyncpg://postgres:postgres@localhost:{TEST_POSTGR
 os.environ["DATABASE_URL"] = TEST_DSN_ASYNC
 os.environ.setdefault("REDIS_URL", f"redis://localhost:{os.environ.get('REDIS_PORT', '16380')}/0")
 os.environ.setdefault("JWT_SECRET", "test-secret-at-least-32-characters-long!!")
+# Integration tests issue local HS256 tokens. Never let a developer's .env
+# silently switch the suite to remote DiddiFreeID/JWKS verification.
+os.environ["IDENTITY_BASE_URL"] = ""
+os.environ["IDENTITY_JWKS_URL"] = ""
+os.environ["IDENTITY_PROFILE_URL"] = ""
+os.environ["DRIVER_MIN_BALANCE"] = "0"
 # Rate limit off by default so back-to-back OTP requests in tests don't 429.
 os.environ.setdefault("OTP_RATE_LIMIT_SECONDS", "0")
 # Point DiddiMap at a closed port so the unreachable-service path is taken
@@ -169,10 +175,25 @@ async def client(database) -> AsyncIterator[httpx.AsyncClient]:  # noqa: F821
         # `app_base.core.lifespan.lifespan`.
         from app_base.core.redis import create_redis_pool
         from app_base.core.settings import settings
+        from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
+        from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
         from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 
         app.state.redis = create_redis_pool(settings.redis_url)
         app.state.diddimap = FakeDiddiMap()
+        app.state.diddifiles = DiddiFilesClient(
+            base_url=None,
+            identity_base_url=None,
+            client_id=None,
+            client_secret=None,
+        )
+        app.state.diddipay = DiddiPayClient(
+            base_url=None,
+            client_id="diddigo-test",
+            service_key=None,
+            identity_base_url=None,
+            client_secret=None,
+        )
         app.state.driver_locations = RedisDriverLocationService(redis=app.state.redis)
         try:
             yield c
@@ -371,6 +392,7 @@ def full_vehicle_kyv_documents() -> dict[str, str]:
             "vehicle_left_photo_file_id",
             "vehicle_right_photo_file_id",
             "vehicle_interior_photo_file_id",
+            "vehicle_plate_photo_file_id",
         )
     }
 

@@ -455,8 +455,20 @@ async def test_completing_a_ride_returns_the_driver_to_the_pool(
     driver = await driver_factory(NEAR)
     ride_id = await create_ride(client, passenger)
     await client.post(f"/v1/rides/{ride_id}/accept", headers=driver)
-    for status in ("driver_en_route", "in_progress", "completed"):
-        await client.patch(f"/v1/rides/{ride_id}/status", json={"status": status}, headers=driver)
+    await client.patch(
+        f"/v1/rides/{ride_id}/status",
+        json={"status": "driver_en_route"},
+        headers=driver,
+    )
+    await client.post(f"/v1/rides/{ride_id}/arrive", headers=driver)
+    detail = (await client.get(f"/v1/rides/{ride_id}", headers=passenger)).json()
+    code = detail["start_authorization"]["code"]
+    await client.post(f"/v1/rides/{ride_id}/start", json={"code": code}, headers=driver)
+    await client.patch(
+        f"/v1/rides/{ride_id}/status",
+        json={"status": "completed"},
+        headers=driver,
+    )
 
     other = await passenger_factory()
     second_ride = await create_ride(client, other)

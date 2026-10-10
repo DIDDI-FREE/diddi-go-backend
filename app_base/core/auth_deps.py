@@ -46,6 +46,7 @@ def require_identity_service_token(
     audience: str,
     required_scope: str,
     expected_subject: str | None = None,
+    expected_client_id: str | None = None,
 ):
     """Dependency factory for backend endpoints protected by a service JWT.
 
@@ -66,6 +67,8 @@ def require_identity_service_token(
             raise ApiError(401, "TOKEN_MISSING", "Authentification service requise.")
         if not x_client_id:
             raise ApiError(401, "SERVICE_CLIENT_ID_MISSING", "X-Client-ID est requis.")
+        if expected_client_id is not None and x_client_id != expected_client_id:
+            raise ApiError(403, "SERVICE_CLIENT_FORBIDDEN", "Client service non autorise.")
         claims = decode_identity_service_token(
             token,
             audience=audience,

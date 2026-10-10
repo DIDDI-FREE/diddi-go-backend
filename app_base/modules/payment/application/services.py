@@ -24,6 +24,7 @@ from app_base.modules.payment.domain.entities import (
     KEEP,
     DriverLedgerEntry,
     DriverTopup,
+    DriverWithdrawal,
     PaymentMethod,
     PaymentStatus,
     TopupStatus,
@@ -31,6 +32,7 @@ from app_base.modules.payment.domain.entities import (
     WalletEntryDirection,
     WalletEntryStatus,
     WalletEntryType,
+    WithdrawalStatus,
 )
 from app_base.modules.payment.domain.interfaces import PaymentRepository
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
@@ -238,6 +240,47 @@ class PaymentService:
         if not stored:
             log_event("payment.webhook.duplicate", event_id=event_id, payment_intent_id=intent_id)
             return {"status": "duplicate"}
+        payout_id = UUID(str(data["payout_id"])) if data.get("payout_id") else None
+        if payout_id is not None:
+            withdrawal = await self.payment_repo.find_withdrawal_by_payout_id(payout_id)
+            if withdrawal is None and data.get("business_reference"):
+                withdrawal = await self.payment_repo.find_withdrawal_by_business_reference(
+                    str(data["business_reference"])
+                )
+            if withdrawal is None:
+                raise ApiError(404, "WITHDRAWAL_NOT_FOUND", "Retrait chauffeur introuvable.")
+            if data.get("business_reference") != withdrawal.business_reference:
+                raise ApiError(409, "WITHDRAWAL_REFERENCE_MISMATCH", "Reference payout DiddiPay incoherente.")
+            provider_status = str(data.get("status") or "")
+            if provider_status == "succeeded":
+                target = WithdrawalStatus.SUCCEEDED
+            elif provider_status in {"failed", "disputed"}:
+                target = WithdrawalStatus.FAILED
+            elif provider_status in {"pending", "processing"}:
+                target = WithdrawalStatus.PROCESSING
+            else:
+                raise ApiError(422, "WITHDRAWAL_STATUS_INVALID", "Statut payout DiddiPay invalide.")
+            updated = await self.payment_repo.mark_withdrawal_provider_state(
+                withdrawal.id,
+                status=target,
+                payout_id=payout_id,
+                provider_status=provider_status,
+                failure_code=data.get("failure_code"),
+                failure_message=data.get("failure_message"),
+                now=datetime.now(UTC),
+            )
+            log_event(
+                "payment.webhook.processed",
+                event_id=event_id,
+                payout_id=payout_id,
+                reference_type="driver_withdrawal",
+                status=updated.status.value,
+            )
+            return {
+                "status": "processed",
+                "payout_id": str(payout_id),
+                "reference_type": "driver_withdrawal",
+            }
         if intent_id is None:
             raise ApiError(422, ErrorCode.PAYMENT_CALLBACK_INVALID, "PaymentIntent ID manquant.")
 
@@ -337,6 +380,12 @@ class PaymentService:
         for topup in topups:
             await self._reconcile_topup(topup, report)
 
+        list_stale_withdrawals = getattr(self.payment_repo, "list_stale_withdrawals", None)
+        if list_stale_withdrawals is not None:
+            withdrawals = await list_stale_withdrawals(updated_before=created_before, limit=limit)
+            for withdrawal in withdrawals:
+                await self._reconcile_withdrawal(withdrawal, report)
+
         return report
 
     async def reconcile_transaction(self, ride_id: UUID) -> ReconciliationReport:
@@ -356,6 +405,55 @@ class PaymentService:
             raise ApiError(404, ErrorCode.PAYMENT_INTENT_NOT_FOUND, "Aucune recharge DiddiPay pour cet identifiant.")
         await self._reconcile_topup(topup, report)
         return report
+
+    async def _reconcile_withdrawal(self, withdrawal: DriverWithdrawal, report: ReconciliationReport) -> None:
+        report.checked += 1
+        try:
+            client = self.diddipay or DiddiPayClient()
+            payout = (
+                await client.get_payout(withdrawal.payout_id)
+                if withdrawal.payout_id
+                else await client.get_payout_by_business_reference(withdrawal.business_reference or "")
+            )
+        except ApiError:
+            report.errors += 1
+            logger.exception("withdrawal reconciliation provider failure id=%s", withdrawal.id)
+            return
+        if payout is None:
+            report.missing += 1
+            return
+        if (
+            int(payout.get("amount") or -1) != int(withdrawal.net_amount)
+            or payout.get("currency") != withdrawal.currency
+            or payout.get("business_reference") != withdrawal.business_reference
+        ):
+            report.mismatched += 1
+            return
+        provider_status = str(payout.get("status") or "")
+        if provider_status == "succeeded":
+            target = WithdrawalStatus.SUCCEEDED
+        elif provider_status in {"failed", "disputed"}:
+            target = WithdrawalStatus.FAILED
+        elif provider_status in {"pending", "processing"}:
+            target = WithdrawalStatus.PROCESSING
+        else:
+            report.errors += 1
+            return
+        previous = withdrawal.status
+        updated = await self.payment_repo.mark_withdrawal_provider_state(
+            withdrawal.id,
+            status=target,
+            payout_id=UUID(str(payout["id"])),
+            provider_status=provider_status,
+            failure_code=payout.get("failure_code"),
+            failure_message=payout.get("failure_message"),
+            now=datetime.now(UTC),
+        )
+        if updated.status is previous:
+            report.unchanged += 1
+        else:
+            report.updated += 1
+            report.updated_references.append(withdrawal.business_reference or str(withdrawal.id))
 
     async def _reconcile_transaction(self, payment: Transaction, report: ReconciliationReport) -> None:
         reference = payment.business_reference or f"diddigo:ride:{payment.ride_id}"
@@ -610,7 +708,10 @@ class PaymentService:
         callback_url = _consumer_return_url()
         if self.return_contexts:
             return_token = await self.return_contexts.create(
-                flow="ride_payment", surface="consumer", user_id=payer_user_id, resource_id=ride_id,
+                flow="ride_payment",
+                surface="consumer",
+                user_id=payer_user_id,
+                resource_id=ride_id,
             )
             callback_url = self.return_contexts.callback_url(callback_url, return_token)
         intent = await (self.diddipay or DiddiPayClient()).create_payment_intent(

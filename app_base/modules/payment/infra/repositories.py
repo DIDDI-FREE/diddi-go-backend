@@ -7,7 +7,7 @@ Maps between `payment.domain.entities.Transaction` and the ORM
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -23,6 +23,8 @@ from app_base.modules.payment.domain.entities import (
     DriverLedgerEntry,
     DriverTopup,
     DriverWallet,
+    DriverWithdrawal,
+    DriverWithdrawalQuote,
     PaymentMethod,
     PaymentStatus,
     TopupStatus,
@@ -30,6 +32,7 @@ from app_base.modules.payment.domain.entities import (
     WalletEntryDirection,
     WalletEntryStatus,
     WalletEntryType,
+    WithdrawalStatus,
 )
 from app_base.modules.payment.infra import models as orm
 
@@ -37,6 +40,9 @@ from app_base.modules.payment.infra import models as orm
 class SqlAlchemyPaymentRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def commit(self) -> None:
+        await self._session.commit()
 
     async def save(self, transaction: Transaction) -> Transaction:
         row = orm.TransactionModel(
@@ -182,6 +188,15 @@ class SqlAlchemyPaymentRepository:
             row = result.scalar_one()
         return self._wallet_to_domain(row)
 
+    async def withdrawal_reserved_total(self, driver_id: UUID) -> Decimal:
+        result = await self._session.execute(
+            select(func.coalesce(func.sum(orm.DriverWithdrawalModel.amount), 0)).where(
+                orm.DriverWithdrawalModel.driver_id == driver_id,
+                orm.DriverWithdrawalModel.status.in_(("reserved", "processing")),
+            )
+        )
+        return Decimal(str(result.scalar_one()))
+
     async def list_ledger_entries(
         self,
         driver_id: UUID,
@@ -190,7 +205,9 @@ class SqlAlchemyPaymentRepository:
         page_size: int = 20,
     ) -> tuple[list[DriverLedgerEntry], int]:
         count_result = await self._session.execute(
-            select(func.count()).select_from(orm.DriverLedgerEntryModel).where(
+            select(func.count())
+            .select_from(orm.DriverLedgerEntryModel)
+            .where(
                 orm.DriverLedgerEntryModel.driver_id == driver_id,
             ),
         )
@@ -316,6 +333,239 @@ class SqlAlchemyPaymentRepository:
         )
         return [self._topup_to_domain(row) for row in result.scalars().all()]
 
+    async def save_withdrawal_quote(self, quote: DriverWithdrawalQuote) -> DriverWithdrawalQuote:
+        self._session.add(
+            orm.DriverWithdrawalQuoteModel(
+                id=quote.id,
+                driver_id=quote.driver_id,
+                amount=quote.amount,
+                fees=quote.fees,
+                net_amount=quote.net_amount,
+                currency=quote.currency,
+                expires_at=quote.expires_at,
+                created_at=quote.created_at or datetime.now(UTC),
+            )
+        )
+        await self._session.flush()
+        return quote
+
+    async def reserve_withdrawal_from_quote(self, withdrawal: DriverWithdrawal, *, now: datetime) -> DriverWithdrawal:
+        quote_result = await self._session.execute(
+            select(orm.DriverWithdrawalQuoteModel)
+            .where(orm.DriverWithdrawalQuoteModel.id == withdrawal.quote_id)
+            .with_for_update()
+        )
+        quote = quote_result.scalar_one_or_none()
+        if quote is None or quote.driver_id != withdrawal.driver_id:
+            raise LookupError("WITHDRAWAL_QUOTE_NOT_FOUND")
+        if quote.consumed_at is not None:
+            existing = await self._session.execute(
+                select(orm.DriverWithdrawalModel).where(orm.DriverWithdrawalModel.quote_id == withdrawal.quote_id)
+            )
+            row = existing.scalar_one_or_none()
+            if row is not None:
+                return self._withdrawal_to_domain(row)
+            raise LookupError("WITHDRAWAL_QUOTE_ALREADY_USED")
+        expires_at = quote.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        if expires_at <= now:
+            raise LookupError("WITHDRAWAL_QUOTE_EXPIRED")
+
+        withdrawal.amount = Decimal(str(quote.amount))
+        withdrawal.fees = Decimal(str(quote.fees))
+        withdrawal.net_amount = Decimal(str(quote.net_amount))
+        withdrawal.currency = quote.currency
+
+        wallet_result = await self._session.execute(
+            select(orm.DriverWalletModel)
+            .where(orm.DriverWalletModel.driver_id == withdrawal.driver_id)
+            .with_for_update()
+        )
+        wallet = wallet_result.scalar_one_or_none()
+        if wallet is None:
+            await self.get_or_create_wallet(withdrawal.driver_id, currency=withdrawal.currency)
+            wallet_result = await self._session.execute(
+                select(orm.DriverWalletModel)
+                .where(orm.DriverWalletModel.driver_id == withdrawal.driver_id)
+                .with_for_update()
+            )
+            wallet = wallet_result.scalar_one()
+        if Decimal(str(wallet.balance)) < withdrawal.amount:
+            raise LookupError("WITHDRAWAL_BALANCE_INSUFFICIENT")
+
+        row = orm.DriverWithdrawalModel(
+            id=withdrawal.id,
+            driver_id=withdrawal.driver_id,
+            quote_id=withdrawal.quote_id,
+            amount=withdrawal.amount,
+            fees=withdrawal.fees,
+            net_amount=withdrawal.net_amount,
+            currency=withdrawal.currency,
+            beneficiary_reference=withdrawal.beneficiary_reference,
+            status=WithdrawalStatus.RESERVED.value,
+            business_reference=withdrawal.business_reference,
+            idempotency_key=withdrawal.idempotency_key,
+            created_at=now,
+            reserved_at=now,
+            updated_at=now,
+        )
+        self._session.add(row)
+        quote.consumed_at = now
+        wallet.balance = Decimal(str(wallet.balance)) - withdrawal.amount
+        wallet.updated_at = now
+        self._session.add(
+            orm.DriverLedgerEntryModel(
+                id=DriverLedgerEntry.new_id(),
+                driver_id=withdrawal.driver_id,
+                amount=withdrawal.amount,
+                currency=withdrawal.currency,
+                direction=WalletEntryDirection.DEBIT.value,
+                entry_type=WalletEntryType.WITHDRAWAL_RESERVED.value,
+                status=WalletEntryStatus.CONFIRMED.value,
+                reference_type="driver_withdrawal",
+                reference_id=withdrawal.id,
+                description="Montant reserve pour retrait chauffeur",
+                created_at=now,
+            )
+        )
+        await self._session.flush()
+        return self._withdrawal_to_domain(row)
+
+    async def find_withdrawal_by_id(self, withdrawal_id: UUID) -> DriverWithdrawal | None:
+        row = await self._session.get(orm.DriverWithdrawalModel, withdrawal_id)
+        return self._withdrawal_to_domain(row) if row else None
+
+    async def find_withdrawal_by_payout_id(self, payout_id: UUID) -> DriverWithdrawal | None:
+        result = await self._session.execute(
+            select(orm.DriverWithdrawalModel).where(orm.DriverWithdrawalModel.payout_id == payout_id)
+        )
+        row = result.scalar_one_or_none()
+        return self._withdrawal_to_domain(row) if row else None
+
+    async def find_withdrawal_by_business_reference(self, business_reference: str) -> DriverWithdrawal | None:
+        result = await self._session.execute(
+            select(orm.DriverWithdrawalModel).where(orm.DriverWithdrawalModel.business_reference == business_reference)
+        )
+        row = result.scalar_one_or_none()
+        return self._withdrawal_to_domain(row) if row else None
+
+    async def list_withdrawals(
+        self, driver_id: UUID, *, page: int = 1, page_size: int = 20
+    ) -> tuple[list[DriverWithdrawal], int]:
+        total = int(
+            (
+                await self._session.execute(
+                    select(func.count())
+                    .select_from(orm.DriverWithdrawalModel)
+                    .where(orm.DriverWithdrawalModel.driver_id == driver_id)
+                )
+            ).scalar_one()
+        )
+        rows = await self._session.execute(
+            select(orm.DriverWithdrawalModel)
+            .where(orm.DriverWithdrawalModel.driver_id == driver_id)
+            .order_by(orm.DriverWithdrawalModel.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [self._withdrawal_to_domain(row) for row in rows.scalars().all()], total
+
+    async def list_stale_withdrawals(self, *, updated_before: datetime, limit: int) -> list[DriverWithdrawal]:
+        rows = await self._session.execute(
+            select(orm.DriverWithdrawalModel)
+            .where(
+                orm.DriverWithdrawalModel.status.in_(("reserved", "processing")),
+                orm.DriverWithdrawalModel.updated_at <= updated_before,
+            )
+            .order_by(orm.DriverWithdrawalModel.updated_at.asc())
+            .limit(limit)
+        )
+        return [self._withdrawal_to_domain(row) for row in rows.scalars().all()]
+
+    async def mark_withdrawal_provider_state(
+        self,
+        withdrawal_id: UUID,
+        *,
+        status: object,
+        payout_id: UUID | None,
+        provider_status: str | None,
+        failure_code: str | None = None,
+        failure_message: str | None = None,
+        now: datetime,
+    ) -> DriverWithdrawal:
+        result = await self._session.execute(
+            select(orm.DriverWithdrawalModel).where(orm.DriverWithdrawalModel.id == withdrawal_id).with_for_update()
+        )
+        row = result.scalar_one()
+        target = status if isinstance(status, WithdrawalStatus) else WithdrawalStatus(str(status))
+        if row.status in (WithdrawalStatus.SUCCEEDED.value, WithdrawalStatus.RELEASED.value):
+            return self._withdrawal_to_domain(row)
+        row.payout_id = payout_id or row.payout_id
+        row.provider_status = provider_status
+        row.failure_code = failure_code
+        row.failure_message = failure_message
+        row.updated_at = now
+        if target is WithdrawalStatus.SUCCEEDED:
+            row.status = target.value
+            row.succeeded_at = now
+            await self._insert_withdrawal_ledger_once(
+                row, WalletEntryType.WITHDRAWAL_SUCCEEDED, WalletEntryDirection.DEBIT, now
+            )
+        elif target in (WithdrawalStatus.FAILED, WithdrawalStatus.RELEASED):
+            row.status = WithdrawalStatus.RELEASED.value
+            row.released_at = now
+            inserted = await self._insert_withdrawal_ledger_once(
+                row, WalletEntryType.WITHDRAWAL_RELEASED, WalletEntryDirection.CREDIT, now
+            )
+            if inserted:
+                wallet_result = await self._session.execute(
+                    select(orm.DriverWalletModel)
+                    .where(orm.DriverWalletModel.driver_id == row.driver_id)
+                    .with_for_update()
+                )
+                wallet = wallet_result.scalar_one()
+                wallet.balance = Decimal(str(wallet.balance)) + Decimal(str(row.amount))
+                wallet.updated_at = now
+        else:
+            row.status = target.value
+        await self._session.flush()
+        return self._withdrawal_to_domain(row)
+
+    async def _insert_withdrawal_ledger_once(
+        self,
+        row: orm.DriverWithdrawalModel,
+        entry_type: WalletEntryType,
+        direction: WalletEntryDirection,
+        now: datetime,
+    ) -> bool:
+        stmt = (
+            insert(orm.DriverLedgerEntryModel)
+            .values(
+                id=DriverLedgerEntry.new_id(),
+                driver_id=row.driver_id,
+                amount=row.amount,
+                currency=row.currency,
+                direction=direction.value,
+                entry_type=entry_type.value,
+                status=WalletEntryStatus.CONFIRMED.value,
+                reference_type="driver_withdrawal",
+                reference_id=row.id,
+                description=entry_type.value,
+                created_at=now,
+            )
+            .on_conflict_do_nothing(
+                index_elements=[
+                    orm.DriverLedgerEntryModel.driver_id,
+                    orm.DriverLedgerEntryModel.entry_type,
+                    orm.DriverLedgerEntryModel.reference_type,
+                    orm.DriverLedgerEntryModel.reference_id,
+                ]
+            )
+        )
+        result = await self._session.execute(stmt)
+        return bool(result.rowcount)
+
     @staticmethod
     def _to_domain(row: orm.TransactionModel) -> Transaction:
         return Transaction(
@@ -379,4 +629,29 @@ class SqlAlchemyPaymentRepository:
             provider_next_action=row.provider_next_action,
             created_at=row.created_at,
             paid_at=row.paid_at,
+        )
+
+    @staticmethod
+    def _withdrawal_to_domain(row: orm.DriverWithdrawalModel) -> DriverWithdrawal:
+        return DriverWithdrawal(
+            id=row.id,
+            driver_id=row.driver_id,
+            quote_id=row.quote_id,
+            amount=Decimal(str(row.amount)),
+            fees=Decimal(str(row.fees)),
+            net_amount=Decimal(str(row.net_amount)),
+            currency=row.currency,
+            beneficiary_reference=row.beneficiary_reference,
+            status=WithdrawalStatus(row.status),
+            payout_id=row.payout_id,
+            business_reference=row.business_reference,
+            idempotency_key=row.idempotency_key,
+            provider_status=row.provider_status,
+            failure_code=row.failure_code,
+            failure_message=row.failure_message,
+            created_at=row.created_at,
+            reserved_at=row.reserved_at,
+            succeeded_at=row.succeeded_at,
+            released_at=row.released_at,
+            updated_at=row.updated_at,
         )

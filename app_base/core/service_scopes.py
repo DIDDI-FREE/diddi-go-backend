@@ -17,6 +17,7 @@ PARTNERS_READ = "diddigo:partners:read"
 PARTNERS_WRITE = "diddigo:partners:write"
 OPERATIONS_READ = "diddigo:operations:read"
 RIDE_SUMMARY_READ = "diddigo:ride-summary:read"
+COMMS_TASK_READ = "diddigo:comms-task:read"
 DISPATCH_READ = "diddigo:dispatch:read"
 DISPATCH_WRITE = "diddigo:dispatch:write"
 
@@ -35,6 +36,7 @@ KNOWN_SCOPES = frozenset(
         PARTNERS_WRITE,
         OPERATIONS_READ,
         RIDE_SUMMARY_READ,
+        COMMS_TASK_READ,
         DISPATCH_READ,
         DISPATCH_WRITE,
     }

@@ -23,9 +23,20 @@ def auth(token: str) -> dict[str, str]:
 
 
 async def create_ride(client, passenger) -> str:
-    r = await client.post("/v1/rides", json={**RIDE_BODY, "scheduled_at": None}, headers=passenger)
+    quote = await create_quote(client, passenger)
+    r = await client.post(
+        "/v1/rides",
+        json={"quote_id": quote["quote_id"], "payment_method": "cash", "scheduled_at": None},
+        headers=passenger,
+    )
     assert r.status_code == 201, r.text
     return r.json()["ride_id"]
+
+
+async def create_quote(client, passenger, payload=None) -> dict:
+    r = await client.post("/v1/rides/pricing/estimate", json=payload or RIDE_BODY, headers=passenger)
+    assert r.status_code == 200, r.text
+    return r.json()
 
 
 async def matched_ride(client, passenger, driver) -> str:
@@ -39,11 +50,20 @@ async def matched_ride(client, passenger, driver) -> str:
 async def complete_ride(client, passenger, driver) -> tuple[str, int]:
     """Drive a ride all the way to `completed`. Returns (ride_id, final_fare)."""
     ride_id = await matched_ride(client, passenger, driver)
-    for status in ("driver_en_route", "in_progress", "completed"):
-        r = await client.patch(
-            f"/v1/rides/{ride_id}/status", json={"status": status}, headers=driver,
-        )
-        assert r.status_code == 200, f"{status}: {r.text}"
+    r = await client.patch(
+        f"/v1/rides/{ride_id}/status", json={"status": "driver_en_route"}, headers=driver,
+    )
+    assert r.status_code == 200, r.text
+    r = await client.post(f"/v1/rides/{ride_id}/arrive", headers=driver)
+    assert r.status_code == 200, r.text
+    detail = (await client.get(f"/v1/rides/{ride_id}", headers=passenger)).json()
+    code = detail["start_authorization"]["code"]
+    r = await client.post(f"/v1/rides/{ride_id}/start", json={"code": code}, headers=driver)
+    assert r.status_code == 200, r.text
+    r = await client.patch(
+        f"/v1/rides/{ride_id}/status", json={"status": "completed"}, headers=driver,
+    )
+    assert r.status_code == 200, r.text
     fare = (await client.get(f"/v1/rides/{ride_id}", headers=passenger)).json()["final_fare"]
     return ride_id, fare
 
@@ -68,6 +88,9 @@ async def test_pricing_estimate_matches_contract_shape(client, passenger) -> Non
         "commission_rate",
         "platform_commission",
         "driver_payout_estimate",
+        "quote_id",
+        "tariff_version",
+        "expires_at",
     }
     assert body["currency"] == "XOF"
     assert isinstance(body["estimated_fare"], int) and body["estimated_fare"] > 0
@@ -75,7 +98,7 @@ async def test_pricing_estimate_matches_contract_shape(client, passenger) -> Non
     assert body["surge_multiplier"] == 1.0
     assert body["surge_cap"] == 1.6
     assert body["comfort_multiplier"] == 1.0
-    assert body["commission_rate"] == 0.08
+    assert body["commission_rate"] == 0.18
     assert body["platform_commission"] > 0
     assert body["driver_payout_estimate"] > 0
 
@@ -103,7 +126,12 @@ async def test_pricing_defaults_vehicle_category_for_simplified_frontend(client,
 # --- creation --------------------------------------------------------------
 
 async def test_create_ride_returns_requested(client, passenger) -> None:
-    r = await client.post("/v1/rides", json={**RIDE_BODY, "scheduled_at": None}, headers=passenger)
+    quote = await create_quote(client, passenger)
+    r = await client.post(
+        "/v1/rides",
+        json={"quote_id": quote["quote_id"], "payment_method": "cash", "scheduled_at": None},
+        headers=passenger,
+    )
     assert r.status_code == 201
     body = r.json()
     assert body["status"] == "requested"
@@ -114,7 +142,10 @@ async def test_create_ride_returns_requested(client, passenger) -> None:
 
 
 async def test_create_ride_requires_authentication(client) -> None:
-    r = await client.post("/v1/rides", json={**RIDE_BODY, "scheduled_at": None})
+    r = await client.post(
+        "/v1/rides",
+        json={"quote_id": "00000000-0000-0000-0000-000000000000", "payment_method": "cash"},
+    )
     assert r.status_code == 401
 
 
@@ -124,9 +155,12 @@ async def test_create_ride_defaults_vehicle_category_for_simplified_frontend(
     premium_driver = await driver_factory(comfort_level="premium")
     payload = {key: value for key, value in RIDE_BODY.items() if key != "vehicle_category"}
     payload["comfort_level"] = "premium"
-    payload["scheduled_at"] = None
-
-    r = await client.post("/v1/rides", json=payload, headers=passenger)
+    quote = await create_quote(client, passenger, payload)
+    r = await client.post(
+        "/v1/rides",
+        json={"quote_id": quote["quote_id"], "payment_method": "cash", "scheduled_at": None},
+        headers=passenger,
+    )
     assert r.status_code == 201, r.text
 
     ride_id = r.json()["ride_id"]
@@ -143,7 +177,12 @@ async def test_passenger_cannot_have_two_active_rides(client, passenger, driver)
     """The guard covers rides that are genuinely live. `driver` is online, so
     the first ride stays in an active state rather than dying immediately."""
     await create_ride(client, passenger)
-    r = await client.post("/v1/rides", json={**RIDE_BODY, "scheduled_at": None}, headers=passenger)
+    quote = await create_quote(client, passenger)
+    r = await client.post(
+        "/v1/rides",
+        json={"quote_id": quote["quote_id"], "payment_method": "cash", "scheduled_at": None},
+        headers=passenger,
+    )
     assert r.status_code == 409
     assert r.json()["error"]["code"] == "ACTIVE_RIDE_ALREADY_EXISTS"
 
@@ -155,7 +194,12 @@ async def test_passenger_may_retry_after_no_driver_found(client, passenger) -> N
     detail = (await client.get(f"/v1/rides/{first}", headers=passenger)).json()
     assert detail["status"] == "no_driver_found"
 
-    r = await client.post("/v1/rides", json={**RIDE_BODY, "scheduled_at": None}, headers=passenger)
+    quote = await create_quote(client, passenger)
+    r = await client.post(
+        "/v1/rides",
+        json={"quote_id": quote["quote_id"], "payment_method": "cash", "scheduled_at": None},
+        headers=passenger,
+    )
     assert r.status_code == 201, r.text
 
 
@@ -180,14 +224,7 @@ async def test_get_ride_404_for_unknown_id(client, passenger) -> None:
 # --- status transitions ----------------------------------------------------
 
 async def test_driver_walks_the_ride_to_completion(client, passenger, driver) -> None:
-    ride_id = await matched_ride(client, passenger, driver)
-
-    for status in ("driver_en_route", "in_progress", "completed"):
-        r = await client.patch(
-            f"/v1/rides/{ride_id}/status", json={"status": status}, headers=driver,
-        )
-        assert r.status_code == 200, r.text
-        assert r.json()["status"] == status
+    ride_id, _fare = await complete_ride(client, passenger, driver)
 
     final = (await client.get(f"/v1/rides/{ride_id}", headers=passenger)).json()
     assert final["matched_at"] and final["started_at"] and final["completed_at"]
@@ -389,7 +426,7 @@ async def test_payment_browser_return_is_a_safe_landing_page(client) -> None:
 
     assert r.status_code == 200
     assert "Lien de retour invalide" in r.text
-    assert "verification" in r.text
+    assert "confirmer le statut final" in r.text
 
 
 async def test_wallet_browser_return_is_a_safe_landing_page(client) -> None:

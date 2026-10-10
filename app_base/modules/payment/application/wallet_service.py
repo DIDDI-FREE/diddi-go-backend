@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -14,12 +14,15 @@ from app_base.modules.payment.application.return_contexts import PaymentReturnCo
 from app_base.modules.payment.domain.entities import (
     DriverLedgerEntry,
     DriverTopup,
+    DriverWithdrawal,
+    DriverWithdrawalQuote,
     PaymentMethod,
     PaymentStatus,
     TopupStatus,
     WalletEntryDirection,
     WalletEntryStatus,
     WalletEntryType,
+    WithdrawalStatus,
 )
 from app_base.modules.payment.domain.interfaces import PaymentRepository
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
@@ -37,7 +40,10 @@ class DriverWalletService:
     async def get_wallet(self, *, driver_user_id: UUID) -> dict:
         driver_id = await self._driver_id_for_user(driver_user_id)
         wallet = await self.payment_repo.get_or_create_wallet(driver_id)
-        return _wallet_payload(wallet, min_balance=Decimal(settings.driver_min_balance))
+        reserved = await self._withdrawal_reserved_total(driver_id)
+        return _wallet_payload(
+            wallet, min_balance=Decimal(settings.driver_min_balance), reserved=Decimal(reserved)
+        )
 
     async def get_ledger(self, *, driver_user_id: UUID, page: int = 1, page_size: int = 20) -> dict:
         driver_id = await self._driver_id_for_user(driver_user_id)
@@ -51,7 +57,10 @@ class DriverWalletService:
     async def admin_get_wallet(self, driver_id: UUID) -> dict:
         await self._require_driver(driver_id)
         wallet = await self.payment_repo.get_or_create_wallet(driver_id)
-        return _wallet_payload(wallet, min_balance=Decimal(settings.driver_min_balance))
+        reserved = await self._withdrawal_reserved_total(driver_id)
+        return _wallet_payload(
+            wallet, min_balance=Decimal(settings.driver_min_balance), reserved=Decimal(reserved)
+        )
 
     async def admin_get_ledger(self, driver_id: UUID, *, page: int = 1, page_size: int = 20) -> dict:
         await self._require_driver(driver_id)
@@ -107,7 +116,10 @@ class DriverWalletService:
         callback_url = _pro_return_url()
         if self.return_contexts:
             return_token = await self.return_contexts.create(
-                flow="driver_topup", surface="pro", user_id=driver_user_id, resource_id=topup_id,
+                flow="driver_topup",
+                surface="pro",
+                user_id=driver_user_id,
+                resource_id=topup_id,
             )
             callback_url = self.return_contexts.callback_url(callback_url, return_token)
         intent = await (self.diddipay or DiddiPayClient()).create_payment_intent(
@@ -151,6 +163,174 @@ class DriverWalletService:
         if status is TopupStatus.SUCCEEDED:
             await self.credit_topup(topup)
         return _topup_payload(topup, next_action=next_action)
+
+    async def quote_withdrawal(self, *, driver_user_id: UUID, amount: Decimal) -> dict:
+        driver_id = await self._driver_id_for_user(driver_user_id)
+        minimum = Decimal(settings.driver_withdrawal_min_amount_xof)
+        fees = Decimal(settings.driver_withdrawal_fee_xof)
+        if amount != amount.to_integral_value() or amount < minimum:
+            raise ApiError(
+                422,
+                "INVALID_WITHDRAWAL_AMOUNT",
+                "Le montant doit etre un entier XOF superieur ou egal au minimum.",
+                {"minimum_amount": int(minimum), "currency": "XOF"},
+            )
+        if amount <= fees:
+            raise ApiError(422, "INVALID_WITHDRAWAL_AMOUNT", "Le montant doit etre superieur aux frais.")
+        wallet = await self.payment_repo.get_or_create_wallet(driver_id)
+        if wallet.balance < amount:
+            raise ApiError(
+                409,
+                "WITHDRAWAL_BALANCE_INSUFFICIENT",
+                "Solde disponible insuffisant.",
+                {"available_balance": int(wallet.balance), "requested_amount": int(amount)},
+            )
+        now = datetime.now(UTC)
+        quote = DriverWithdrawalQuote(
+            id=DriverWithdrawalQuote.new_id(),
+            driver_id=driver_id,
+            amount=amount,
+            fees=fees,
+            net_amount=amount - fees,
+            expires_at=now + timedelta(seconds=settings.driver_withdrawal_quote_ttl_seconds),
+            created_at=now,
+        )
+        await self.payment_repo.save_withdrawal_quote(quote)
+        await self.payment_repo.commit()
+        return {
+            "quote_id": str(quote.id),
+            "amount": int(quote.amount),
+            "fees": int(quote.fees),
+            "net_amount": int(quote.net_amount),
+            "currency": quote.currency,
+            "expires_at": quote.expires_at.isoformat(),
+        }
+
+    async def request_withdrawal(self, *, driver_user_id: UUID, quote_id: UUID, beneficiary_reference: str) -> dict:
+        driver_id = await self._driver_id_for_user(driver_user_id)
+        if not beneficiary_reference.strip():
+            raise ApiError(422, "WITHDRAWAL_BENEFICIARY_REQUIRED", "Le beneficiaire est requis.")
+        now = datetime.now(UTC)
+        withdrawal_id = DriverWithdrawal.new_id()
+        withdrawal = DriverWithdrawal(
+            id=withdrawal_id,
+            driver_id=driver_id,
+            quote_id=quote_id,
+            amount=Decimal("0"),
+            fees=Decimal("0"),
+            net_amount=Decimal("0"),
+            beneficiary_reference=beneficiary_reference.strip(),
+            business_reference=f"diddigo:driver_withdrawal:{withdrawal_id}",
+            idempotency_key=f"diddigo:driver_withdrawal:{withdrawal_id}:v1",
+            reserved_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        # The repository owns the locked quote values; load them through the
+        # atomic reservation result rather than trusting amounts from a client.
+        try:
+            withdrawal = await self.payment_repo.reserve_withdrawal_from_quote(withdrawal, now=now)
+        except LookupError as exc:
+            code = str(exc)
+            status = 409 if code in {"WITHDRAWAL_QUOTE_ALREADY_USED", "WITHDRAWAL_BALANCE_INSUFFICIENT"} else 422
+            if code == "WITHDRAWAL_QUOTE_NOT_FOUND":
+                status = 404
+            raise ApiError(status, code, "Impossible de reserver ce retrait.") from exc
+        await self.payment_repo.commit()
+
+        try:
+            payout = await (self.diddipay or DiddiPayClient()).create_payout(
+                {
+                    "business_reference": withdrawal.business_reference,
+                    "beneficiary_reference": withdrawal.beneficiary_reference,
+                    "amount": int(withdrawal.net_amount),
+                    "currency": withdrawal.currency,
+                    "metadata": {
+                        "driver_id": str(driver_id),
+                        "withdrawal_id": str(withdrawal.id),
+                        "quote_id": str(withdrawal.quote_id),
+                        "fees_xof": int(withdrawal.fees),
+                    },
+                },
+                idempotency_key=withdrawal.idempotency_key or "",
+            )
+        except ApiError as exc:
+            if exc.status_code < 500:
+                withdrawal = await self.payment_repo.mark_withdrawal_provider_state(
+                    withdrawal.id,
+                    status=WithdrawalStatus.FAILED,
+                    payout_id=None,
+                    provider_status="rejected",
+                    failure_code=exc.code,
+                    failure_message=exc.message,
+                    now=datetime.now(UTC),
+                )
+                await self.payment_repo.commit()
+            raise
+        withdrawal = await self.apply_withdrawal_provider_payload(withdrawal, payout)
+        await self.payment_repo.commit()
+        return _withdrawal_payload(withdrawal)
+
+    async def get_withdrawal(self, *, driver_user_id: UUID, withdrawal_id: UUID) -> dict:
+        driver_id = await self._driver_id_for_user(driver_user_id)
+        withdrawal = await self.payment_repo.find_withdrawal_by_id(withdrawal_id)
+        if withdrawal is None or withdrawal.driver_id != driver_id:
+            raise ApiError(404, "WITHDRAWAL_NOT_FOUND", "Retrait chauffeur introuvable.")
+        return _withdrawal_payload(withdrawal)
+
+    async def list_withdrawals(self, *, driver_user_id: UUID, page: int = 1, page_size: int = 20) -> dict:
+        driver_id = await self._driver_id_for_user(driver_user_id)
+        return await self.admin_list_withdrawals(driver_id, page=page, page_size=page_size)
+
+    async def admin_list_withdrawals(self, driver_id: UUID, *, page: int = 1, page_size: int = 20) -> dict:
+        await self._require_driver(driver_id)
+        rows, total = await self.payment_repo.list_withdrawals(driver_id, page=page, page_size=page_size)
+        return {
+            "driver_id": str(driver_id),
+            "data": [_withdrawal_payload(row) for row in rows],
+            "pagination": {"page": page, "page_size": page_size, "total": total},
+        }
+
+    async def admin_get_withdrawal(self, withdrawal_id: UUID) -> dict:
+        withdrawal = await self.payment_repo.find_withdrawal_by_id(withdrawal_id)
+        if withdrawal is None:
+            raise ApiError(404, "WITHDRAWAL_NOT_FOUND", "Retrait chauffeur introuvable.")
+        return _withdrawal_payload(withdrawal)
+
+    async def reconcile_withdrawal(self, withdrawal_id: UUID) -> dict:
+        withdrawal = await self.payment_repo.find_withdrawal_by_id(withdrawal_id)
+        if withdrawal is None:
+            raise ApiError(404, "WITHDRAWAL_NOT_FOUND", "Retrait chauffeur introuvable.")
+        client = self.diddipay or DiddiPayClient()
+        payout = (
+            await client.get_payout(withdrawal.payout_id)
+            if withdrawal.payout_id
+            else await client.get_payout_by_business_reference(withdrawal.business_reference or "")
+        )
+        if payout is None:
+            return _withdrawal_payload(withdrawal)
+        withdrawal = await self.apply_withdrawal_provider_payload(withdrawal, payout)
+        await self.payment_repo.commit()
+        return _withdrawal_payload(withdrawal)
+
+    async def apply_withdrawal_provider_payload(self, withdrawal: DriverWithdrawal, payout: dict) -> DriverWithdrawal:
+        if int(payout.get("amount") or -1) != int(withdrawal.net_amount):
+            raise ApiError(409, "WITHDRAWAL_AMOUNT_MISMATCH", "Montant payout DiddiPay incoherent.")
+        if payout.get("currency") != withdrawal.currency:
+            raise ApiError(409, "WITHDRAWAL_CURRENCY_MISMATCH", "Devise payout DiddiPay incoherente.")
+        if payout.get("business_reference") != withdrawal.business_reference:
+            raise ApiError(409, "WITHDRAWAL_REFERENCE_MISMATCH", "Reference payout DiddiPay incoherente.")
+        provider_status = str(payout.get("status") or "")
+        status = _withdrawal_status_from_diddipay(provider_status)
+        return await self.payment_repo.mark_withdrawal_provider_state(
+            withdrawal.id,
+            status=status,
+            payout_id=UUID(str(payout["id"])),
+            provider_status=provider_status,
+            failure_code=payout.get("failure_code"),
+            failure_message=payout.get("failure_message"),
+            now=datetime.now(UTC),
+        )
 
     async def get_topup(self, *, driver_user_id: UUID, topup_id: UUID) -> dict:
         driver_id = await self._driver_id_for_user(driver_user_id)
@@ -232,6 +412,12 @@ class DriverWalletService:
             raise ApiError(404, ErrorCode.DRIVER_PROFILE_NOT_FOUND, "Aucun profil chauffeur pour ce compte.")
         return profile.id
 
+    async def _withdrawal_reserved_total(self, driver_id: UUID) -> Decimal:
+        loader = getattr(self.payment_repo, "withdrawal_reserved_total", None)
+        if loader is None:
+            return Decimal("0")
+        return Decimal(await loader(driver_id))
+
     async def _require_driver(self, driver_id: UUID) -> None:
         profile = await self.driver_repo.find_by_id(driver_id)
         if profile is None:
@@ -262,10 +448,13 @@ def _topup_status_from_payment_status(status: PaymentStatus) -> TopupStatus:
     return mapping.get(status, TopupStatus.FAILED)
 
 
-def _wallet_payload(wallet, *, min_balance: Decimal) -> dict:
+def _wallet_payload(wallet, *, min_balance: Decimal, reserved: Decimal = Decimal("0")) -> dict:
     return {
         "driver_id": str(wallet.driver_id),
         "balance": int(wallet.balance),
+        "available_balance": int(wallet.balance),
+        "reserved_balance": int(reserved),
+        "total_balance": int(wallet.balance + reserved),
         "currency": wallet.currency,
         "min_balance": int(min_balance),
         "can_go_online": wallet.balance >= min_balance,
@@ -305,6 +494,44 @@ def _topup_payload(topup: DriverTopup, *, next_action: dict | None) -> dict:
     }
 
 
+def _withdrawal_payload(withdrawal: DriverWithdrawal) -> dict:
+    return {
+        "id": str(withdrawal.id),
+        "driver_id": str(withdrawal.driver_id),
+        "quote_id": str(withdrawal.quote_id),
+        "amount": int(withdrawal.amount),
+        "fees": int(withdrawal.fees),
+        "net_amount": int(withdrawal.net_amount),
+        "currency": withdrawal.currency,
+        "beneficiary_reference": withdrawal.beneficiary_reference,
+        "status": withdrawal.status.value,
+        "payout_id": str(withdrawal.payout_id) if withdrawal.payout_id else None,
+        "business_reference": withdrawal.business_reference,
+        "provider_status": withdrawal.provider_status,
+        "failure_code": withdrawal.failure_code,
+        "failure_message": withdrawal.failure_message,
+        "created_at": withdrawal.created_at.isoformat() if withdrawal.created_at else None,
+        "reserved_at": withdrawal.reserved_at.isoformat() if withdrawal.reserved_at else None,
+        "succeeded_at": withdrawal.succeeded_at.isoformat() if withdrawal.succeeded_at else None,
+        "released_at": withdrawal.released_at.isoformat() if withdrawal.released_at else None,
+    }
+
+
+def _withdrawal_status_from_diddipay(status: str) -> WithdrawalStatus:
+    if status == "succeeded":
+        return WithdrawalStatus.SUCCEEDED
+    if status in {"failed", "disputed"}:
+        return WithdrawalStatus.FAILED
+    if status in {"pending", "processing"}:
+        return WithdrawalStatus.PROCESSING
+    raise ApiError(
+        422,
+        "WITHDRAWAL_STATUS_INVALID",
+        "Statut payout DiddiPay non reconnu.",
+        {"status": status},
+    )
+
+
 def _next_action_from_intent(intent: dict) -> dict | None:
     attempts = intent.get("attempts") if isinstance(intent.get("attempts"), list) else []
     if not attempts or not isinstance(attempts[0], dict):
@@ -318,5 +545,5 @@ def _pro_return_url() -> str | None:
         return settings.diddigo_pro_return_url
     fallback = settings.diddigo_payment_callback_url
     if fallback and fallback.endswith("/payments/return"):
-        return f"{fallback[:-len('/payments/return')]}/wallet/return"
+        return f"{fallback[: -len('/payments/return')]}/wallet/return"
     return fallback

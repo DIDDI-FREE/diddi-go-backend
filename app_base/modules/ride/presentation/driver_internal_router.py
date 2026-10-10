@@ -116,7 +116,11 @@ async def update_driver_profile_photo(
     reservation = await commands.reserve(
         client_id=client_id,
         idempotency_key=idempotency_key,
-        payload={"driver_id": str(driver_id), "profile_photo_file_id": str(payload.profile_photo_file_id), "actor_user_id": str(actor.id)},
+        payload={
+            "driver_id": str(driver_id),
+            "profile_photo_file_id": str(payload.profile_photo_file_id),
+            "actor_user_id": str(actor.id),
+        },
     )
     if reservation.cached_response is not None:
         return reservation.cached_response

@@ -251,6 +251,7 @@ class DriverService:
         vehicle_left_photo_file_id: UUID | None = None,
         vehicle_right_photo_file_id: UUID | None = None,
         vehicle_interior_photo_file_id: UUID | None = None,
+        vehicle_plate_photo_file_id: UUID | None = None,
         registration_document_url: str | None = None,
         insurance_document_url: str | None = None,
         technical_inspection_document_url: str | None = None,
@@ -261,6 +262,7 @@ class DriverService:
         vehicle_left_photo_url: str | None = None,
         vehicle_right_photo_url: str | None = None,
         vehicle_interior_photo_url: str | None = None,
+        vehicle_plate_photo_url: str | None = None,
     ) -> dict:
         if category not in {c.value for c in VehicleCategory}:
             raise ApiError(
@@ -291,6 +293,7 @@ class DriverService:
             vehicle_left_photo_file_id=vehicle_left_photo_file_id,
             vehicle_right_photo_file_id=vehicle_right_photo_file_id,
             vehicle_interior_photo_file_id=vehicle_interior_photo_file_id,
+            vehicle_plate_photo_file_id=vehicle_plate_photo_file_id,
             registration_document_url=_blank_to_none(registration_document_url),
             insurance_document_url=_blank_to_none(insurance_document_url),
             technical_inspection_document_url=_blank_to_none(technical_inspection_document_url),
@@ -301,6 +304,7 @@ class DriverService:
             vehicle_left_photo_url=_blank_to_none(vehicle_left_photo_url),
             vehicle_right_photo_url=_blank_to_none(vehicle_right_photo_url),
             vehicle_interior_photo_url=_blank_to_none(vehicle_interior_photo_url),
+            vehicle_plate_photo_url=_blank_to_none(vehicle_plate_photo_url),
             verification_status=VehicleVerificationStatus.PENDING_VERIFICATION,
             category=VehicleCategory(category),
             comfort_level=ComfortLevel(comfort_level),
@@ -388,6 +392,7 @@ class DriverService:
         vehicle_left_photo_file_id: UUID | None = None,
         vehicle_right_photo_file_id: UUID | None = None,
         vehicle_interior_photo_file_id: UUID | None = None,
+        vehicle_plate_photo_file_id: UUID | None = None,
         registration_document_url: str | None = None,
         insurance_document_url: str | None = None,
         technical_inspection_document_url: str | None = None,
@@ -398,6 +403,7 @@ class DriverService:
         vehicle_left_photo_url: str | None = None,
         vehicle_right_photo_url: str | None = None,
         vehicle_interior_photo_url: str | None = None,
+        vehicle_plate_photo_url: str | None = None,
     ) -> dict:
         profile = await self._require_profile(user_id)
         vehicle = await self._require_vehicle(vehicle_id)
@@ -415,6 +421,7 @@ class DriverService:
             vehicle_left_photo_file_id=vehicle_left_photo_file_id,
             vehicle_right_photo_file_id=vehicle_right_photo_file_id,
             vehicle_interior_photo_file_id=vehicle_interior_photo_file_id,
+            vehicle_plate_photo_file_id=vehicle_plate_photo_file_id,
             registration_document_url=registration_document_url,
             insurance_document_url=insurance_document_url,
             technical_inspection_document_url=technical_inspection_document_url,
@@ -425,6 +432,7 @@ class DriverService:
             vehicle_left_photo_url=vehicle_left_photo_url,
             vehicle_right_photo_url=vehicle_right_photo_url,
             vehicle_interior_photo_url=vehicle_interior_photo_url,
+            vehicle_plate_photo_url=vehicle_plate_photo_url,
         )
         vehicle.verification_status = VehicleVerificationStatus.PENDING_VERIFICATION
         vehicle.verified_at = None
@@ -858,6 +866,9 @@ def _vehicle_payload(vehicle: Vehicle) -> dict:
         "vehicle_interior_photo_file_id": str(vehicle.vehicle_interior_photo_file_id)
         if vehicle.vehicle_interior_photo_file_id
         else None,
+        "vehicle_plate_photo_file_id": str(vehicle.vehicle_plate_photo_file_id)
+        if vehicle.vehicle_plate_photo_file_id
+        else None,
         "registration_document_url": vehicle.registration_document_url,
         "insurance_document_url": vehicle.insurance_document_url,
         "technical_inspection_document_url": vehicle.technical_inspection_document_url,
@@ -868,6 +879,7 @@ def _vehicle_payload(vehicle: Vehicle) -> dict:
         "vehicle_left_photo_url": vehicle.vehicle_left_photo_url,
         "vehicle_right_photo_url": vehicle.vehicle_right_photo_url,
         "vehicle_interior_photo_url": vehicle.vehicle_interior_photo_url,
+        "vehicle_plate_photo_url": vehicle.vehicle_plate_photo_url,
         "verification_status": vehicle.verification_status.value,
         "verified_at": vehicle.verified_at.isoformat() if vehicle.verified_at else None,
         "reviewed_at": vehicle.reviewed_at.isoformat() if vehicle.reviewed_at else None,
@@ -956,6 +968,7 @@ def _update_vehicle_kyv_fields(
     vehicle_left_photo_file_id: UUID | None,
     vehicle_right_photo_file_id: UUID | None,
     vehicle_interior_photo_file_id: UUID | None,
+    vehicle_plate_photo_file_id: UUID | None,
     registration_document_url: str | None,
     insurance_document_url: str | None,
     technical_inspection_document_url: str | None,
@@ -966,6 +979,7 @@ def _update_vehicle_kyv_fields(
     vehicle_left_photo_url: str | None,
     vehicle_right_photo_url: str | None,
     vehicle_interior_photo_url: str | None,
+    vehicle_plate_photo_url: str | None,
 ) -> None:
     if registration_document_file_id is not None:
         vehicle.registration_document_file_id = registration_document_file_id
@@ -987,6 +1001,8 @@ def _update_vehicle_kyv_fields(
         vehicle.vehicle_right_photo_file_id = vehicle_right_photo_file_id
     if vehicle_interior_photo_file_id is not None:
         vehicle.vehicle_interior_photo_file_id = vehicle_interior_photo_file_id
+    if vehicle_plate_photo_file_id is not None:
+        vehicle.vehicle_plate_photo_file_id = vehicle_plate_photo_file_id
     if registration_document_url is not None:
         vehicle.registration_document_url = _blank_to_none(registration_document_url)
     if insurance_document_url is not None:
@@ -1007,6 +1023,8 @@ def _update_vehicle_kyv_fields(
         vehicle.vehicle_right_photo_url = _blank_to_none(vehicle_right_photo_url)
     if vehicle_interior_photo_url is not None:
         vehicle.vehicle_interior_photo_url = _blank_to_none(vehicle_interior_photo_url)
+    if vehicle_plate_photo_url is not None:
+        vehicle.vehicle_plate_photo_url = _blank_to_none(vehicle_plate_photo_url)
 
 
 def _ensure_vehicle_kyv_documents_complete(vehicle: Vehicle) -> None:
@@ -1025,6 +1043,7 @@ def _ensure_vehicle_kyv_documents_complete(vehicle: Vehicle) -> None:
             "vehicle_interior_photo": bool(
                 vehicle.vehicle_interior_photo_file_id or vehicle.vehicle_interior_photo_url
             ),
+            "vehicle_plate_photo": bool(vehicle.vehicle_plate_photo_file_id or vehicle.vehicle_plate_photo_url),
         }.items()
         if not present
     ]

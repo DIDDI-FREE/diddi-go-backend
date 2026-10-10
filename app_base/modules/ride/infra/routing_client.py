@@ -285,13 +285,13 @@ class DiddiMapRoutingClient:
         source_ride_id: str | None = None,
     ) -> str:
         payload = {
+            "source_service": "diddigo",
             "start": {"lng": start.lng, "lat": start.lat},
             "end": {"lng": end.lng, "lat": end.lat},
             "profile": _abidjanmaps_profile(profile),
             "source_ride_id": source_ride_id,
             "planned_distance_m": _km_to_meters(planned_distance_km),
             "planned_duration_s": planned_duration_seconds,
-            "planned_route_geometry": {"type": "LineString", "coordinates": []},
         }
         payload = {key: value for key, value in payload.items() if value is not None}
         response_payload = await self._post_json(

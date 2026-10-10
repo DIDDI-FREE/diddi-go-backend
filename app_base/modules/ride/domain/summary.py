@@ -29,3 +29,12 @@ class RideFinanceSummaryTotals:
     driver_topups_pending_xof: Decimal
     driver_topups_failed_count: int
     driver_topups_failed_xof: Decimal
+    driver_withdrawals_requested_count: int = 0
+    driver_withdrawals_requested_xof: Decimal = Decimal("0")
+    driver_withdrawals_processing_count: int = 0
+    driver_withdrawals_processing_xof: Decimal = Decimal("0")
+    driver_withdrawals_succeeded_count: int = 0
+    driver_withdrawals_succeeded_xof: Decimal = Decimal("0")
+    driver_withdrawals_released_count: int = 0
+    driver_withdrawals_released_xof: Decimal = Decimal("0")
+    withdrawal_fees_xof: Decimal = Decimal("0")

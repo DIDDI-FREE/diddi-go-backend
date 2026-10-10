@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -33,16 +34,17 @@ class PricingEstimateRequest(BaseModel):
 
 
 class RideCreateRequest(BaseModel):
-    pickup: PointPayload
-    dropoff: PointPayload
-    vehicle_category: str = Field(default="standard")
-    comfort_level: str = Field(default="standard")
+    quote_id: UUID
     payment_method: str = Field(default="cash")
     scheduled_at: datetime | None = None  # null = ride immédiat, sinon ISO 8601
 
 
 class RideStatusUpdateRequest(BaseModel):
     status: str
+
+
+class RideStartRequest(BaseModel):
+    code: str = Field(pattern=r"^\d{6}$")
 
 
 class RideCancelRequest(BaseModel):

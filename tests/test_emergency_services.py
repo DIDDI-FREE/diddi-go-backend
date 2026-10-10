@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -8,7 +8,7 @@ import pytest
 from app_base.core.errors import ApiError
 from app_base.modules.ride.application.emergency_contact_service import EmergencyContactService
 from app_base.modules.ride.application.services import RideService
-from app_base.modules.ride.domain.entities import EmergencyContact, Ride
+from app_base.modules.ride.domain.entities import EmergencyContact, Ride, RideEmergencyEvent
 from app_base.shared_kernel.types import GeoPoint
 
 pytestmark = pytest.mark.unit
@@ -42,6 +42,7 @@ class FakeRideRepo:
     def __init__(self, ride: Ride) -> None:
         self.ride = ride
         self.saved = False
+        self.events: list[RideEmergencyEvent] = []
 
     async def find_by_id(self, ride_id: UUID) -> Ride | None:
         return self.ride if ride_id == self.ride.id else None
@@ -50,6 +51,13 @@ class FakeRideRepo:
         self.ride = ride
         self.saved = True
         return ride
+
+    async def latest_emergency_event(self, ride_id: UUID) -> RideEmergencyEvent | None:
+        return self.events[-1] if self.events and self.events[-1].ride_id == ride_id else None
+
+    async def save_emergency_event(self, event: RideEmergencyEvent) -> RideEmergencyEvent:
+        self.events.append(event)
+        return event
 
 
 class FakeNotifier:
@@ -142,7 +150,7 @@ async def test_ride_emergency_notifies_with_stored_contact() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ride_emergency_cannot_overwrite_existing_open_alert() -> None:
+async def test_ride_emergency_repeat_preserves_initial_alert() -> None:
     first_requested_at = datetime(2026, 9, 16, 10, 0, tzinfo=UTC)
     ride = Ride(
         id=RIDE_ID,
@@ -163,16 +171,41 @@ async def test_ride_emergency_cannot_overwrite_existing_open_alert() -> None:
         emergency_notifications=FakeNotifier(),
     )
 
+    result = await service.request_emergency(
+        RIDE_ID,
+        actor_user_id=USER_ID,
+        actor_role="user",
+        note="Deuxieme alerte",
+    )
+
+    assert result["sequence"] == 1
+    assert repo.saved is True
+    assert ride.emergency_requested_at == first_requested_at
+    assert ride.emergency_note == "Premiere alerte"
+
+
+@pytest.mark.asyncio
+async def test_ride_emergency_repeats_are_rate_limited() -> None:
+    ride = Ride(id=RIDE_ID, passenger_user_id=USER_ID)
+    repo = FakeRideRepo(ride)
+    repo.events.append(
+        RideEmergencyEvent(
+            id=uuid4(),
+            ride_id=RIDE_ID,
+            actor_user_id=USER_ID,
+            actor_role="user",
+            requested_at=datetime.now(UTC) - timedelta(seconds=1),
+        ),
+    )
+    service = RideService(ride_repo=repo, routing=FakeRouting(), pricing_rules=FakePricingRules())
+
     with pytest.raises(ApiError) as exc_info:
         await service.request_emergency(
             RIDE_ID,
             actor_user_id=USER_ID,
             actor_role="user",
-            note="Deuxieme alerte",
+            note="Encore",
         )
 
-    assert exc_info.value.status_code == 409
-    assert exc_info.value.code == "EMERGENCY_ALREADY_OPEN"
-    assert repo.saved is False
-    assert ride.emergency_requested_at == first_requested_at
-    assert ride.emergency_note == "Premiere alerte"
+    assert exc_info.value.status_code == 429
+    assert exc_info.value.code == "EMERGENCY_RATE_LIMITED"

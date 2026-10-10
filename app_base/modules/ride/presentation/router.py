@@ -56,6 +56,7 @@ from app_base.modules.ride.presentation.schemas import (
     RideEmergencyRequest,
     RideLocationSamplesRequest,
     RideRatingRequest,
+    RideStartRequest,
     RideStatusUpdateRequest,
     RideStopCreateRequest,
     RideSupplementCreateRequest,
@@ -162,10 +163,19 @@ async def search_places(
 async def estimate_pricing(
     payload: PricingEstimateRequest,
     service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
 ) -> dict:
     pickup = GeoPoint(lat=payload.pickup.lat, lng=payload.pickup.lng)
     dropoff = GeoPoint(lat=payload.dropoff.lat, lng=payload.dropoff.lng)
-    return await service.estimate_pricing(pickup, dropoff, payload.vehicle_category, payload.comfort_level)
+    return await service.create_quote(
+        passenger_user_id=current_user.id,
+        pickup=pickup,
+        pickup_address=payload.pickup.address,
+        dropoff=dropoff,
+        dropoff_address=payload.dropoff.address,
+        vehicle_category=payload.vehicle_category,
+        comfort_level=payload.comfort_level,
+    )
 
 
 @router.post("", status_code=201)
@@ -186,16 +196,9 @@ async def create_ride(
     `no_driver_found` in the database and the `ride.no_driver_found` event is
     on its way, but the creation response keeps its contractual shape.
     """
-    pickup = GeoPoint(lat=payload.pickup.lat, lng=payload.pickup.lng)
-    dropoff = GeoPoint(lat=payload.dropoff.lat, lng=payload.dropoff.lng)
     ride = await service.request_ride(
         passenger_user_id=current_user.id,
-        pickup=pickup,
-        pickup_address=payload.pickup.address,
-        dropoff=dropoff,
-        dropoff_address=payload.dropoff.address,
-        vehicle_category=payload.vehicle_category,
-        comfort_level=payload.comfort_level,
+        quote_id=payload.quote_id,
         payment_method=payload.payment_method,
         scheduled_at=payload.scheduled_at,
     )
@@ -358,6 +361,61 @@ async def start_waiting(
     )
     await manager.broadcast_status_changed(ride_id, RideStatus.WAITING.value)
     await manager.broadcast_waiting_changed(ride_id, result)
+    return result
+
+
+@router.post("/{ride_id}/arrive")
+async def mark_driver_arrived(
+    request: Request,
+    ride_id: UUID,
+    service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    position = await request.app.state.driver_locations.get_position(current_user.id)
+    result = await service.mark_arrived(
+        ride_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        driver_position=position,
+    )
+    await manager.broadcast_status_changed(ride_id, RideStatus.ARRIVED.value)
+    return result
+
+
+@router.post("/{ride_id}/start")
+async def start_ride(
+    ride_id: UUID,
+    payload: RideStartRequest,
+    service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    result = await service.start_ride_with_code(
+        ride_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        code=payload.code,
+    )
+    await manager.broadcast_status_changed(ride_id, RideStatus.IN_PROGRESS.value)
+    return result
+
+
+@router.post("/{ride_id}/no-show")
+async def mark_passenger_no_show(
+    ride_id: UUID,
+    service: RideService = Depends(ride_service),
+    matching: MatchingService = Depends(matching_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    result = await service.mark_passenger_no_show(
+        ride_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
+    await matching.release_driver(await service.load_ride(ride_id))
+    await manager.broadcast_status_changed(ride_id, RideStatus.CANCELLED_BY_DRIVER.value)
     return result
 
 

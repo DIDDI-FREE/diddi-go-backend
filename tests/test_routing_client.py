@@ -326,7 +326,7 @@ async def test_trace_start_uses_diddimap_contract_shape_and_auth() -> None:
         "profile": "car",
         "planned_distance_m": 8400,
         "planned_duration_s": 1140,
-        "planned_route_geometry": {"type": "LineString", "coordinates": []},
+        "source_service": "diddigo",
     }
 
 

@@ -23,6 +23,10 @@ from app_base.modules.payment.application.wallet_service import DriverWalletServ
 from app_base.modules.payment.presentation.schemas import (
     CashConfirmationRequest,
     DriverTopupRequest,
+    DriverWithdrawalQuoteRequest,
+    DriverWithdrawalQuoteResponse,
+    DriverWithdrawalRequest,
+    DriverWithdrawalResponse,
     PaymentPreparationRequest,
 )
 from app_base.modules.ride.domain.entities import DriverProfile
@@ -123,6 +127,51 @@ async def get_driver_topup(
     return await service.get_topup(driver_user_id=current_user.id, topup_id=topup_id)
 
 
+@wallet_router.post("/withdrawals/quote", response_model=DriverWithdrawalQuoteResponse)
+async def quote_driver_withdrawal(
+    payload: DriverWithdrawalQuoteRequest,
+    service: DriverWalletService = Depends(driver_wallet_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    return await service.quote_withdrawal(driver_user_id=current_user.id, amount=Decimal(payload.amount))
+
+
+@wallet_router.post("/withdrawals", status_code=201, response_model=DriverWithdrawalResponse)
+async def request_driver_withdrawal(
+    payload: DriverWithdrawalRequest,
+    service: DriverWalletService = Depends(driver_wallet_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    return await service.request_withdrawal(
+        driver_user_id=current_user.id,
+        quote_id=payload.quote_id,
+        beneficiary_reference=payload.beneficiary_reference,
+    )
+
+
+@wallet_router.get("/withdrawals", response_model=dict)
+async def list_driver_withdrawals(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    service: DriverWalletService = Depends(driver_wallet_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    return await service.list_withdrawals(driver_user_id=current_user.id, page=page, page_size=page_size)
+
+
+@wallet_router.get("/withdrawals/{withdrawal_id}", response_model=DriverWithdrawalResponse)
+async def get_driver_withdrawal(
+    withdrawal_id: UUID,
+    service: DriverWalletService = Depends(driver_wallet_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    return await service.get_withdrawal(driver_user_id=current_user.id, withdrawal_id=withdrawal_id)
+
+
 @admin_wallet_router.get("/{driver_id}/wallet")
 async def admin_get_driver_wallet(
     driver_id: UUID,
@@ -141,6 +190,17 @@ async def admin_get_driver_ledger(
     _current_user: UserModel = Depends(require_role("admin")),
 ) -> dict:
     return await service.admin_get_ledger(driver_id, page=page, page_size=page_size)
+
+
+@admin_wallet_router.get("/{driver_id}/wallet/withdrawals")
+async def admin_list_driver_withdrawals(
+    driver_id: UUID,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    service: DriverWalletService = Depends(driver_wallet_service),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.admin_list_withdrawals(driver_id, page=page, page_size=page_size)
 
 
 @admin_payment_router.post("/reconcile")
@@ -178,6 +238,24 @@ async def reconcile_driver_topup(
     report = await service.reconcile_topup(topup_id)
     await session.commit()
     return report.as_dict()
+
+
+@admin_payment_router.post("/withdrawals/{withdrawal_id}/reconcile")
+async def reconcile_driver_withdrawal(
+    withdrawal_id: UUID,
+    service: DriverWalletService = Depends(driver_wallet_service),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.reconcile_withdrawal(withdrawal_id)
+
+
+@admin_payment_router.get("/withdrawals/{withdrawal_id}", response_model=DriverWithdrawalResponse)
+async def admin_get_driver_withdrawal(
+    withdrawal_id: UUID,
+    service: DriverWalletService = Depends(driver_wallet_service),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    return await service.admin_get_withdrawal(withdrawal_id)
 
 
 @internal_router.post("/diddipay", status_code=204)

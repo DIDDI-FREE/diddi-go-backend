@@ -25,6 +25,8 @@ from app_base.modules.ride.domain.entities import (
     PaymentMethod,
     PricingRule,
     Ride,
+    RideEmergencyEvent,
+    RideQuote,
     RideRating,
     RideRoutePoint,
     RideStatus,
@@ -42,6 +44,7 @@ _ACTIVE_STATES = {
     RideStatus.REQUESTED,
     RideStatus.MATCHED,
     RideStatus.DRIVER_EN_ROUTE,
+    RideStatus.ARRIVED,
     RideStatus.IN_PROGRESS,
     RideStatus.WAITING,
 }
@@ -158,6 +161,45 @@ class SqlAlchemyRideRepository:
         )
         self._session.add(row)
         await self._session.flush()
+
+    async def latest_emergency_event(self, ride_id: UUID) -> RideEmergencyEvent | None:
+        result = await self._session.execute(
+            select(orm.RideEmergencyEventModel)
+            .where(orm.RideEmergencyEventModel.ride_id == ride_id)
+            .order_by(orm.RideEmergencyEventModel.sequence.desc())
+            .limit(1),
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return RideEmergencyEvent(
+            id=row.id,
+            ride_id=row.ride_id,
+            actor_user_id=row.actor_user_id,
+            actor_role=row.actor_role,
+            requested_at=row.requested_at,
+            note=row.note,
+            sequence=row.sequence,
+            contact_notified=row.contact_notified,
+            notification_results=row.notification_results,
+        )
+
+    async def save_emergency_event(self, event: RideEmergencyEvent) -> RideEmergencyEvent:
+        self._session.add(
+            orm.RideEmergencyEventModel(
+                id=event.id,
+                ride_id=event.ride_id,
+                actor_user_id=event.actor_user_id,
+                actor_role=event.actor_role,
+                requested_at=event.requested_at,
+                note=event.note,
+                sequence=event.sequence,
+                contact_notified=event.contact_notified,
+                notification_results=event.notification_results,
+            ),
+        )
+        await self._session.flush()
+        return event
 
     async def save_rating(self, rating: RideRating) -> RideRating:
         row = orm.RideRatingModel(
@@ -402,6 +444,7 @@ class SqlAlchemyRideRepository:
         row.scheduled_at = ride.scheduled_at
         row.requested_at = ride.requested_at or datetime.now(UTC)
         row.matched_at = ride.matched_at
+        row.arrived_at = ride.arrived_at
         row.started_at = ride.started_at
         row.completed_at = ride.completed_at
         row.cancelled_at = ride.cancelled_at
@@ -413,6 +456,9 @@ class SqlAlchemyRideRepository:
         row.waiting_fee = ride.waiting_fee
         row.supplements_total = ride.supplements_total
         row.waiting_rate_per_minute = ride.waiting_rate_per_minute
+        row.pre_ride_wait_started_at = ride.pre_ride_wait_started_at
+        row.pre_ride_wait_seconds = ride.pre_ride_wait_seconds
+        row.pre_ride_wait_fee = ride.pre_ride_wait_fee
         row.currency = ride.currency
         row.distance_km = ride.distance_km
         row.duration_seconds = ride.duration_seconds
@@ -437,6 +483,11 @@ class SqlAlchemyRideRepository:
         row.trace_points_count = ride.trace_points_count
         row.trace_usable_points_count = ride.trace_usable_points_count
         row.payment_method = ride.payment_method.value
+        row.quote_id = ride.quote_id
+        row.start_code_hash = ride.start_code_hash
+        row.start_code_attempts = ride.start_code_attempts
+        row.start_code_blocked_at = ride.start_code_blocked_at
+        row.start_code_used_at = ride.start_code_used_at
         row.driver_id = ride.driver_id
         row.vehicle_id = ride.vehicle_id
         row.payment_transaction_id = ride.payment_transaction_id
@@ -461,6 +512,7 @@ class SqlAlchemyRideRepository:
             scheduled_at=row.scheduled_at,
             requested_at=row.requested_at,
             matched_at=row.matched_at,
+            arrived_at=row.arrived_at,
             started_at=row.started_at,
             completed_at=row.completed_at,
             cancelled_at=row.cancelled_at,
@@ -474,6 +526,9 @@ class SqlAlchemyRideRepository:
             waiting_rate_per_minute=Decimal(str(row.waiting_rate_per_minute))
             if row.waiting_rate_per_minute is not None
             else None,
+            pre_ride_wait_started_at=row.pre_ride_wait_started_at,
+            pre_ride_wait_seconds=row.pre_ride_wait_seconds,
+            pre_ride_wait_fee=Decimal(str(row.pre_ride_wait_fee)),
             currency=row.currency,
             distance_km=Decimal(str(row.distance_km)) if row.distance_km is not None else None,
             duration_seconds=row.duration_seconds,
@@ -500,6 +555,11 @@ class SqlAlchemyRideRepository:
             trace_points_count=row.trace_points_count,
             trace_usable_points_count=row.trace_usable_points_count,
             payment_method=PaymentMethod(row.payment_method),
+            quote_id=row.quote_id,
+            start_code_hash=row.start_code_hash,
+            start_code_attempts=row.start_code_attempts,
+            start_code_blocked_at=row.start_code_blocked_at,
+            start_code_used_at=row.start_code_used_at,
             driver_id=row.driver_id,
             vehicle_id=row.vehicle_id,
             payment_transaction_id=row.payment_transaction_id,
@@ -510,6 +570,89 @@ class SqlAlchemyRideRepository:
             emergency_note=row.emergency_note,
             created_at=row.created_at,
             updated_at=row.updated_at,
+        )
+
+
+class SqlAlchemyRideQuoteRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def save(self, quote: RideQuote) -> RideQuote:
+        row = orm.RideQuoteModel(
+            id=quote.id,
+            passenger_user_id=quote.passenger_user_id,
+            pickup_lat=Decimal(str(quote.pickup_location.lat)),
+            pickup_lng=Decimal(str(quote.pickup_location.lng)),
+            pickup_address=quote.pickup_address,
+            dropoff_lat=Decimal(str(quote.dropoff_location.lat)),
+            dropoff_lng=Decimal(str(quote.dropoff_location.lng)),
+            dropoff_address=quote.dropoff_address,
+            vehicle_category=quote.vehicle_category.value,
+            comfort_level=quote.comfort_level.value,
+            estimated_fare=quote.estimated_fare,
+            distance_km=quote.distance_km,
+            duration_seconds=quote.duration_seconds,
+            base_fare=quote.base_fare,
+            distance_fare=quote.distance_fare,
+            duration_fare=quote.duration_fare,
+            surge_multiplier=quote.surge_multiplier,
+            surge_cap=quote.surge_cap,
+            commission_rate=quote.commission_rate,
+            platform_commission=quote.platform_commission,
+            driver_payout_estimate=quote.driver_payout_estimate,
+            tariff_version=quote.tariff_version,
+            expires_at=quote.expires_at,
+            consumed_at=quote.consumed_at,
+            ride_id=quote.ride_id,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return quote
+
+    async def find_by_id(self, quote_id: UUID) -> RideQuote | None:
+        result = await self._session.execute(
+            select(orm.RideQuoteModel).where(orm.RideQuoteModel.id == quote_id).with_for_update(),
+        )
+        row = result.scalar_one_or_none()
+        return self._to_domain(row) if row is not None else None
+
+    async def consume(self, quote: RideQuote, *, ride_id: UUID, consumed_at: datetime) -> None:
+        row = await self._session.get(orm.RideQuoteModel, quote.id)
+        if row is None:
+            return
+        row.ride_id = ride_id
+        row.consumed_at = consumed_at
+        quote.ride_id = ride_id
+        quote.consumed_at = consumed_at
+        await self._session.flush()
+
+    @staticmethod
+    def _to_domain(row: orm.RideQuoteModel) -> RideQuote:
+        return RideQuote(
+            id=row.id,
+            passenger_user_id=row.passenger_user_id,
+            pickup_location=GeoPoint(lat=float(row.pickup_lat), lng=float(row.pickup_lng)),
+            pickup_address=row.pickup_address,
+            dropoff_location=GeoPoint(lat=float(row.dropoff_lat), lng=float(row.dropoff_lng)),
+            dropoff_address=row.dropoff_address,
+            vehicle_category=VehicleCategory(row.vehicle_category),
+            comfort_level=ComfortLevel(row.comfort_level),
+            estimated_fare=Decimal(str(row.estimated_fare)),
+            distance_km=Decimal(str(row.distance_km)),
+            duration_seconds=row.duration_seconds,
+            base_fare=Decimal(str(row.base_fare)),
+            distance_fare=Decimal(str(row.distance_fare)),
+            duration_fare=Decimal(str(row.duration_fare)),
+            surge_multiplier=Decimal(str(row.surge_multiplier)),
+            surge_cap=Decimal(str(row.surge_cap)),
+            commission_rate=Decimal(str(row.commission_rate)),
+            platform_commission=Decimal(str(row.platform_commission)),
+            driver_payout_estimate=Decimal(str(row.driver_payout_estimate)),
+            tariff_version=row.tariff_version,
+            expires_at=row.expires_at,
+            consumed_at=row.consumed_at,
+            ride_id=row.ride_id,
+            created_at=row.created_at,
         )
 
 
@@ -660,6 +803,7 @@ class SqlAlchemyVehicleRepository:
         row.vehicle_left_photo_file_id = vehicle.vehicle_left_photo_file_id
         row.vehicle_right_photo_file_id = vehicle.vehicle_right_photo_file_id
         row.vehicle_interior_photo_file_id = vehicle.vehicle_interior_photo_file_id
+        row.vehicle_plate_photo_file_id = vehicle.vehicle_plate_photo_file_id
         row.registration_document_url = vehicle.registration_document_url
         row.insurance_document_url = vehicle.insurance_document_url
         row.technical_inspection_document_url = vehicle.technical_inspection_document_url
@@ -670,6 +814,7 @@ class SqlAlchemyVehicleRepository:
         row.vehicle_left_photo_url = vehicle.vehicle_left_photo_url
         row.vehicle_right_photo_url = vehicle.vehicle_right_photo_url
         row.vehicle_interior_photo_url = vehicle.vehicle_interior_photo_url
+        row.vehicle_plate_photo_url = vehicle.vehicle_plate_photo_url
         row.verification_status = vehicle.verification_status.value
         row.verified_at = vehicle.verified_at
         row.reviewed_at = vehicle.reviewed_at
@@ -740,6 +885,7 @@ class SqlAlchemyVehicleRepository:
             vehicle_left_photo_file_id=row.vehicle_left_photo_file_id,
             vehicle_right_photo_file_id=row.vehicle_right_photo_file_id,
             vehicle_interior_photo_file_id=row.vehicle_interior_photo_file_id,
+            vehicle_plate_photo_file_id=row.vehicle_plate_photo_file_id,
             registration_document_url=row.registration_document_url,
             insurance_document_url=row.insurance_document_url,
             technical_inspection_document_url=row.technical_inspection_document_url,
@@ -750,6 +896,7 @@ class SqlAlchemyVehicleRepository:
             vehicle_left_photo_url=row.vehicle_left_photo_url,
             vehicle_right_photo_url=row.vehicle_right_photo_url,
             vehicle_interior_photo_url=row.vehicle_interior_photo_url,
+            vehicle_plate_photo_url=row.vehicle_plate_photo_url,
             verification_status=VehicleVerificationStatus(row.verification_status),
             verified_at=row.verified_at,
             reviewed_at=row.reviewed_at,

@@ -37,7 +37,9 @@ class TransactionModel(Base):
     )
 
     id: Mapped[UUID] = mapped_column(
-        _PG_UUID, primary_key=True, server_default=text("uuid_generate_v4()"),
+        _PG_UUID,
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
     )
     ride_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False)  # logical ref to ride.rides(id)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
@@ -45,11 +47,14 @@ class TransactionModel(Base):
     method: Mapped[str] = mapped_column(String(20), nullable=False, default="cash")  # cash → mobile_money/wallet later
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")  # pending | collected | disputed
     collected_by: Mapped[UUID | None] = mapped_column(
-        _PG_UUID, nullable=True,
+        _PG_UUID,
+        nullable=True,
     )  # driver_profiles.id, confirmed collector
     collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
     )
     payment_intent_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     business_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -69,7 +74,9 @@ class PaymentWebhookEventModel(Base):
     business_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
     payload: Mapped[str] = mapped_column(Text, nullable=False)
     processed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
     )
 
 
@@ -85,10 +92,14 @@ class DriverWalletModel(Base):
     balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal("0"))
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="XOF")
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
     )
 
 
@@ -117,7 +128,9 @@ class DriverLedgerEntryModel(Base):
     reference_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
     )
 
 
@@ -142,6 +155,56 @@ class DriverTopupModel(Base):
     provider_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
     provider_next_action: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("now()"),
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
     )
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DriverWithdrawalQuoteModel(Base):
+    __tablename__ = "driver_withdrawal_quotes"
+    __table_args__ = (Index("idx_payment_withdrawal_quotes_driver", "driver_id", "created_at"), {"schema": "payment"})
+
+    id: Mapped[UUID] = mapped_column(_PG_UUID, primary_key=True)
+    driver_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False, index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    fees: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    net_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="XOF")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+
+class DriverWithdrawalModel(Base):
+    __tablename__ = "driver_withdrawals"
+    __table_args__ = (
+        UniqueConstraint("quote_id", name="uq_payment_driver_withdrawals_quote"),
+        UniqueConstraint("payout_id", name="uq_payment_driver_withdrawals_payout"),
+        UniqueConstraint("idempotency_key", name="uq_payment_driver_withdrawals_idempotency"),
+        Index("idx_payment_driver_withdrawals_driver_created", "driver_id", "created_at"),
+        Index("idx_payment_driver_withdrawals_status_updated", "status", "updated_at"),
+        {"schema": "payment"},
+    )
+
+    id: Mapped[UUID] = mapped_column(_PG_UUID, primary_key=True)
+    driver_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False, index=True)
+    quote_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    fees: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    net_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="XOF")
+    beneficiary_reference: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    payout_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    business_reference: Mapped[str] = mapped_column(String(128), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    provider_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    failure_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    reserved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    succeeded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))

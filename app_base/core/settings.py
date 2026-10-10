@@ -79,12 +79,14 @@ class Settings(BaseSettings):
     ride_summary_max_age_days: int = Field(default=31, ge=0, le=3660)
     pilotage_breakdown_current_ttl_seconds: int = Field(default=300, ge=1, le=3600)
     pilotage_breakdown_final_ttl_seconds: int = Field(default=86400, ge=60, le=604800)
+    pilotage_summary_freshness_window_seconds: int = Field(default=600, ge=30, le=86400)
 
     identity_base_url: str | None = None
     identity_jwks_url: str | None = None
     identity_issuer: str = "diddifree-id"
     identity_profile_url: str | None = None
     identity_service_key: str | None = None
+    diddicomms_service_client_id: str = "diddicomms-staging-diddigo"
     identity_service_client_id: str | None = None
     identity_service_client_secret: str | None = None
     identity_service_timeout_seconds: float = 5.0
@@ -123,6 +125,24 @@ class Settings(BaseSettings):
     driver_provisioning_idempotency_ttl_seconds: int = Field(default=86400, ge=300, le=604800)
     driver_min_balance: int = 0
     driver_max_estimated_commission: int = 0
+
+    # Frozen DiddiGo MVP business parameters. Changes are applied through an
+    # environment update and redeploy; there is deliberately no hot reload.
+    diddigo_commission_rate: float = Field(default=0.18, ge=0, le=1)
+    ride_quote_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+    driver_arrival_max_distance_meters: int = Field(default=50, ge=5, le=1000)
+    pre_ride_wait_free_seconds: int = Field(default=180, ge=0, le=3600)
+    pre_ride_wait_price_per_minute_xof: int = Field(default=100, ge=0)
+    pre_ride_no_show_seconds: int = Field(default=600, ge=60, le=7200)
+    ride_start_code_max_attempts: int = Field(default=5, ge=1, le=20)
+    ride_start_code_secret: str = "change-me-in-production"
+    driver_withdrawal_min_amount_xof: int = Field(default=2000, ge=1)
+    driver_withdrawal_fee_xof: int = Field(default=0, ge=0)
+    driver_withdrawal_quote_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+    ride_emergency_rate_limit_seconds: int = Field(default=60, ge=1, le=3600)
+    ride_emergency_contact_notify_once: bool = True
+    vehicle_kyv_required_photos: str = "front,back,left,right,interior,plate"
+    diddimap_trace_anonymization_enabled: bool = True
 
     # Manual ride waiting. GPS drift is tolerated up to the configured speed;
     # telemetry older than the Redis TTL cannot authorize a waiting start.

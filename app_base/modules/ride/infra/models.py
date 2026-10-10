@@ -122,6 +122,7 @@ class VehicleModel(Base):
     vehicle_left_photo_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     vehicle_right_photo_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     vehicle_interior_photo_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    vehicle_plate_photo_file_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     registration_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     insurance_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     technical_inspection_document_url: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -132,6 +133,7 @@ class VehicleModel(Base):
     vehicle_left_photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     vehicle_right_photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     vehicle_interior_photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    vehicle_plate_photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     verification_status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending_verification")
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -154,7 +156,8 @@ class RideModel(Base):
             "driver_id",
             unique=True,
             postgresql_where=text(
-                "driver_id IS NOT NULL AND status IN ('matched', 'driver_en_route', 'in_progress', 'waiting')",
+                "driver_id IS NOT NULL AND status IN "
+                "('matched', 'driver_en_route', 'arrived', 'in_progress', 'waiting')",
             ),
         ),
         {"schema": "ride"},
@@ -198,6 +201,7 @@ class RideModel(Base):
         DateTime(timezone=True), nullable=False, server_default=text("now()"),
     )
     matched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    arrived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -209,6 +213,9 @@ class RideModel(Base):
     waiting_duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     waiting_fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal("0"))
     waiting_rate_per_minute: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    pre_ride_wait_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pre_ride_wait_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    pre_ride_wait_fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal("0"))
     supplements_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal("0"))
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="XOF")
     distance_km: Mapped[Decimal | None] = mapped_column(Numeric(6, 2), nullable=True)  # from DiddiMap
@@ -218,7 +225,7 @@ class RideModel(Base):
     duration_fare: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     surge_multiplier: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False, default=Decimal("1.00"))
     surge_cap: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False, default=Decimal("1.60"))
-    commission_rate: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False, default=Decimal("0.08"))
+    commission_rate: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False, default=Decimal("0.18"))
     driver_payout_estimate: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     platform_commission: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     actual_distance_km: Mapped[Decimal | None] = mapped_column(Numeric(8, 3), nullable=True)
@@ -234,6 +241,11 @@ class RideModel(Base):
     trace_points_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     trace_usable_points_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     payment_method: Mapped[str] = mapped_column(String(20), nullable=False, default="cash")
+    quote_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True, unique=True)
+    start_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    start_code_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    start_code_blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    start_code_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # -- Cross-module reference (resolved via payment_module, never via direct SQL)
     payment_transaction_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     share_token: Mapped[str | None] = mapped_column(String(80), nullable=True, unique=True)
@@ -247,6 +259,41 @@ class RideModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()"),
     )
+
+
+class RideQuoteModel(Base):
+    __tablename__ = "ride_quotes"
+    __table_args__ = (
+        Index("ix_ride_quotes_passenger_expires", "passenger_user_id", "expires_at"),
+        {"schema": "ride"},
+    )
+
+    id: Mapped[UUID] = mapped_column(_PG_UUID, primary_key=True)
+    passenger_user_id: Mapped[UUID] = mapped_column(_PG_UUID, ForeignKey("auth.users.id"), nullable=False)
+    pickup_lat: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    pickup_lng: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    pickup_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dropoff_lat: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    dropoff_lng: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    dropoff_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    vehicle_category: Mapped[str] = mapped_column(String(20), nullable=False)
+    comfort_level: Mapped[str] = mapped_column(String(20), nullable=False)
+    estimated_fare: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    distance_km: Mapped[Decimal] = mapped_column(Numeric(8, 3), nullable=False)
+    duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    base_fare: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    distance_fare: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    duration_fare: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    surge_multiplier: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False)
+    surge_cap: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False)
+    commission_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
+    platform_commission: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    driver_payout_estimate: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    tariff_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ride_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
 
 
 class RideStatusHistoryModel(Base):
@@ -271,6 +318,29 @@ class RideStatusHistoryModel(Base):
     # The column is named `metadata` in the DB, but accessible in Python as
     # `extra` (mapped via the positional name arg of mapped_column).
     extra: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
+
+
+class RideEmergencyEventModel(Base):
+    __tablename__ = "ride_emergency_events"
+    __table_args__ = (
+        UniqueConstraint("ride_id", "sequence", name="uq_ride_emergency_event_sequence"),
+        Index("ix_ride_emergency_events_ride_requested", "ride_id", "requested_at"),
+        {"schema": "ride"},
+    )
+
+    id: Mapped[UUID] = mapped_column(_PG_UUID, primary_key=True)
+    ride_id: Mapped[UUID] = mapped_column(
+        _PG_UUID,
+        ForeignKey("ride.rides.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    actor_user_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False)
+    actor_role: Mapped[str] = mapped_column(String(30), nullable=False)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    contact_notified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    notification_results: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
 
 class RideRoutePointModel(Base):

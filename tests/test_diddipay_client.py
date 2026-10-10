@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from uuid import uuid4
 
 import httpx
@@ -70,6 +69,30 @@ async def test_get_payment_intent_uses_read_scope_and_caches_token() -> None:
     await client.get_payment_intent(intent_id)
     await client.get_payment_intent(intent_id)
     assert token_requests == 1
+
+
+async def test_payout_uses_dedicated_scopes_and_tokens() -> None:
+    requested_scopes: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/auth/service/token"):
+            body = request.content.decode()
+            scope = "diddipay:payouts:write" if "payouts%3Awrite" in body else "diddipay:payouts:read"
+            requested_scopes.append(scope)
+            return httpx.Response(200, json={"access_token": scope, "expires_in": 600})
+        if request.method == "POST":
+            assert request.url.path == "/payouts"
+            assert request.headers["Authorization"] == "Bearer diddipay:payouts:write"
+            assert request.headers["Idempotency-Key"] == "withdrawal-1"
+            return httpx.Response(201, json={"id": str(uuid4()), "status": "processing"})
+        assert request.headers["Authorization"] == "Bearer diddipay:payouts:read"
+        return httpx.Response(200, json={"id": str(uuid4()), "status": "processing"})
+
+    client = _s2s_client(handler)
+    created = await client.create_payout({"amount": 2000}, idempotency_key="withdrawal-1")
+    await client.get_payout(created["id"])
+
+    assert requested_scopes == ["diddipay:payouts:write", "diddipay:payouts:read"]
 
 
 async def test_falls_back_to_legacy_service_key_when_no_client_secret() -> None:

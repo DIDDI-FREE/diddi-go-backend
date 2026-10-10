@@ -22,6 +22,15 @@ FinanceMetricName = Literal[
     "driver_topups_pending_xof",
     "driver_topups_failed_count",
     "driver_topups_failed_xof",
+    "driver_withdrawals_requested_count",
+    "driver_withdrawals_requested_xof",
+    "driver_withdrawals_processing_count",
+    "driver_withdrawals_processing_xof",
+    "driver_withdrawals_succeeded_count",
+    "driver_withdrawals_succeeded_xof",
+    "driver_withdrawals_released_count",
+    "driver_withdrawals_released_xof",
+    "withdrawal_fees_xof",
 ]
 
 
@@ -36,6 +45,12 @@ class PilotageSource(BaseModel):
     record_type: str
 
 
+class PilotageFreshness(BaseModel):
+    status: Literal["fresh", "stale", "unavailable"]
+    synchronized_at: datetime | None
+    window_seconds: int
+
+
 class PilotageFinanceSummaryResponse(BaseModel):
     contract_version: Literal["pilotage.v1"]
     module: Literal["diddigo"]
@@ -45,3 +60,4 @@ class PilotageFinanceSummaryResponse(BaseModel):
     metrics: list[PilotageMetric]
     calculated_at: datetime
     sources: list[PilotageSource]
+    freshness: PilotageFreshness
