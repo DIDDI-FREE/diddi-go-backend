@@ -6,7 +6,11 @@ from decimal import Decimal
 from sqlalchemy import and_, case, exists, func, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app_base.modules.payment.infra.models import DriverTopupModel, TransactionModel
+from app_base.modules.payment.infra.models import (
+    DriverTopupModel,
+    DriverWithdrawalModel,
+    TransactionModel,
+)
 from app_base.modules.ride.domain.summary import RideFinanceSummaryTotals, RideSummaryTotals
 from app_base.modules.ride.infra.models import RideModel
 
@@ -180,10 +184,54 @@ class SqlAlchemyRideSummaryRepository:
             )
             .subquery()
         )
-        sources = rides.join(topups_requested, true()).join(topups_succeeded, true()).join(topups_state, true())
+        withdrawals = (
+            select(
+                func.count(DriverWithdrawalModel.id).label("driver_withdrawals_requested_count"),
+                func.coalesce(func.sum(DriverWithdrawalModel.amount), 0).label("driver_withdrawals_requested_xof"),
+                func.count(DriverWithdrawalModel.id)
+                .filter(DriverWithdrawalModel.status.in_(("reserved", "processing")))
+                .label("driver_withdrawals_processing_count"),
+                func.coalesce(
+                    func.sum(DriverWithdrawalModel.amount).filter(
+                        DriverWithdrawalModel.status.in_(("reserved", "processing"))
+                    ),
+                    0,
+                ).label("driver_withdrawals_processing_xof"),
+                func.count(DriverWithdrawalModel.id)
+                .filter(DriverWithdrawalModel.status == "succeeded")
+                .label("driver_withdrawals_succeeded_count"),
+                func.coalesce(
+                    func.sum(DriverWithdrawalModel.amount).filter(DriverWithdrawalModel.status == "succeeded"),
+                    0,
+                ).label("driver_withdrawals_succeeded_xof"),
+                func.count(DriverWithdrawalModel.id)
+                .filter(DriverWithdrawalModel.status == "released")
+                .label("driver_withdrawals_released_count"),
+                func.coalesce(
+                    func.sum(DriverWithdrawalModel.amount).filter(DriverWithdrawalModel.status == "released"),
+                    0,
+                ).label("driver_withdrawals_released_xof"),
+                func.coalesce(
+                    func.sum(DriverWithdrawalModel.fees).filter(DriverWithdrawalModel.status == "succeeded"),
+                    0,
+                ).label("withdrawal_fees_xof"),
+            )
+            .where(
+                DriverWithdrawalModel.created_at >= start,
+                DriverWithdrawalModel.created_at < end,
+                DriverWithdrawalModel.currency == "XOF",
+            )
+            .subquery()
+        )
+        sources = (
+            rides.join(topups_requested, true())
+            .join(topups_succeeded, true())
+            .join(topups_state, true())
+            .join(withdrawals, true())
+        )
         row = (
             await self._session.execute(
-                select(rides, topups_requested, topups_succeeded, topups_state).select_from(sources)
+                select(rides, topups_requested, topups_succeeded, topups_state, withdrawals).select_from(sources)
             )
         ).one()
         return RideFinanceSummaryTotals(
@@ -202,4 +250,13 @@ class SqlAlchemyRideSummaryRepository:
             driver_topups_pending_xof=Decimal(row.driver_topups_pending_xof),
             driver_topups_failed_count=int(row.driver_topups_failed_count),
             driver_topups_failed_xof=Decimal(row.driver_topups_failed_xof),
+            driver_withdrawals_requested_count=int(row.driver_withdrawals_requested_count),
+            driver_withdrawals_requested_xof=Decimal(row.driver_withdrawals_requested_xof),
+            driver_withdrawals_processing_count=int(row.driver_withdrawals_processing_count),
+            driver_withdrawals_processing_xof=Decimal(row.driver_withdrawals_processing_xof),
+            driver_withdrawals_succeeded_count=int(row.driver_withdrawals_succeeded_count),
+            driver_withdrawals_succeeded_xof=Decimal(row.driver_withdrawals_succeeded_xof),
+            driver_withdrawals_released_count=int(row.driver_withdrawals_released_count),
+            driver_withdrawals_released_xof=Decimal(row.driver_withdrawals_released_xof),
+            withdrawal_fees_xof=Decimal(row.withdrawal_fees_xof),
         )

@@ -137,6 +137,8 @@ class Settings(BaseSettings):
     ride_start_code_max_attempts: int = Field(default=5, ge=1, le=20)
     ride_start_code_secret: str = "change-me-in-production"
     driver_withdrawal_min_amount_xof: int = Field(default=2000, ge=1)
+    driver_withdrawal_fee_xof: int = Field(default=0, ge=0)
+    driver_withdrawal_quote_ttl_seconds: int = Field(default=300, ge=30, le=3600)
     ride_emergency_rate_limit_seconds: int = Field(default=60, ge=1, le=3600)
     ride_emergency_contact_notify_once: bool = True
     vehicle_kyv_required_photos: str = "front,back,left,right,interior,plate"

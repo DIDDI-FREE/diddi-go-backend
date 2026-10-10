@@ -11,11 +11,15 @@ from app_base.modules.payment.domain.entities import (
     DriverLedgerEntry,
     DriverTopup,
     DriverWallet,
+    DriverWithdrawal,
+    DriverWithdrawalQuote,
     Transaction,
 )
 
 
 class PaymentRepository(Protocol):
+    async def commit(self) -> None: ...
+
     async def save(self, transaction: Transaction) -> Transaction: ...
 
     async def find_by_ride_id(self, ride_id: UUID) -> Transaction | None: ...
@@ -63,6 +67,8 @@ class PaymentRepository(Protocol):
 
     async def get_or_create_wallet(self, driver_id: UUID, *, currency: str = "XOF") -> DriverWallet: ...
 
+    async def withdrawal_reserved_total(self, driver_id: UUID) -> object: ...
+
     async def list_ledger_entries(
         self,
         driver_id: UUID,
@@ -99,3 +105,33 @@ class PaymentRepository(Protocol):
     ) -> list[DriverTopup]:
         """Topups still awaiting a final DiddiPay callback."""
         ...
+
+    async def save_withdrawal_quote(self, quote: DriverWithdrawalQuote) -> DriverWithdrawalQuote: ...
+
+    async def reserve_withdrawal_from_quote(
+        self, withdrawal: DriverWithdrawal, *, now: datetime
+    ) -> DriverWithdrawal: ...
+
+    async def find_withdrawal_by_id(self, withdrawal_id: UUID) -> DriverWithdrawal | None: ...
+
+    async def find_withdrawal_by_payout_id(self, payout_id: UUID) -> DriverWithdrawal | None: ...
+
+    async def find_withdrawal_by_business_reference(self, business_reference: str) -> DriverWithdrawal | None: ...
+
+    async def list_withdrawals(
+        self, driver_id: UUID, *, page: int = 1, page_size: int = 20
+    ) -> tuple[list[DriverWithdrawal], int]: ...
+
+    async def list_stale_withdrawals(self, *, updated_before: datetime, limit: int) -> list[DriverWithdrawal]: ...
+
+    async def mark_withdrawal_provider_state(
+        self,
+        withdrawal_id: UUID,
+        *,
+        status: object,
+        payout_id: UUID | None,
+        provider_status: str | None,
+        failure_code: str | None = None,
+        failure_message: str | None = None,
+        now: datetime,
+    ) -> DriverWithdrawal: ...

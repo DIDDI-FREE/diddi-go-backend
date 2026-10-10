@@ -128,11 +128,7 @@ class RideSummaryService:
                 "Resume financier temporairement indisponible.",
             ) from exc
 
-        amounts = {
-            name: value
-            for name, value in vars(totals).items()
-            if name.endswith("_xof")
-        }
+        amounts = {name: value for name, value in vars(totals).items() if name.endswith("_xof")}
         if any(value != value.to_integral_value() for value in amounts.values()):
             raise ApiError(500, "INVALID_FINANCE_AMOUNT", "Montant XOF non entier dans le resume financier.")
         if totals.digital_payments_xof + totals.cash_payments_xof != totals.completed_fare_total_xof:
@@ -160,6 +156,15 @@ class RideSummaryService:
             ("driver_topups_pending_xof", totals.driver_topups_pending_xof, "XOF"),
             ("driver_topups_failed_count", totals.driver_topups_failed_count, "count"),
             ("driver_topups_failed_xof", totals.driver_topups_failed_xof, "XOF"),
+            ("driver_withdrawals_requested_count", totals.driver_withdrawals_requested_count, "count"),
+            ("driver_withdrawals_requested_xof", totals.driver_withdrawals_requested_xof, "XOF"),
+            ("driver_withdrawals_processing_count", totals.driver_withdrawals_processing_count, "count"),
+            ("driver_withdrawals_processing_xof", totals.driver_withdrawals_processing_xof, "XOF"),
+            ("driver_withdrawals_succeeded_count", totals.driver_withdrawals_succeeded_count, "count"),
+            ("driver_withdrawals_succeeded_xof", totals.driver_withdrawals_succeeded_xof, "XOF"),
+            ("driver_withdrawals_released_count", totals.driver_withdrawals_released_count, "count"),
+            ("driver_withdrawals_released_xof", totals.driver_withdrawals_released_xof, "XOF"),
+            ("withdrawal_fees_xof", totals.withdrawal_fees_xof, "XOF"),
         ]
         return {
             "contract_version": "pilotage.v1",

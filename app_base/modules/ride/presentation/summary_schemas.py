@@ -22,6 +22,15 @@ FinanceMetricName = Literal[
     "driver_topups_pending_xof",
     "driver_topups_failed_count",
     "driver_topups_failed_xof",
+    "driver_withdrawals_requested_count",
+    "driver_withdrawals_requested_xof",
+    "driver_withdrawals_processing_count",
+    "driver_withdrawals_processing_xof",
+    "driver_withdrawals_succeeded_count",
+    "driver_withdrawals_succeeded_xof",
+    "driver_withdrawals_released_count",
+    "driver_withdrawals_released_xof",
+    "withdrawal_fees_xof",
 ]
 
 

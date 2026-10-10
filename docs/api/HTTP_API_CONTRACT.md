@@ -9,8 +9,8 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 
 ## Surface
 
-- **115 chemins**
-- **128 opérations HTTP**
+- **121 chemins**
+- **135 opérations HTTP**
 
 ## admin-driver-wallet
 
@@ -18,6 +18,7 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 |---|---|---|---|---|
 | GET | `/v1/admin/drivers/{driver_id}/wallet` | Admin Get Driver Wallet | 200, 422 | oui |
 | GET | `/v1/admin/drivers/{driver_id}/wallet/ledger` | Admin Get Driver Ledger | 200, 422 | oui |
+| GET | `/v1/admin/drivers/{driver_id}/wallet/withdrawals` | Admin List Driver Withdrawals | 200, 422 | oui |
 
 ## admin-observability
 
@@ -57,6 +58,8 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 | POST | `/v1/admin/payments/reconcile` | Reconcile Pending Payments | 200, 422 | oui |
 | POST | `/v1/admin/payments/rides/{ride_id}/reconcile` | Reconcile Ride Payment | 200, 422 | oui |
 | POST | `/v1/admin/payments/topups/{topup_id}/reconcile` | Reconcile Driver Topup | 200, 422 | oui |
+| GET | `/v1/admin/payments/withdrawals/{withdrawal_id}` | Admin Get Driver Withdrawal | 200, 422 | oui |
+| POST | `/v1/admin/payments/withdrawals/{withdrawal_id}/reconcile` | Reconcile Driver Withdrawal | 200, 422 | oui |
 
 ## admin-vehicles
 
@@ -110,6 +113,10 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 | GET | `/v1/drivers/me/wallet/ledger` | Get My Ledger | 200, 422 | oui |
 | POST | `/v1/drivers/me/wallet/topups` | Create Driver Topup | 201, 422 | oui |
 | GET | `/v1/drivers/me/wallet/topups/{topup_id}` | Get Driver Topup | 200, 422 | oui |
+| GET | `/v1/drivers/me/wallet/withdrawals` | List Driver Withdrawals | 200, 422 | oui |
+| POST | `/v1/drivers/me/wallet/withdrawals` | Request Driver Withdrawal | 201, 422 | oui |
+| POST | `/v1/drivers/me/wallet/withdrawals/quote` | Quote Driver Withdrawal | 200, 422 | oui |
+| GET | `/v1/drivers/me/wallet/withdrawals/{withdrawal_id}` | Get Driver Withdrawal | 200, 422 | oui |
 
 ## internal-admin-partners
 

@@ -32,8 +32,7 @@ class DiddiPayClient:
     client_secret: str | None = settings.diddipay_service_client_secret
     timeout_seconds: float = settings.diddipay_http_timeout_seconds
     transport: httpx.AsyncBaseTransport | None = None
-    _access_token: str | None = field(default=None, init=False, repr=False)
-    _token_expires_at: float = field(default=0, init=False, repr=False)
+    _scope_tokens: dict[str, tuple[str, float]] = field(default_factory=dict, init=False, repr=False)
     _token_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
 
     @property
@@ -48,9 +47,7 @@ class DiddiPayClient:
         self._require_configured()
 
         url = f"{self.base_url.rstrip('/')}/payment-intents"
-        headers = await self._headers(
-            scope="diddipay:payment-intents:write", idempotency_key=idempotency_key
-        )
+        headers = await self._headers(scope="diddipay:payment-intents:write", idempotency_key=idempotency_key)
         try:
             async with httpx.AsyncClient(timeout=self.timeout_seconds, transport=self.transport) as client:
                 response = await client.post(url, json=payload, headers=headers)
@@ -91,6 +88,49 @@ class DiddiPayClient:
             raise self._error_from(response)
         return response.json()
 
+    async def create_payout(self, payload: dict[str, Any], *, idempotency_key: str) -> dict[str, Any]:
+        self._require_configured()
+        url = f"{self.base_url.rstrip('/')}/payouts"
+        headers = await self._headers(scope="diddipay:payouts:write", idempotency_key=idempotency_key)
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout_seconds, transport=self.transport) as client:
+                response = await client.post(url, json=payload, headers=headers)
+        except httpx.HTTPError as exc:
+            raise ApiError(503, ErrorCode.PAYMENT_PROVIDER_UNAVAILABLE, "DiddiPay est indisponible.") from exc
+        if response.status_code >= 400:
+            raise self._error_from(response)
+        return response.json()
+
+    async def get_payout(self, payout_id: UUID | str) -> dict[str, Any] | None:
+        self._require_configured()
+        url = f"{self.base_url.rstrip('/')}/payouts/{payout_id}"
+        headers = await self._headers(scope="diddipay:payouts:read")
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout_seconds, transport=self.transport) as client:
+                response = await client.get(url, headers=headers)
+        except httpx.HTTPError as exc:
+            raise ApiError(503, ErrorCode.PAYMENT_PROVIDER_UNAVAILABLE, "DiddiPay est indisponible.") from exc
+        if response.status_code == 404:
+            return None
+        if response.status_code >= 400:
+            raise self._error_from(response)
+        return response.json()
+
+    async def get_payout_by_business_reference(self, business_reference: str) -> dict[str, Any] | None:
+        self._require_configured()
+        url = f"{self.base_url.rstrip('/')}/payouts"
+        headers = await self._headers(scope="diddipay:payouts:read")
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout_seconds, transport=self.transport) as client:
+                response = await client.get(url, params={"business_reference": business_reference}, headers=headers)
+        except httpx.HTTPError as exc:
+            raise ApiError(503, ErrorCode.PAYMENT_PROVIDER_UNAVAILABLE, "DiddiPay est indisponible.") from exc
+        if response.status_code == 404:
+            return None
+        if response.status_code >= 400:
+            raise self._error_from(response)
+        return response.json()
+
     def _require_configured(self) -> None:
         if not self.configured:
             raise ApiError(
@@ -117,12 +157,14 @@ class DiddiPayClient:
 
     async def _service_token(self, scope: str) -> str:
         now = time.monotonic()
-        if self._access_token and now < self._token_expires_at:
-            return self._access_token
+        cached = self._scope_tokens.get(scope)
+        if cached and now < cached[1]:
+            return cached[0]
         async with self._token_lock:
             now = time.monotonic()
-            if self._access_token and now < self._token_expires_at:
-                return self._access_token
+            cached = self._scope_tokens.get(scope)
+            if cached and now < cached[1]:
+                return cached[0]
             async with httpx.AsyncClient(
                 base_url=self.identity_base_url.rstrip("/"),
                 timeout=self.timeout_seconds,
@@ -145,8 +187,10 @@ class DiddiPayClient:
             if not isinstance(token, str) or not token:
                 raise ValueError("DiddiFreeID token response has no access_token")
             expires_in = max(int(payload.get("expires_in", 600)), 1)
-            self._access_token = token
-            self._token_expires_at = time.monotonic() + max(expires_in - 30, 1)
+            self._scope_tokens[scope] = (
+                token,
+                time.monotonic() + max(expires_in - 30, 1),
+            )
             return token
 
     @staticmethod
