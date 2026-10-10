@@ -53,6 +53,11 @@ class FakeSummaryService:
             ],
             "calculated_at": "2026-09-19T00:00:00Z",
             "sources": [{"module": "diddigo", "record_type": "ride-finance-summary"}],
+            "freshness": {
+                "status": "fresh",
+                "synchronized_at": "2026-09-19T00:00:00Z",
+                "window_seconds": 600,
+            },
         }
 
 

@@ -20,6 +20,7 @@ class RideStatus(str, Enum):
     REQUESTED = "requested"
     MATCHED = "matched"
     DRIVER_EN_ROUTE = "driver_en_route"
+    ARRIVED = "arrived"
     IN_PROGRESS = "in_progress"
     WAITING = "waiting"
     COMPLETED = "completed"
@@ -42,6 +43,11 @@ ALLOWED_TRANSITIONS: dict[RideStatus, set[RideStatus]] = {
         RideStatus.CANCELLED_BY_DRIVER,
     },
     RideStatus.DRIVER_EN_ROUTE: {
+        RideStatus.ARRIVED,
+        RideStatus.CANCELLED_BY_PASSENGER,
+        RideStatus.CANCELLED_BY_DRIVER,
+    },
+    RideStatus.ARRIVED: {
         RideStatus.IN_PROGRESS,
         RideStatus.CANCELLED_BY_PASSENGER,
         RideStatus.CANCELLED_BY_DRIVER,
@@ -139,6 +145,7 @@ class Ride:
     scheduled_at: datetime | None = None
     requested_at: datetime | None = None
     matched_at: datetime | None = None
+    arrived_at: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     cancelled_at: datetime | None = None
@@ -151,6 +158,9 @@ class Ride:
     waiting_duration_seconds: int = 0
     waiting_fee: Decimal = Decimal("0")
     waiting_rate_per_minute: Decimal | None = None
+    pre_ride_wait_started_at: datetime | None = None
+    pre_ride_wait_seconds: int = 0
+    pre_ride_wait_fee: Decimal = Decimal("0")
     supplements_total: Decimal = Decimal("0")
     currency: str = "XOF"
     distance_km: Decimal | None = None
@@ -160,7 +170,7 @@ class Ride:
     duration_fare: Decimal | None = None
     surge_multiplier: Decimal = Decimal("1.00")
     surge_cap: Decimal = Decimal("1.60")
-    commission_rate: Decimal = Decimal("0.08")
+    commission_rate: Decimal = Decimal("0.18")
     driver_payout_estimate: Decimal | None = None
     platform_commission: Decimal | None = None
     actual_distance_km: Decimal | None = None
@@ -176,6 +186,11 @@ class Ride:
     trace_points_count: int | None = None
     trace_usable_points_count: int | None = None
     payment_method: PaymentMethod = PaymentMethod.CASH
+    quote_id: UUID | None = None
+    start_code_hash: str | None = None
+    start_code_attempts: int = 0
+    start_code_blocked_at: datetime | None = None
+    start_code_used_at: datetime | None = None
 
     # Cross-module refs (logical — resolved via module APIs, never via SQL)
     driver_id: UUID | None = None
@@ -204,6 +219,7 @@ class Ride:
             RideStatus.REQUESTED,
             RideStatus.MATCHED,
             RideStatus.DRIVER_EN_ROUTE,
+            RideStatus.ARRIVED,
             RideStatus.IN_PROGRESS,
             RideStatus.WAITING,
         }
@@ -239,6 +255,8 @@ class Ride:
         self.status = new_status
         if new_status == RideStatus.MATCHED and self.matched_at is None:
             self.matched_at = now
+        if new_status == RideStatus.ARRIVED and self.arrived_at is None:
+            self.arrived_at = now
         if new_status == RideStatus.IN_PROGRESS and self.started_at is None:
             self.started_at = now
         if new_status == RideStatus.COMPLETED and self.completed_at is None:
@@ -320,6 +338,7 @@ class Vehicle:
     vehicle_left_photo_file_id: UUID | None = None
     vehicle_right_photo_file_id: UUID | None = None
     vehicle_interior_photo_file_id: UUID | None = None
+    vehicle_plate_photo_file_id: UUID | None = None
     registration_document_url: str | None = None
     insurance_document_url: str | None = None
     technical_inspection_document_url: str | None = None
@@ -330,6 +349,7 @@ class Vehicle:
     vehicle_left_photo_url: str | None = None
     vehicle_right_photo_url: str | None = None
     vehicle_interior_photo_url: str | None = None
+    vehicle_plate_photo_url: str | None = None
     verification_status: VehicleVerificationStatus = VehicleVerificationStatus.PENDING_VERIFICATION
     verified_at: datetime | None = None
     reviewed_at: datetime | None = None
@@ -356,6 +376,38 @@ class PricingRule:
     surge_multiplier: Decimal = Decimal("1.00")
     active_from: datetime | None = None
     active_to: datetime | None = None
+
+
+@dataclass
+class RideQuote:
+    id: UUID
+    passenger_user_id: UUID
+    pickup_location: GeoPoint
+    dropoff_location: GeoPoint
+    vehicle_category: VehicleCategory
+    comfort_level: ComfortLevel
+    estimated_fare: Decimal
+    distance_km: Decimal
+    duration_seconds: int
+    base_fare: Decimal
+    distance_fare: Decimal
+    duration_fare: Decimal
+    surge_multiplier: Decimal
+    surge_cap: Decimal
+    commission_rate: Decimal
+    platform_commission: Decimal
+    driver_payout_estimate: Decimal
+    tariff_version: str
+    expires_at: datetime
+    pickup_address: str | None = None
+    dropoff_address: str | None = None
+    consumed_at: datetime | None = None
+    ride_id: UUID | None = None
+    created_at: datetime | None = None
+
+    @staticmethod
+    def new_id() -> UUID:
+        return uuid4()
 
 
 @dataclass
@@ -433,6 +485,23 @@ class EmergencyContact:
     relationship: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+    @staticmethod
+    def new_id() -> UUID:
+        return uuid4()
+
+
+@dataclass
+class RideEmergencyEvent:
+    id: UUID
+    ride_id: UUID
+    actor_user_id: UUID
+    actor_role: str
+    requested_at: datetime
+    note: str | None = None
+    sequence: int = 1
+    contact_notified: bool = False
+    notification_results: list[dict] | None = None
 
     @staticmethod
     def new_id() -> UUID:

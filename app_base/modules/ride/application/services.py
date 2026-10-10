@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import math
 import secrets
@@ -10,7 +12,6 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
 from app_base.core.observability import log_event
 from app_base.core.settings import settings
@@ -24,6 +25,8 @@ from app_base.modules.ride.domain.entities import (
     InvalidStatusTransition,
     PaymentMethod,
     Ride,
+    RideEmergencyEvent,
+    RideQuote,
     RideRating,
     RideRoutePoint,
     RideStatus,
@@ -35,6 +38,7 @@ from app_base.modules.ride.domain.interfaces import (
     DriverProfileRepository,
     EmergencyContactRepository,
     PricingRuleRepository,
+    RideQuoteRepository,
     RideRepository,
     VehicleRepository,
 )
@@ -48,7 +52,6 @@ _DEFAULT_BASE_FARE = Decimal("250")
 _DEFAULT_PRICE_PER_KM = Decimal("240")
 _DEFAULT_PRICE_PER_MIN = Decimal("0")
 _SURGE_CAP = Decimal("1.60")
-_COMMISSION_RATE = Decimal("0.08")
 _SHARE_TOKEN_BYTES = 24
 _SHARE_TTL_HOURS = 24
 
@@ -66,6 +69,7 @@ class RideService:
     ride_repo: RideRepository
     routing: RoutingProvider
     pricing_rules: PricingRuleRepository
+    quote_repo: RideQuoteRepository | None = None
     driver_repo: DriverProfileRepository | None = None
     vehicle_repo: VehicleRepository | None = None
     user_repo: UserRepository | None = None
@@ -113,7 +117,7 @@ class RideService:
         )
         return _pricing_response(distance_km, duration_seconds, pricing, surge_multiplier, comfort)
 
-    async def request_ride(
+    async def create_quote(
         self,
         *,
         passenger_user_id: UUID,
@@ -123,12 +127,60 @@ class RideService:
         dropoff_address: str | None,
         vehicle_category: str,
         comfort_level: str,
+    ) -> dict:
+        if self.quote_repo is None:
+            raise ApiError(503, "QUOTE_STORE_UNAVAILABLE", "Le service de devis est indisponible.")
+        category = _vehicle_category(vehicle_category)
+        comfort = _comfort_level(comfort_level)
+        estimate = await self.estimate_pricing(pickup, dropoff, vehicle_category, comfort_level)
+        now = datetime.now(UTC)
+        quote = RideQuote(
+            id=RideQuote.new_id(),
+            passenger_user_id=passenger_user_id,
+            pickup_location=pickup,
+            pickup_address=pickup_address,
+            dropoff_location=dropoff,
+            dropoff_address=dropoff_address,
+            vehicle_category=category,
+            comfort_level=comfort,
+            estimated_fare=Decimal(estimate["estimated_fare"]),
+            distance_km=Decimal(str(estimate["distance_km"])),
+            duration_seconds=int(estimate["duration_seconds"]),
+            base_fare=Decimal(estimate["base_fare"]),
+            distance_fare=Decimal(estimate["distance_fare"]),
+            duration_fare=Decimal(estimate["duration_fare"]),
+            surge_multiplier=Decimal(str(estimate["surge_multiplier"])),
+            surge_cap=Decimal(str(estimate["surge_cap"])),
+            commission_rate=Decimal(str(estimate["commission_rate"])),
+            platform_commission=Decimal(estimate["platform_commission"]),
+            driver_payout_estimate=Decimal(estimate["driver_payout_estimate"]),
+            tariff_version=_tariff_version(),
+            expires_at=now + timedelta(seconds=settings.ride_quote_ttl_seconds),
+            created_at=now,
+        )
+        await self.quote_repo.save(quote)
+        return {**estimate, "quote_id": str(quote.id), "tariff_version": quote.tariff_version,
+                "expires_at": iso_utc(quote.expires_at)}
+
+    async def request_ride(
+        self,
+        *,
+        passenger_user_id: UUID,
+        quote_id: UUID,
         payment_method: str,
         scheduled_at: datetime | None,
     ) -> Ride:
-        category = _vehicle_category(vehicle_category)
-        comfort = _comfort_level(comfort_level)
         method = _payment_method(payment_method)
+        if self.quote_repo is None:
+            raise ApiError(503, "QUOTE_STORE_UNAVAILABLE", "Le service de devis est indisponible.")
+        quote = await self.quote_repo.find_by_id(quote_id)
+        if quote is None or quote.passenger_user_id != passenger_user_id:
+            raise ApiError(404, "QUOTE_NOT_FOUND", "Devis introuvable.")
+        now = datetime.now(UTC)
+        if quote.consumed_at is not None:
+            raise ApiError(409, "QUOTE_ALREADY_USED", "Ce devis a deja ete utilise.")
+        if quote.expires_at <= now:
+            raise ApiError(409, "QUOTE_EXPIRED", "Ce devis a expire. Demandez un nouveau devis.")
         if await self.ride_repo.has_active_ride(passenger_user_id):
             raise ApiError(
                 409,
@@ -136,42 +188,43 @@ class RideService:
                 "Un passager ne peut pas avoir deux courses actives simultanement.",
             )
 
-        pricing = await self.estimate_pricing(pickup, dropoff, vehicle_category, comfort_level)
         ride = Ride(
             id=Ride.new_id(),
             passenger_user_id=passenger_user_id,
             status=RideStatus.REQUESTED,
-            vehicle_category=category,
-            comfort_level=comfort,
-            pickup_location=pickup,
-            pickup_address=pickup_address,
-            dropoff_location=dropoff,
-            dropoff_address=dropoff_address,
+            vehicle_category=quote.vehicle_category,
+            comfort_level=quote.comfort_level,
+            pickup_location=quote.pickup_location,
+            pickup_address=quote.pickup_address,
+            dropoff_location=quote.dropoff_location,
+            dropoff_address=quote.dropoff_address,
             scheduled_at=scheduled_at,
-            estimated_fare=Decimal(pricing["estimated_fare"]),
+            estimated_fare=quote.estimated_fare,
             currency="XOF",
-            distance_km=Decimal(str(pricing["distance_km"])),
-            duration_seconds=pricing["duration_seconds"],
-            base_fare=Decimal(pricing["base_fare"]),
-            distance_fare=Decimal(pricing["distance_fare"]),
-            duration_fare=Decimal(pricing["duration_fare"]),
-            surge_multiplier=Decimal(str(pricing["surge_multiplier"])),
-            surge_cap=Decimal(str(pricing["surge_cap"])),
-            commission_rate=Decimal(str(pricing["commission_rate"])),
-            platform_commission=Decimal(pricing["platform_commission"]),
-            driver_payout_estimate=Decimal(pricing["driver_payout_estimate"]),
+            distance_km=quote.distance_km,
+            duration_seconds=quote.duration_seconds,
+            base_fare=quote.base_fare,
+            distance_fare=quote.distance_fare,
+            duration_fare=quote.duration_fare,
+            surge_multiplier=quote.surge_multiplier,
+            surge_cap=quote.surge_cap,
+            commission_rate=quote.commission_rate,
+            platform_commission=quote.platform_commission,
+            driver_payout_estimate=quote.driver_payout_estimate,
             payment_method=method,
-            requested_at=datetime.utcnow(),
+            quote_id=quote.id,
+            requested_at=now,
         )
         await self.ride_repo.save(ride)
+        await self.quote_repo.consume(quote, ride_id=ride.id, consumed_at=now)
         for transition in ride.status_history:
             await self.ride_repo.record_status_transition(transition)
         log_event(
             "ride.created",
             ride_id=ride.id,
             passenger_user_id=passenger_user_id,
-            vehicle_category=category.value,
-            comfort_level=comfort.value,
+            vehicle_category=quote.vehicle_category.value,
+            comfort_level=quote.comfort_level.value,
             payment_method=method.value,
             estimated_fare=ride.estimated_fare,
             distance_km=ride.distance_km,
@@ -306,6 +359,8 @@ class RideService:
                 "WAITING_STOP_ENDPOINT_REQUIRED",
                 "Utilisez la route d'arret d'attente pour reprendre la course.",
             )
+        if new_status is RideStatus.IN_PROGRESS:
+            raise ApiError(409, "RIDE_START_CODE_REQUIRED", "Utilisez la route de demarrage avec le code passager.")
         if new_status is RideStatus.COMPLETED and ride.status is RideStatus.WAITING:
             await self.stop_waiting(
                 ride_id,
@@ -346,7 +401,7 @@ class RideService:
             ) from exc
         if new_status is RideStatus.COMPLETED:
             base_fare = ride.final_fare or ride.estimated_fare or Decimal("0")
-            ride.final_fare = base_fare + ride.waiting_fee + ride.supplements_total
+            ride.final_fare = base_fare + ride.pre_ride_wait_fee + ride.waiting_fee + ride.supplements_total
             ride.platform_commission = (ride.final_fare * ride.commission_rate).quantize(Decimal("1"))
             ride.driver_payout_estimate = ride.final_fare - ride.platform_commission
         await self.ride_repo.save(ride)
@@ -362,6 +417,120 @@ class RideService:
         )
         viewer_role = "admin" if actor_role == "admin" else "driver"
         return _ride_detail_payload(ride, driver=None, viewer_role=viewer_role)
+
+    async def mark_arrived(
+        self,
+        ride_id: UUID,
+        *,
+        actor_user_id: UUID,
+        actor_role: str,
+        driver_position: GeoPoint | None,
+    ) -> dict:
+        ride = await self.load_ride(ride_id)
+        if actor_role != "admin" and not await self._is_assigned_driver(ride, actor_user_id):
+            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Seul le chauffeur assigne peut signaler son arrivee.")
+        if ride.status is RideStatus.ARRIVED:
+            return _pre_ride_payload(ride)
+        if ride.status is not RideStatus.DRIVER_EN_ROUTE:
+            raise ApiError(409, "ARRIVAL_INVALID_RIDE_STATUS", "La course ne permet pas de signaler l'arrivee.")
+        if driver_position is None or ride.pickup_location is None:
+            raise ApiError(422, "DRIVER_LOCATION_REQUIRED", "Une position chauffeur recente est requise.")
+        distance_m = _distance_meters(driver_position, ride.pickup_location)
+        if distance_m > settings.driver_arrival_max_distance_meters:
+            raise ApiError(
+                422,
+                "DRIVER_TOO_FAR_FROM_PICKUP",
+                "Le chauffeur est trop loin du point de prise en charge.",
+                {
+                    "distance_meters": round(distance_m, 1),
+                    "maximum_meters": settings.driver_arrival_max_distance_meters,
+                },
+            )
+        now = datetime.now(UTC)
+        code = _ride_start_code(ride.id)
+        ride.start_code_hash = _hash_start_code(ride.id, code)
+        ride.pre_ride_wait_started_at = now
+        ride.transition(RideStatus.ARRIVED, when=now, metadata={"distance_meters": round(distance_m, 1)})
+        await self.ride_repo.save(ride)
+        await self.ride_repo.record_status_transition(ride.status_history[-1])
+        log_event("ride.driver_arrived", ride_id=ride.id, distance_meters=distance_m)
+        return _pre_ride_payload(ride)
+
+    async def start_ride_with_code(
+        self,
+        ride_id: UUID,
+        *,
+        actor_user_id: UUID,
+        actor_role: str,
+        code: str,
+    ) -> dict:
+        ride = await self.load_ride(ride_id)
+        if actor_role != "admin" and not await self._is_assigned_driver(ride, actor_user_id):
+            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Seul le chauffeur assigne peut demarrer la course.")
+        if ride.status is not RideStatus.ARRIVED:
+            raise ApiError(409, "RIDE_START_INVALID_STATUS", "Le chauffeur doit d'abord signaler son arrivee.")
+        if ride.start_code_used_at is not None:
+            raise ApiError(409, "RIDE_START_CODE_ALREADY_USED", "Le code de demarrage a deja ete utilise.")
+        if ride.start_code_blocked_at is not None:
+            raise ApiError(423, "RIDE_START_CODE_BLOCKED", "Le code est bloque. Contactez le support.")
+        expected_hash = ride.start_code_hash or ""
+        if not hmac.compare_digest(expected_hash, _hash_start_code(ride.id, code)):
+            ride.start_code_attempts += 1
+            if ride.start_code_attempts >= settings.ride_start_code_max_attempts:
+                ride.start_code_blocked_at = datetime.now(UTC)
+                log_event("ride_start_code_blocked", level="warning", ride_id=ride.id,
+                          attempts=ride.start_code_attempts)
+            await self.ride_repo.save(ride)
+            code_name = "RIDE_START_CODE_BLOCKED" if ride.start_code_blocked_at else "INVALID_RIDE_START_CODE"
+            status_code = 423 if ride.start_code_blocked_at else 422
+            raise ApiError(status_code, code_name, "Code de demarrage invalide.",
+                           {"attempts": ride.start_code_attempts,
+                            "maximum_attempts": settings.ride_start_code_max_attempts})
+        now = datetime.now(UTC)
+        elapsed = max(0, int((now - (ride.pre_ride_wait_started_at or now)).total_seconds()))
+        billable_seconds = max(0, elapsed - settings.pre_ride_wait_free_seconds)
+        ride.pre_ride_wait_seconds = elapsed
+        ride.pre_ride_wait_fee = (
+            Decimal(settings.pre_ride_wait_price_per_minute_xof) * Decimal(billable_seconds) / Decimal(60)
+        ).quantize(Decimal("1"))
+        ride.start_code_used_at = now
+        ride.transition(RideStatus.IN_PROGRESS, when=now, metadata={"start_code_verified": True})
+        await self._ensure_map_trace_started(ride)
+        await self.ride_repo.save(ride)
+        await self.ride_repo.record_status_transition(ride.status_history[-1])
+        log_event("ride.started", ride_id=ride.id, pre_ride_wait_seconds=elapsed,
+                  pre_ride_wait_fee=ride.pre_ride_wait_fee)
+        return _ride_detail_payload(ride, driver=None, viewer_role="driver")
+
+    async def mark_passenger_no_show(
+        self,
+        ride_id: UUID,
+        *,
+        actor_user_id: UUID,
+        actor_role: str,
+    ) -> dict:
+        ride = await self.load_ride(ride_id)
+        if actor_role != "admin" and not await self._is_assigned_driver(ride, actor_user_id):
+            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Seul le chauffeur assigne peut declarer l'absence.")
+        if ride.status is not RideStatus.ARRIVED or ride.pre_ride_wait_started_at is None:
+            raise ApiError(409, "NO_SHOW_INVALID_RIDE_STATUS", "L'attente pre-course n'est pas active.")
+        elapsed = int((datetime.now(UTC) - ride.pre_ride_wait_started_at).total_seconds())
+        if elapsed < settings.pre_ride_no_show_seconds:
+            raise ApiError(409, "NO_SHOW_TOO_EARLY", "Le delai client absent n'est pas atteint.",
+                           {"remaining_seconds": settings.pre_ride_no_show_seconds - elapsed})
+        ride.pre_ride_wait_seconds = elapsed
+        ride.pre_ride_wait_fee = Decimal("0")
+        ride.cancellation_reason = "passenger_no_show"
+        ride.transition(
+            RideStatus.CANCELLED_BY_DRIVER,
+            when=datetime.now(UTC),
+            metadata={"reason": "passenger_no_show"},
+        )
+        await self.ride_repo.save(ride)
+        await self.ride_repo.record_status_transition(ride.status_history[-1])
+        log_event("ride.passenger_no_show", level="warning", ride_id=ride.id,
+                  passenger_user_id=ride.passenger_user_id, waiting_seconds=elapsed)
+        return _ride_detail_payload(ride, driver=None, viewer_role="driver")
 
     async def start_waiting(
         self,
@@ -649,16 +818,22 @@ class RideService:
         is_participant = ride.passenger_user_id == actor_user_id or await self._is_assigned_driver(ride, actor_user_id)
         if not is_participant and actor_role != "admin":
             raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Cette course ne vous appartient pas.")
-        if ride.emergency_status == "open":
-            raise ApiError(
-                409,
-                ErrorCode.EMERGENCY_ALREADY_OPEN,
-                "Une urgence est deja ouverte pour cette course.",
-                {"ride_id": str(ride.id), "requested_at": iso_utc(ride.emergency_requested_at)},
-            )
-        ride.emergency_requested_at = datetime.now(UTC)
+        latest = await self.ride_repo.latest_emergency_event(ride.id)
+        now = datetime.now(UTC)
+        if latest is not None:
+            elapsed = (now - latest.requested_at).total_seconds()
+            if elapsed < settings.ride_emergency_rate_limit_seconds:
+                raise ApiError(
+                    429,
+                    "EMERGENCY_RATE_LIMITED",
+                    "Une alerte vient deja d'etre envoyee.",
+                    {"retry_after_seconds": math.ceil(settings.ride_emergency_rate_limit_seconds - elapsed)},
+                )
+        if ride.emergency_requested_at is None:
+            ride.emergency_requested_at = now
         ride.emergency_status = "open"
-        ride.emergency_note = note
+        if ride.emergency_note is None:
+            ride.emergency_note = note
         await self.ride_repo.save(ride)
         logger.warning("ride_emergency ride_id=%s actor_user_id=%s actor_role=%s", ride_id, actor_user_id, actor_role)
         log_event(
@@ -675,18 +850,40 @@ class RideService:
                 if self.emergency_contact_repo is not None
                 else None
             )
+            include_contact = not (
+                settings.ride_emergency_contact_notify_once and latest is not None and latest.contact_notified
+            )
             notification_results = await self.emergency_notifications.notify(
                 ride=ride,
                 actor_user_id=actor_user_id,
                 actor_role=actor_role,
                 contact=contact,
                 note=note,
+                include_contact=include_contact,
             )
+        contact_notified = (latest.contact_notified if latest is not None else False) or any(
+            item.get("target") == "emergency_contact" and item.get("status") == "sent"
+            for item in notification_results
+        )
+        event = RideEmergencyEvent(
+            id=RideEmergencyEvent.new_id(),
+            ride_id=ride.id,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            requested_at=now,
+            note=note,
+            sequence=(latest.sequence + 1) if latest is not None else 1,
+            contact_notified=contact_notified,
+            notification_results=notification_results,
+        )
+        await self.ride_repo.save_emergency_event(event)
         return {
             "ride_id": str(ride.id),
             "status": "open",
             "requested_at": iso_utc(ride.emergency_requested_at),
             "notifications": notification_results,
+            "event_id": str(event.id),
+            "sequence": event.sequence,
         }
 
     async def _driver_profile_id_for_user(self, user_id: UUID) -> UUID | None:
@@ -920,6 +1117,24 @@ def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -
             "method": ride.payment_method.value,
             "transaction_id": str(ride.payment_transaction_id) if ride.payment_transaction_id else None,
         },
+        "quote_id": str(ride.quote_id) if ride.quote_id else None,
+        "arrival": {
+            "arrived_at": iso_utc(ride.arrived_at),
+            "waiting_started_at": iso_utc(ride.pre_ride_wait_started_at),
+            "waiting_seconds": ride.pre_ride_wait_seconds,
+            "waiting_fee": int(ride.pre_ride_wait_fee) if money_visible else None,
+        },
+        "start_authorization": {
+            "code": _ride_start_code(ride.id)
+            if viewer_role == "passenger" and ride.start_code_hash and ride.start_code_used_at is None
+            else None,
+            "qr_payload": f"diddigo://rides/{ride.id}/start?code={_ride_start_code(ride.id)}"
+            if viewer_role == "passenger" and ride.start_code_hash and ride.start_code_used_at is None
+            else None,
+            "attempts": ride.start_code_attempts if viewer_role == "admin" else None,
+            "blocked": ride.start_code_blocked_at is not None,
+            "used_at": iso_utc(ride.start_code_used_at),
+        },
         "emergency": {
             "status": ride.emergency_status,
             "requested_at": iso_utc(ride.emergency_requested_at),
@@ -997,7 +1212,8 @@ def _pricing_breakdown(
     duration_fare = duration_minutes * price_per_min
     total_fare = (base_fare + distance_fare + duration_fare) * comfort_multiplier * surge_multiplier
     rounded_total = Decimal(round(float(total_fare)))
-    platform_commission = Decimal(round(float(rounded_total * _COMMISSION_RATE)))
+    commission_rate = Decimal(str(settings.diddigo_commission_rate))
+    platform_commission = Decimal(round(float(rounded_total * commission_rate)))
     return {
         "base_fare": base_fare,
         "distance_fare": Decimal(round(float(distance_fare))),
@@ -1026,10 +1242,52 @@ def _pricing_response(
         "base_fare": int(pricing["base_fare"]),
         "distance_fare": int(pricing["distance_fare"]),
         "duration_fare": int(pricing["duration_fare"]),
-        "commission_rate": float(_COMMISSION_RATE),
+        "commission_rate": settings.diddigo_commission_rate,
         "platform_commission": int(pricing["platform_commission"]),
         "driver_payout_estimate": int(pricing["driver_payout_estimate"]),
     }
+
+
+def _pre_ride_payload(ride: Ride) -> dict:
+    return {
+        "ride_id": str(ride.id),
+        "status": ride.status.value,
+        "arrived_at": iso_utc(ride.arrived_at),
+        "waiting_started_at": iso_utc(ride.pre_ride_wait_started_at),
+        "free_seconds": settings.pre_ride_wait_free_seconds,
+        "no_show_after_seconds": settings.pre_ride_no_show_seconds,
+        "price_per_minute_xof": settings.pre_ride_wait_price_per_minute_xof,
+    }
+
+
+def _ride_start_code(ride_id: UUID) -> str:
+    digest = hmac.new(
+        settings.ride_start_code_secret.encode("utf-8"),
+        str(ride_id).encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+    return f"{int.from_bytes(digest[:8], 'big') % 1_000_000:06d}"
+
+
+def _hash_start_code(ride_id: UUID, code: str) -> str:
+    value = f"{ride_id}:{code}:{settings.ride_start_code_secret}"
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _distance_meters(first: GeoPoint, second: GeoPoint) -> float:
+    radius = 6_371_000.0
+    lat1, lat2 = math.radians(first.lat), math.radians(second.lat)
+    delta_lat = math.radians(second.lat - first.lat)
+    delta_lng = math.radians(second.lng - first.lng)
+    a = math.sin(delta_lat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lng / 2) ** 2
+    return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _tariff_version() -> str:
+    return (
+        f"env-v1:{settings.diddigo_commission_rate}:"
+        f"{_DEFAULT_BASE_FARE}:{_DEFAULT_PRICE_PER_KM}:{_DEFAULT_PRICE_PER_MIN}:{_SURGE_CAP}"
+    )
 
 
 def _vehicle_category(value: str) -> VehicleCategory:

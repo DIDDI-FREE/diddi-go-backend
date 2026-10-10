@@ -2,7 +2,7 @@
 
 The transition table lives in `ride/domain/entities.py` (architecture doc §4):
 
-    requested → matched → driver_en_route → in_progress → completed
+    requested → matched → driver_en_route → arrived → in_progress → completed
         ↓            ↓
     no_driver_found  cancelled_by_passenger / cancelled_by_driver
 """
@@ -41,7 +41,8 @@ def make_ride(status: RideStatus = RideStatus.REQUESTED) -> Ride:
         (RideStatus.REQUESTED, RideStatus.CANCELLED_BY_PASSENGER),
         (RideStatus.MATCHED, RideStatus.DRIVER_EN_ROUTE),
         (RideStatus.MATCHED, RideStatus.CANCELLED_BY_DRIVER),
-        (RideStatus.DRIVER_EN_ROUTE, RideStatus.IN_PROGRESS),
+        (RideStatus.DRIVER_EN_ROUTE, RideStatus.ARRIVED),
+        (RideStatus.ARRIVED, RideStatus.IN_PROGRESS),
         (RideStatus.IN_PROGRESS, RideStatus.COMPLETED),
     ],
 )
@@ -102,6 +103,7 @@ def test_timestamps_are_stamped_on_first_visit() -> None:
     ride.transition(RideStatus.DRIVER_EN_ROUTE)
     assert ride.matched_at == matched_at, "matched_at must not be overwritten"
 
+    ride.transition(RideStatus.ARRIVED)
     ride.transition(RideStatus.IN_PROGRESS)
     assert ride.started_at is not None
 
@@ -113,6 +115,7 @@ def test_completion_defaults_final_fare_to_estimate() -> None:
     ride = make_ride()
     ride.transition(RideStatus.MATCHED)
     ride.transition(RideStatus.DRIVER_EN_ROUTE)
+    ride.transition(RideStatus.ARRIVED)
     ride.transition(RideStatus.IN_PROGRESS)
     assert ride.final_fare is None
 

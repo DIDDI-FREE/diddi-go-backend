@@ -45,6 +45,7 @@ class RideSummaryService:
             "rides_completed": totals.rides_completed,
             "completed_fare_total_xof": int(totals.completed_fare_total_xof),
             "calculated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "freshness": _freshness(),
         }
 
     def _period_for_day(self, day: str) -> tuple[date, datetime, datetime]:
@@ -106,6 +107,7 @@ class RideSummaryService:
             ],
             "calculated_at": summary["calculated_at"],
             "sources": [{"module": "diddigo", "record_type": "ride-summary"}],
+            "freshness": summary["freshness"],
             "deep_links": [
                 {
                     "label": "Ouvrir les courses dans Backoffice",
@@ -168,4 +170,13 @@ class RideSummaryService:
             "metrics": [{"name": name, "value": int(value), "unit": unit} for name, value, unit in metrics],
             "calculated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "sources": [{"module": "diddigo", "record_type": "ride-finance-summary"}],
+            "freshness": _freshness(),
         }
+
+
+def _freshness() -> dict:
+    return {
+        "status": "fresh",
+        "synchronized_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "window_seconds": settings.pilotage_summary_freshness_window_seconds,
+    }

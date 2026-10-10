@@ -36,6 +36,12 @@ class PilotageSource(BaseModel):
     record_type: str
 
 
+class PilotageFreshness(BaseModel):
+    status: Literal["fresh", "stale", "unavailable"]
+    synchronized_at: datetime | None
+    window_seconds: int
+
+
 class PilotageFinanceSummaryResponse(BaseModel):
     contract_version: Literal["pilotage.v1"]
     module: Literal["diddigo"]
@@ -45,3 +51,4 @@ class PilotageFinanceSummaryResponse(BaseModel):
     metrics: list[PilotageMetric]
     calculated_at: datetime
     sources: list[PilotageSource]
+    freshness: PilotageFreshness

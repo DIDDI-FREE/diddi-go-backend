@@ -74,6 +74,7 @@ from app_base.modules.ride.infra.repositories import (
     SqlAlchemyDriverProfileRepository,
     SqlAlchemyEmergencyContactRepository,
     SqlAlchemyPricingRuleRepository,
+    SqlAlchemyRideQuoteRepository,
     SqlAlchemyRideRepository,
     SqlAlchemyVehicleRepository,
 )
@@ -227,6 +228,10 @@ async def pricing_rule_repo(
     return SqlAlchemyPricingRuleRepository(session)
 
 
+async def ride_quote_repo(session: AsyncSession = Depends(session_dep)) -> SqlAlchemyRideQuoteRepository:
+    return SqlAlchemyRideQuoteRepository(session)
+
+
 async def priority_ledger_repo(
     session: AsyncSession = Depends(session_dep),
 ) -> SqlAlchemyPriorityLedgerRepository:
@@ -269,6 +274,7 @@ async def auth_service(
 async def ride_service(
     ride_repo_dep: SqlAlchemyRideRepository = Depends(ride_repo),
     pricing_rule_repo_dep: SqlAlchemyPricingRuleRepository = Depends(pricing_rule_repo),
+    quote_repo_dep: SqlAlchemyRideQuoteRepository = Depends(ride_quote_repo),
     diddimap: DiddiMapRoutingClient = Depends(get_diddimap),
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
     vehicle_repo_dep: SqlAlchemyVehicleRepository = Depends(vehicle_repo),
@@ -282,6 +288,7 @@ async def ride_service(
         ride_repo=ride_repo_dep,
         routing=diddimap,
         pricing_rules=pricing_rule_repo_dep,
+        quote_repo=quote_repo_dep,
         driver_repo=driver_repo_dep,
         vehicle_repo=vehicle_repo_dep,
         user_repo=user_repo_dep,

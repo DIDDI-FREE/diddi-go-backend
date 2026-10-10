@@ -387,6 +387,7 @@ class PartnerService:
         vehicle_left_photo_file_id: UUID | None = None,
         vehicle_right_photo_file_id: UUID | None = None,
         vehicle_interior_photo_file_id: UUID | None = None,
+        vehicle_plate_photo_file_id: UUID | None = None,
         registration_document_url: str | None = None,
         insurance_document_url: str | None = None,
         technical_inspection_document_url: str | None = None,
@@ -397,6 +398,7 @@ class PartnerService:
         vehicle_left_photo_url: str | None = None,
         vehicle_right_photo_url: str | None = None,
         vehicle_interior_photo_url: str | None = None,
+        vehicle_plate_photo_url: str | None = None,
     ) -> dict:
         if self.vehicle_repo is None or self.driver_repo is None:
             raise ApiError(
@@ -425,6 +427,7 @@ class PartnerService:
             vehicle_left_photo_file_id=vehicle_left_photo_file_id,
             vehicle_right_photo_file_id=vehicle_right_photo_file_id,
             vehicle_interior_photo_file_id=vehicle_interior_photo_file_id,
+            vehicle_plate_photo_file_id=vehicle_plate_photo_file_id,
             registration_document_url=_blank_to_none(registration_document_url),
             insurance_document_url=_blank_to_none(insurance_document_url),
             technical_inspection_document_url=_blank_to_none(technical_inspection_document_url),
@@ -435,6 +438,7 @@ class PartnerService:
             vehicle_left_photo_url=_blank_to_none(vehicle_left_photo_url),
             vehicle_right_photo_url=_blank_to_none(vehicle_right_photo_url),
             vehicle_interior_photo_url=_blank_to_none(vehicle_interior_photo_url),
+            vehicle_plate_photo_url=_blank_to_none(vehicle_plate_photo_url),
             verification_status=VehicleVerificationStatus.PENDING_VERIFICATION,
             owner_type="partner",
             partner_id=partner_id,
@@ -628,6 +632,9 @@ def _vehicle_payload(vehicle: Vehicle) -> dict:
         "vehicle_interior_photo_file_id": str(vehicle.vehicle_interior_photo_file_id)
         if vehicle.vehicle_interior_photo_file_id
         else None,
+        "vehicle_plate_photo_file_id": str(vehicle.vehicle_plate_photo_file_id)
+        if vehicle.vehicle_plate_photo_file_id
+        else None,
         "registration_document_url": vehicle.registration_document_url,
         "insurance_document_url": vehicle.insurance_document_url,
         "technical_inspection_document_url": vehicle.technical_inspection_document_url,
@@ -638,6 +645,7 @@ def _vehicle_payload(vehicle: Vehicle) -> dict:
         "vehicle_left_photo_url": vehicle.vehicle_left_photo_url,
         "vehicle_right_photo_url": vehicle.vehicle_right_photo_url,
         "vehicle_interior_photo_url": vehicle.vehicle_interior_photo_url,
+        "vehicle_plate_photo_url": vehicle.vehicle_plate_photo_url,
         "verification_status": vehicle.verification_status.value,
         "verified_at": vehicle.verified_at.isoformat() if vehicle.verified_at else None,
         "reviewed_at": vehicle.reviewed_at.isoformat() if vehicle.reviewed_at else None,

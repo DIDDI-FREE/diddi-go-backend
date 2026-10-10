@@ -42,7 +42,10 @@ COPY app_base ./app_base
 COPY alembic ./alembic
 COPY alembic.ini ./
 COPY docker ./docker
-RUN chmod +x /app/docker/start.sh
+# Windows checkouts may convert shell scripts to CRLF. Normalize inside the
+# image as a final safeguard before executing the entrypoint on Linux.
+RUN sed -i 's/\r$//' /app/docker/start.sh \
+    && chmod +x /app/docker/start.sh
 
 USER diddigo
 

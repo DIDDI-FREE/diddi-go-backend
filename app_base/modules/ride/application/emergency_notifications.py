@@ -29,6 +29,7 @@ class EmergencyNotificationService:
         actor_role: str,
         contact: EmergencyContact | None,
         note: str | None,
+        include_contact: bool = True,
     ) -> list[dict]:
         payload = _emergency_payload(
             ride=ride,
@@ -40,14 +41,14 @@ class EmergencyNotificationService:
             EmergencyRecipient("support", "email", settings.emergency_support_email),
             EmergencyRecipient("support", "whatsapp", settings.emergency_support_whatsapp),
         ]
-        if contact is not None:
+        if contact is not None and include_contact:
             recipients.extend(
                 [
                     EmergencyRecipient("emergency_contact", "email", contact.email),
                     EmergencyRecipient("emergency_contact", "whatsapp", contact.phone),
                 ]
             )
-        else:
+        elif include_contact:
             log_event(
                 "ride.emergency.notification.skipped",
                 level="warning",

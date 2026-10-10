@@ -25,6 +25,8 @@ from app_base.modules.ride.domain.entities import (
     EmergencyContact,
     PricingRule,
     Ride,
+    RideEmergencyEvent,
+    RideQuote,
     RideRating,
     RideRoutePoint,
     RideStatus,
@@ -100,6 +102,10 @@ class RideRepository(Protocol):
         ...
 
     async def record_status_transition(self, transition: RideStatusTransition) -> None: ...
+
+    async def latest_emergency_event(self, ride_id: UUID) -> RideEmergencyEvent | None: ...
+
+    async def save_emergency_event(self, event: RideEmergencyEvent) -> RideEmergencyEvent: ...
 
     async def save_rating(self, rating: RideRating) -> RideRating: ...
 
@@ -177,6 +183,14 @@ class PricingRuleRepository(Protocol):
         """Returns the single pricing rule in force for this city / category
         at time `as_of` (defaults to now). None if no rule has been seeded yet."""
         ...
+
+
+class RideQuoteRepository(Protocol):
+    async def save(self, quote: RideQuote) -> RideQuote: ...
+
+    async def find_by_id(self, quote_id: UUID) -> RideQuote | None: ...
+
+    async def consume(self, quote: RideQuote, *, ride_id: UUID, consumed_at: datetime) -> None: ...
 
 
 class DriverLocationService(Protocol):

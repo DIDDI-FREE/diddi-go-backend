@@ -120,9 +120,9 @@ async def test_pricing_uses_diddigo_policy_with_diddimap_distance():
         "base_fare": 250,
         "distance_fare": 2850,
         "duration_fare": 0,
-        "commission_rate": 0.08,
-        "platform_commission": 248,
-        "driver_payout_estimate": 2852,
+        "commission_rate": 0.18,
+        "platform_commission": 558,
+        "driver_payout_estimate": 2542,
     }
     assert pricing_rules.called is True
 

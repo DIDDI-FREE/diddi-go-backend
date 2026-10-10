@@ -200,6 +200,11 @@ class RideBreakdownService:
             ],
             "is_final": selected_day < datetime.now(ABIDJAN_TIMEZONE).date(),
             "calculated_at": result.calculated_at.isoformat().replace("+00:00", "Z"),
+            "freshness": {
+                "status": "fresh",
+                "synchronized_at": result.calculated_at.isoformat().replace("+00:00", "Z"),
+                "window_seconds": settings.pilotage_summary_freshness_window_seconds,
+            },
         }
 
     @staticmethod

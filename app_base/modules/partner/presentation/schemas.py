@@ -92,6 +92,7 @@ class PartnerVehicleCreateRequest(BaseModel):
     vehicle_left_photo_file_id: UUID | None = None
     vehicle_right_photo_file_id: UUID | None = None
     vehicle_interior_photo_file_id: UUID | None = None
+    vehicle_plate_photo_file_id: UUID | None = None
     registration_document_url: str | None = Field(default=None, max_length=1000)
     insurance_document_url: str | None = Field(default=None, max_length=1000)
     technical_inspection_document_url: str | None = Field(default=None, max_length=1000)
@@ -102,3 +103,4 @@ class PartnerVehicleCreateRequest(BaseModel):
     vehicle_left_photo_url: str | None = Field(default=None, max_length=1000)
     vehicle_right_photo_url: str | None = Field(default=None, max_length=1000)
     vehicle_interior_photo_url: str | None = Field(default=None, max_length=1000)
+    vehicle_plate_photo_url: str | None = Field(default=None, max_length=1000)

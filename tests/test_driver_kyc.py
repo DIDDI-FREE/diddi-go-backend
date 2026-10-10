@@ -307,6 +307,7 @@ async def test_capabilities_allow_active_driver_with_verified_vehicle() -> None:
         vehicle_left_photo_file_id=uuid4(),
         vehicle_right_photo_file_id=uuid4(),
         vehicle_interior_photo_file_id=uuid4(),
+        vehicle_plate_photo_file_id=uuid4(),
     )
     await service.approve_vehicle_kyv(UUID(vehicle["id"]), reviewed_by_user_id=admin_id)
 
@@ -341,6 +342,7 @@ async def test_register_vehicle_stores_registration_file_id() -> None:
     left_photo_file_id = uuid4()
     right_photo_file_id = uuid4()
     interior_photo_file_id = uuid4()
+    plate_photo_file_id = uuid4()
 
     await service.create_profile(user_id=user_id, license_number="CI-123456")
     payload = await service.register_vehicle(
@@ -358,6 +360,7 @@ async def test_register_vehicle_stores_registration_file_id() -> None:
         vehicle_left_photo_file_id=left_photo_file_id,
         vehicle_right_photo_file_id=right_photo_file_id,
         vehicle_interior_photo_file_id=interior_photo_file_id,
+        vehicle_plate_photo_file_id=plate_photo_file_id,
     )
 
     assert payload["plate_number"] == "CE-123-AA"
@@ -369,6 +372,7 @@ async def test_register_vehicle_stores_registration_file_id() -> None:
     assert payload["vehicle_left_photo_file_id"] == str(left_photo_file_id)
     assert payload["vehicle_right_photo_file_id"] == str(right_photo_file_id)
     assert payload["vehicle_interior_photo_file_id"] == str(interior_photo_file_id)
+    assert payload["vehicle_plate_photo_file_id"] == str(plate_photo_file_id)
     assert payload["verification_status"] == "pending_verification"
     assert vehicle_repo.vehicle.registration_document_file_id == registration_file_id
 
@@ -403,6 +407,7 @@ async def test_vehicle_kyv_approval_rejects_incomplete_documents() -> None:
         "vehicle_left_photo",
         "vehicle_right_photo",
         "vehicle_interior_photo",
+        "vehicle_plate_photo",
     ]
 
 
@@ -431,6 +436,7 @@ async def test_vehicle_kyv_approval_allows_driver_online_resolution() -> None:
         vehicle_left_photo_file_id=uuid4(),
         vehicle_right_photo_file_id=uuid4(),
         vehicle_interior_photo_file_id=uuid4(),
+        vehicle_plate_photo_file_id=uuid4(),
     )
 
     with pytest.raises(ApiError) as exc_info:
