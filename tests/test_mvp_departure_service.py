@@ -16,6 +16,10 @@ class FakeRideRepo:
     def __init__(self, ride: Ride) -> None:
         self.ride = ride
         self.transitions = []
+        self.commits = 0
+
+    async def commit(self):
+        self.commits += 1
 
     async def find_by_id(self, ride_id):
         return self.ride if self.ride.id == ride_id else None
@@ -106,3 +110,42 @@ async def test_start_code_is_single_use_and_bills_only_after_free_wait():
             code=_ride_start_code(ride.id),
         )
     assert reused.value.code == "RIDE_START_INVALID_STATUS"
+
+
+@pytest.mark.asyncio
+async def test_fifth_invalid_start_code_is_persisted_and_blocks_following_attempts(monkeypatch):
+    monkeypatch.setattr(
+        "app_base.modules.ride.application.services.settings.ride_start_code_max_attempts",
+        5,
+    )
+    service, repo, ride, user_id, pickup = departure_service()
+    await service.mark_arrived(
+        ride.id,
+        actor_user_id=user_id,
+        actor_role="driver",
+        driver_position=pickup,
+    )
+
+    for attempt in range(1, 6):
+        with pytest.raises(ApiError) as rejected:
+            await service.start_ride_with_code(
+                ride.id,
+                actor_user_id=user_id,
+                actor_role="driver",
+                code="000000",
+            )
+        expected_code = "RIDE_START_CODE_BLOCKED" if attempt == 5 else "INVALID_RIDE_START_CODE"
+        assert rejected.value.code == expected_code
+        assert rejected.value.details["attempts"] == attempt
+
+    assert repo.commits == 5
+    assert repo.ride.start_code_blocked_at is not None
+    with pytest.raises(ApiError) as blocked:
+        await service.start_ride_with_code(
+            ride.id,
+            actor_user_id=user_id,
+            actor_role="driver",
+            code=_ride_start_code(ride.id),
+        )
+    assert blocked.value.status_code == 423
+    assert blocked.value.code == "RIDE_START_CODE_BLOCKED"

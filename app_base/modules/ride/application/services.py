@@ -481,6 +481,11 @@ class RideService:
                 log_event("ride_start_code_blocked", level="warning", ride_id=ride.id,
                           attempts=ride.start_code_attempts)
             await self.ride_repo.save(ride)
+            # The API intentionally returns an error for an invalid code. Commit
+            # the security counter first, otherwise get_session rolls it back
+            # while producing that error response and brute-force protection is
+            # silently disabled.
+            await self.ride_repo.commit()
             code_name = "RIDE_START_CODE_BLOCKED" if ride.start_code_blocked_at else "INVALID_RIDE_START_CODE"
             status_code = 423 if ride.start_code_blocked_at else 422
             raise ApiError(status_code, code_name, "Code de demarrage invalide.",

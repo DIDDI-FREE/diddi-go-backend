@@ -69,6 +69,9 @@ class SqlAlchemyRideRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def commit(self) -> None:
+        await self._session.commit()
+
     async def save(self, ride: Ride) -> Ride:
         row: orm.RideModel | None = await self._session.get(orm.RideModel, ride.id)
         if row is None:
