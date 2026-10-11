@@ -686,7 +686,12 @@ class PaymentService:
             raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Montant de course indisponible.")
 
         existing = await self.payment_repo.find_by_ride_id(ride_id)
-        if existing and existing.payment_intent_id:
+        retrying_terminal_payment = bool(
+            existing
+            and existing.payment_intent_id
+            and existing.status in {PaymentStatus.FAILED, PaymentStatus.CANCELLED}
+        )
+        if existing and existing.payment_intent_id and not retrying_terminal_payment:
             log_event(
                 "payment.prepare.reused",
                 ride_id=ride_id,
@@ -695,14 +700,18 @@ class PaymentService:
                 status=existing.status.value,
             )
             return _external_payment_payload(existing, next_action=existing.provider_next_action)
-        if existing:
+        if existing and not retrying_terminal_payment:
             raise ApiError(
                 409,
                 ErrorCode.PAYMENT_OPERATION_CONFLICT,
                 "Une transaction locale existe deja pour cette course.",
             )
 
-        idempotency_key = f"diddigo:ride:{ride_id}:collection:v1"
+        idempotency_key = (
+            f"diddigo:ride:{ride_id}:collection:retry:{existing.payment_intent_id}"
+            if retrying_terminal_payment and existing is not None
+            else f"diddigo:ride:{ride_id}:collection:v1"
+        )
         business_reference = f"diddigo:ride:{ride_id}"
         return_token = None
         callback_url = _consumer_return_url()
@@ -736,22 +745,41 @@ class PaymentService:
         if self.return_contexts and return_token:
             await self.return_contexts.bind_payment_intent(return_token, payment_intent_id)
         next_action = _next_action_from_intent(intent)
-        payment = Transaction(
-            id=Transaction.new_id(),
-            ride_id=ride_id,
-            amount=Decimal(str(intent.get("amount") or amount)),
-            currency=str(intent.get("currency") or ride.currency),
-            method=payment_method,
-            status=status,
-            created_at=datetime.now(UTC),
-            payment_intent_id=payment_intent_id,
-            business_reference=business_reference,
-            idempotency_key=idempotency_key,
-            provider_status=str(intent.get("status") or status.value),
-            provider_next_action=next_action,
-            paid_at=datetime.now(UTC) if status is PaymentStatus.SUCCEEDED else None,
-        )
-        await self.payment_repo.save(payment)
+        provider_status = str(intent.get("status") or status.value)
+        if retrying_terminal_payment and existing is not None:
+            payment = await self.payment_repo.replace_external_intent(
+                existing.id,
+                payment_intent_id=payment_intent_id,
+                idempotency_key=idempotency_key,
+                method=payment_method,
+                status=status,
+                provider_status=provider_status,
+                next_action=next_action,
+            )
+            log_event(
+                "payment.prepare.retried",
+                ride_id=ride_id,
+                payment_id=payment.id,
+                previous_payment_intent_id=existing.payment_intent_id,
+                payment_intent_id=payment_intent_id,
+            )
+        else:
+            payment = Transaction(
+                id=Transaction.new_id(),
+                ride_id=ride_id,
+                amount=Decimal(str(intent.get("amount") or amount)),
+                currency=str(intent.get("currency") or ride.currency),
+                method=payment_method,
+                status=status,
+                created_at=datetime.now(UTC),
+                payment_intent_id=payment_intent_id,
+                business_reference=business_reference,
+                idempotency_key=idempotency_key,
+                provider_status=provider_status,
+                provider_next_action=next_action,
+                paid_at=datetime.now(UTC) if status is PaymentStatus.SUCCEEDED else None,
+            )
+            await self.payment_repo.save(payment)
         log_event(
             "payment.prepare.created",
             ride_id=ride_id,
@@ -824,8 +852,11 @@ class PaymentService:
 
 
 def _payment_status_from_diddipay(status: str) -> PaymentStatus:
+    normalized = status.strip().lower()
+    if normalized in {"expired", "abandoned"}:
+        return PaymentStatus.CANCELLED
     try:
-        return PaymentStatus(status)
+        return PaymentStatus(normalized)
     except ValueError as exc:
         raise ApiError(
             422,

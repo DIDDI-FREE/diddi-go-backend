@@ -122,6 +122,31 @@ class SqlAlchemyPaymentRepository:
         await self._session.flush()
         return self._to_domain(row)
 
+    async def replace_external_intent(
+        self,
+        transaction_id: UUID,
+        *,
+        payment_intent_id: UUID,
+        idempotency_key: str,
+        method: object,
+        status: object,
+        provider_status: str,
+        next_action: dict[str, Any] | None,
+    ) -> Transaction:
+        row = await self._session.get(orm.TransactionModel, transaction_id)
+        if row is None:
+            raise LookupError(f"No transaction with id={transaction_id}")
+        row.payment_intent_id = payment_intent_id
+        row.idempotency_key = idempotency_key
+        row.method = method.value if isinstance(method, PaymentMethod) else str(method)
+        row.status = status.value if isinstance(status, PaymentStatus) else str(status)
+        row.provider_status = provider_status
+        row.provider_next_action = next_action
+        row.paid_at = None
+        row.collected_at = None
+        await self._session.flush()
+        return self._to_domain(row)
+
     async def list_stale_transactions(
         self,
         *,

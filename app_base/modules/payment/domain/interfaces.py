@@ -43,6 +43,18 @@ class PaymentRepository(Protocol):
         next_action: Any = KEEP,
     ) -> Transaction: ...
 
+    async def replace_external_intent(
+        self,
+        transaction_id: UUID,
+        *,
+        payment_intent_id: UUID,
+        idempotency_key: str,
+        method: object,
+        status: object,
+        provider_status: str,
+        next_action: dict[str, Any] | None,
+    ) -> Transaction: ...
+
     async def list_stale_transactions(
         self,
         *,

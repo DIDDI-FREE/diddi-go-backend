@@ -11,15 +11,19 @@ import pytest
 from pydantic import ValidationError
 
 from app_base.core.errors import ApiError
-from app_base.modules.payment.application.services import PaymentService
+from app_base.modules.payment.application.services import PaymentService, _payment_status_from_diddipay
 from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.payment.domain.entities import (
     KEEP,
     PENDING_PAYMENT_STATUSES,
     PENDING_TOPUP_STATUSES,
     PaymentStatus,
+    Transaction,
     WalletEntryDirection,
     WalletEntryType,
+)
+from app_base.modules.payment.domain.entities import (
+    PaymentMethod as PaymentDomainMethod,
 )
 from app_base.modules.payment.presentation.schemas import DriverTopupRequest, PaymentPreparationRequest
 from app_base.modules.ride.domain.entities import PaymentMethod as RidePaymentMethod
@@ -64,6 +68,27 @@ class FakePaymentRepo:
         self.payment.paid_at = paid_at
         if next_action is not KEEP:
             self.payment.provider_next_action = next_action
+        return self.payment
+
+    async def replace_external_intent(
+        self,
+        transaction_id,
+        *,
+        payment_intent_id,
+        idempotency_key,
+        method,
+        status,
+        provider_status,
+        next_action,
+    ):
+        assert self.payment.id == transaction_id
+        self.payment.payment_intent_id = payment_intent_id
+        self.payment.idempotency_key = idempotency_key
+        self.payment.method = method
+        self.payment.status = status
+        self.payment.provider_status = provider_status
+        self.payment.provider_next_action = next_action
+        self.payment.paid_at = None
         return self.payment
 
     async def list_stale_transactions(self, *, created_before, created_after, limit):
@@ -293,6 +318,55 @@ async def test_prepare_wave_creates_diddipay_intent(monkeypatch) -> None:
     assert contexts.bound == ("opaque-context", intent_id)
 
 
+@pytest.mark.asyncio
+async def test_prepare_wave_replaces_failed_intent_and_then_reuses_retry(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app_base.modules.payment.application.services.settings.diddigo_consumer_return_url",
+        "https://go.test/payments/return",
+    )
+    ride = make_completed_ride()
+    failed_intent_id = uuid4()
+    retry_intent_id = uuid4()
+    repo = FakePaymentRepo()
+    repo.payment = Transaction(
+        id=uuid4(),
+        ride_id=ride.id,
+        amount=ride.final_fare,
+        method=PaymentDomainMethod.WAVE,
+        status=PaymentStatus.FAILED,
+        payment_intent_id=failed_intent_id,
+        idempotency_key=f"diddigo:ride:{ride.id}:collection:v1",
+        provider_status="failed",
+    )
+    gateway = FakeDiddiPay(retry_intent_id)
+    service = PaymentService(
+        payment_repo=repo,
+        ride_repo=FakeRideRepo(ride),
+        diddipay=gateway,
+        return_contexts=FakeReturnContexts(),  # type: ignore[arg-type]
+    )
+
+    retried = await service.prepare_payment(
+        ride.id,
+        "wave",
+        payer_user_id=ride.passenger_user_id,
+        customer_email="client@example.com",
+    )
+    reused = await service.prepare_payment(
+        ride.id,
+        "wave",
+        payer_user_id=ride.passenger_user_id,
+        customer_email="client@example.com",
+    )
+
+    assert retried["payment_intent_id"] == str(retry_intent_id)
+    assert retried["status"] == "requires_action"
+    assert reused["payment_intent_id"] == str(retry_intent_id)
+    assert gateway.last_idempotency_key == (
+        f"diddigo:ride:{ride.id}:collection:retry:{failed_intent_id}"
+    )
+
+
 def test_payment_requests_reject_client_owned_callback_urls() -> None:
     with pytest.raises(ValidationError):
         PaymentPreparationRequest(method="wave", callback_url="https://attacker.test/redirect")
@@ -303,6 +377,10 @@ def test_payment_requests_reject_client_owned_callback_urls() -> None:
             customer_email="driver@example.com",
             callback_url="https://attacker.test/redirect",
         )
+
+
+def test_expired_diddipay_intent_is_a_retryable_terminal_status() -> None:
+    assert _payment_status_from_diddipay("expired") is PaymentStatus.CANCELLED
 
 
 @pytest.mark.asyncio
