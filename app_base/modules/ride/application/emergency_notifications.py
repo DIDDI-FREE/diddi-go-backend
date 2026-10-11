@@ -70,20 +70,32 @@ class EmergencyNotificationService:
         return results
 
     async def _send_whatsapp(self, ride: Ride, recipient: EmergencyRecipient, payload: dict) -> dict:
-        if not settings.emergency_whatsapp_webhook_url:
-            return await self._skip(ride, recipient, "whatsapp_webhook_not_configured")
-        headers = {"Content-Type": "application/json"}
-        if settings.emergency_whatsapp_api_key:
-            headers["Authorization"] = f"Bearer {settings.emergency_whatsapp_api_key}"
+        if not settings.evolution_api_url:
+            return await self._skip(ride, recipient, "evolution_api_url_not_configured")
+        if not settings.evolution_api_key:
+            return await self._skip(ride, recipient, "evolution_api_key_not_configured")
+        if not settings.evolution_instance:
+            return await self._skip(ride, recipient, "evolution_instance_not_configured")
+
+        number = _evolution_number(recipient.recipient)
+        if not number:
+            return await self._skip(ride, recipient, "invalid_whatsapp_recipient")
+
+        url = (
+            f"{settings.evolution_api_url.rstrip('/')}"
+            f"/message/sendText/{settings.evolution_instance}"
+        )
+        headers = {
+            "Content-Type": "application/json",
+            "apikey": settings.evolution_api_key,
+        }
         body = {
-            "to": recipient.recipient,
-            "template": "diddigo_emergency_alert",
-            "message": _human_message(payload),
-            "data": payload,
+            "number": number,
+            "text": _human_message(payload),
         }
         try:
-            async with httpx.AsyncClient(timeout=settings.emergency_notification_timeout_seconds) as client:
-                response = await client.post(settings.emergency_whatsapp_webhook_url, json=body, headers=headers)
+            async with httpx.AsyncClient(timeout=settings.evolution_api_timeout_seconds) as client:
+                response = await client.post(url, json=body, headers=headers)
                 response.raise_for_status()
         except Exception as exc:
             return self._failed(ride, recipient, str(exc))
@@ -197,3 +209,10 @@ def _result(recipient: EmergencyRecipient, status: str, *, reason: str | None = 
         "status": status,
         "reason": reason,
     }
+
+
+def _evolution_number(value: str | None) -> str:
+    """Evolution expects the international number as digits, without '+'."""
+    if not value:
+        return ""
+    return "".join(character for character in value if character.isdigit())

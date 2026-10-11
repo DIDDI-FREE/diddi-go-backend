@@ -152,8 +152,10 @@ class Settings(BaseSettings):
 
     emergency_support_email: str = "direction.generale@diddifree.com"
     emergency_support_whatsapp: str | None = None
-    emergency_whatsapp_webhook_url: str | None = None
-    emergency_whatsapp_api_key: str | None = None
+    evolution_api_url: str | None = None
+    evolution_api_key: str | None = None
+    evolution_instance: str | None = None
+    evolution_api_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
     emergency_email_from: str = "alerts@diddifree.com"
     emergency_smtp_host: str | None = None
     emergency_smtp_port: int = 587
