@@ -1,7 +1,7 @@
 # Contrat HTTP DiddiGo
 
 **Source :** `app_base.main:app.openapi()`
-**Généré le :** 2026-10-10
+**Généré le :** 2026-10-12
 **Version applicative :** 0.1.0
 
 La spécification complète, incluant les schémas de requête et de réponse, est dans [`openapi.json`](openapi.json). Ce fichier est généré depuis le code ; ne pas le modifier manuellement.
@@ -11,6 +11,27 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 
 - **121 chemins**
 - **135 opérations HTTP**
+
+## Règles comportementales frontend
+
+### Démarrage sécurisé d'une course
+
+- `POST /v1/rides/{ride_id}/start` accepte un code à six chiffres.
+- Un code invalide répond `422 INVALID_RIDE_START_CODE` avec `details.attempts` et `details.maximum_attempts`.
+- À la cinquième tentative invalide par défaut, la route répond `423 RIDE_START_CODE_BLOCKED`. Le blocage est persistant.
+
+### Reprise d'un paiement numérique
+
+- `POST /v1/payments/{ride_id}/prepare` réutilise une intention non terminale.
+- Si l'intention précédente est `failed`, `cancelled` ou expirée, le même appel crée une nouvelle intention et retourne ses nouveaux `payment_intent_id` et `next_action`.
+- `GET /v1/payments/{ride_id}` reste la source de vérité après retour navigateur.
+
+### Alerte SOS
+
+- `POST /v1/rides/{ride_id}/emergency` persiste l'alerte avant les notifications externes.
+- La réponse contient `event_id`, `sequence`, `requested_at` et `notifications[]`.
+- Chaque notification expose `target`, `channel`, `status` et éventuellement `reason`.
+- La limitation répond `429 EMERGENCY_RATE_LIMITED` avec `details.retry_after_seconds`.
 
 ## admin-driver-wallet
 

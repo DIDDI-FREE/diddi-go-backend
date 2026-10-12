@@ -1,6 +1,8 @@
 # DiddiGo — brief frontend
 
-**Date :** 10 octobre 2026
+**Version :** 2026.10.12
+**Publié le :** 10 octobre 2026
+**Dernière mise à jour :** 12 octobre 2026
 **But :** intégrer le frontend et les applications mobiles sur le backend réellement disponible, tout en préparant le parcours MVP figé.
 
 ## Sources à utiliser
@@ -53,8 +55,12 @@ L'application chauffeur envoie `driver.location_push` avec latitude/longitude ; 
 3. La réponse de `/arrive` fournit `waiting_started_at`, `free_seconds`, `no_show_after_seconds` et `price_per_minute_xof`. Utiliser ces valeurs serveur plutôt que coder `3 minutes`, `10 minutes` ou `100 XOF` en dur.
 4. Le passager voit alors le code à six chiffres et le contenu QR dans `start_authorization` dans le détail de sa course. Le chauffeur ne doit jamais recevoir ni afficher ce code avant saisie/scan par le passager.
 5. Le chauffeur appelle `POST /v1/rides/{ride_id}/start` avec le code.
-6. Après cinq essais invalides par défaut, afficher le blocage support renvoyé par le backend.
-7. Lorsque `no_show_after_seconds` est atteint, le chauffeur peut appeler `POST /v1/rides/{ride_id}/no-show`.
+6. Une saisie incorrecte renvoie `422 INVALID_RIDE_START_CODE` avec `details.attempts` et
+   `details.maximum_attempts`. La tentative est persistée côté serveur : ne jamais maintenir un
+   compteur de sécurité local comme source de vérité.
+7. La cinquième saisie incorrecte par défaut renvoie `423 RIDE_START_CODE_BLOCKED`. Les essais
+   suivants, même avec le bon code, restent bloqués et nécessitent une intervention support.
+8. Lorsque `no_show_after_seconds` est atteint, le chauffeur peut appeler `POST /v1/rides/{ride_id}/no-show`.
 
 #### Fonctionnement de l'attente pré-course
 
@@ -97,6 +103,50 @@ Statuts à afficher :
 | `released` | Le payout a échoué ou a été rejeté ; DiddiGo a restitué le montant disponible. Afficher `failure_code`/`failure_message` lorsqu'ils existent. |
 
 Le montant minimum et les frais sont configurés côté backend. La `beneficiary_reference` doit respecter le format accepté par DiddiPay ; ne pas annoncer un canal de payout, notamment Wave, tant qu'il n'est pas confirmé par le contrat DiddiPay déployé.
+
+### Paiement passager et reprise après expiration
+
+1. Appeler `POST /v1/payments/{ride_id}/prepare` avec `method`, `customer_email` et, si disponible,
+   `customer_phone`.
+2. Si la réponse contient `next_action.type=redirect`, ouvrir uniquement l'URL renvoyée dans
+   `next_action.url`. Le frontend ne construit jamais une URL DiddiPay lui-même.
+3. Une intention encore `pending`, `requires_action` ou `processing` est idempotente : un nouvel
+   appel à `/prepare` renvoie la même intention.
+4. Si l'intention précédente est terminale (`failed`, `cancelled` ou expirée chez DiddiPay), rappeler
+   le même endpoint `/prepare`. DiddiGo crée une nouvelle tentative et renvoie un nouveau
+   `payment_intent_id` et un nouveau `next_action`; aucune nouvelle route frontend n'est nécessaire.
+5. Après le retour navigateur, une reconnexion ou une reprise d'application, relire
+   `GET /v1/payments/{ride_id}`. Le retour `/payments/return` n'est pas une preuve de paiement : le
+   statut serveur, alimenté par webhook et réconciliation, reste la source de vérité.
+6. Ne jamais confirmer localement un gain chauffeur et ne jamais créditer le wallet depuis le
+   frontend.
+
+Statuts d'affichage principaux :
+
+| Statut | Action frontend |
+|---|---|
+| `requires_action` | Ouvrir ou proposer `next_action.url`. |
+| `processing` | Afficher le traitement et interroger à nouveau avec un délai raisonnable. |
+| `succeeded` | Afficher le paiement confirmé. |
+| `failed` / `cancelled` | Proposer « Réessayer », qui rappelle `/prepare`. |
+
+### SOS et contacts d'urgence
+
+1. Le passager ou le chauffeur configure son contact via `PUT /v1/me/emergency-contact`. Au moins
+   un canal exploitable, téléphone ou e-mail, doit être fourni selon le schéma OpenAPI.
+2. Sur confirmation explicite de l'utilisateur, appeler `POST /v1/rides/{ride_id}/emergency` avec
+   une `note` optionnelle. Ne pas déclencher cette route automatiquement depuis un simple affichage.
+3. Une réponse réussie confirme d'abord la persistance de l'alerte avec `status=open`, `event_id`,
+   `sequence` et `requested_at`. L'alerte reste créée même si un canal externe échoue.
+4. Lire `notifications[]` pour le diagnostic par canal. Chaque élément contient `target`
+   (`support` ou `emergency_contact`), `channel` (`email` ou `whatsapp`), `status`
+   (`sent`, `failed` ou `skipped`) et éventuellement `reason`.
+5. Afficher à l'utilisateur que l'alerte a été enregistrée dès que la route réussit. Ne pas afficher
+   les détails techniques de `reason`; les conserver avec le `request_id` pour le support.
+6. Un nouvel appel trop rapide renvoie `429 EMERGENCY_RATE_LIMITED` et
+   `details.retry_after_seconds`. Désactiver temporairement le bouton pendant ce délai.
+7. Le frontend n'appelle jamais Evolution API, SMTP ou un webhook WhatsApp. DiddiGo orchestre les
+   notifications serveur et Evolution API transporte WhatsApp.
 
 ## Fonction encore dépendante d'un contrat externe
 
