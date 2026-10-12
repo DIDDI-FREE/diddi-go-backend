@@ -5,6 +5,8 @@
 **Dernière mise à jour :** 12 octobre 2026
 **But :** intégrer le frontend et les applications mobiles sur le backend réellement disponible, tout en préparant le parcours MVP figé.
 
+**Complément obligatoire :** lire également la [révision V2 du 12 octobre 2026](DIDDIGO_FRONTEND_CLARIFICATIONS_2026-10-12_V2.md), qui précise DiddiFiles, les traces GPS, DiddiComms, les capacités chauffeur et les résultats SOS sans prétendre que les correctifs encore planifiés sont déjà livrés.
+
 ## Sources à utiliser
 
 | Besoin | Référence |
