@@ -31,12 +31,15 @@ from app_base.modules.ride.domain.interfaces import (
 )
 from app_base.shared_kernel.contracts.capabilities import CapabilityStatusPublisher
 
+from .driver_online_eligibility import DriverOnlineEligibilityService
+
 
 @dataclass
 class DriverService:
     driver_repo: DriverProfileRepository
     vehicle_repo: VehicleRepository
     capability_publisher: CapabilityStatusPublisher | None = None
+    online_eligibility: DriverOnlineEligibilityService | None = None
 
     async def create_profile(
         self,
@@ -510,6 +513,15 @@ class DriverService:
         if profile is not None:
             vehicle = await self.vehicle_repo.find_active_for_driver(profile.id)
             driver_capability = _driver_capability_payload(profile, vehicle=vehicle)
+            if self.online_eligibility is not None:
+                operational = await self.online_eligibility.evaluate(profile.id)
+                driver_capability["blocking_reasons"].extend(operational["blocking_reasons"])
+                driver_capability["blocking_reasons"] = list(dict.fromkeys(driver_capability["blocking_reasons"]))
+                driver_capability["can_go_online"] = not driver_capability["blocking_reasons"]
+                driver_capability["online_requirements"] = {
+                    "partner": operational["partner"],
+                    "wallet": operational["wallet"],
+                }
 
         return {
             "user_id": str(user_id),

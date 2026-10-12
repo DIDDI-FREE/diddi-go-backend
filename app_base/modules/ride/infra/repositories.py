@@ -15,6 +15,7 @@ from uuid import UUID
 from geoalchemy2.shape import from_shape, to_shape
 from shapely.geometry import Point
 from sqlalchemy import case, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app_base.modules.ride.domain.entities import (
@@ -297,6 +298,44 @@ class SqlAlchemyRideRepository:
                 ),
             )
         await self._session.flush()
+
+    async def save_route_point_batch(
+        self,
+        *,
+        batch_id: UUID,
+        actor_user_id: UUID,
+        payload_hash: str,
+        points: list[RideRoutePoint],
+    ) -> tuple[int, bool, bool]:
+        if not points:
+            return 0, False, False
+        statement = (
+            pg_insert(orm.RideLocationBatchModel)
+            .values(
+                ride_id=points[0].ride_id,
+                batch_id=batch_id,
+                actor_user_id=actor_user_id,
+                samples_count=len(points),
+                payload_hash=payload_hash,
+            )
+            .on_conflict_do_nothing(constraint="uq_ride_location_batch")
+            .returning(orm.RideLocationBatchModel.id)
+        )
+        inserted = (await self._session.execute(statement)).scalar_one_or_none()
+        if inserted is None:
+            existing = await self._session.execute(
+                select(
+                    orm.RideLocationBatchModel.samples_count,
+                    orm.RideLocationBatchModel.payload_hash,
+                ).where(
+                    orm.RideLocationBatchModel.ride_id == points[0].ride_id,
+                    orm.RideLocationBatchModel.batch_id == batch_id,
+                )
+            )
+            samples_count, existing_hash = existing.one()
+            return int(samples_count), True, existing_hash != payload_hash
+        await self.save_route_points(points)
+        return len(points), False, False
 
     async def latest_route_point(self, ride_id: UUID) -> RideRoutePoint | None:
         result = await self._session.execute(
@@ -610,6 +649,7 @@ class SqlAlchemyRideQuoteRepository:
         )
         self._session.add(row)
         await self._session.flush()
+
         return quote
 
     async def find_by_id(self, quote_id: UUID) -> RideQuote | None:

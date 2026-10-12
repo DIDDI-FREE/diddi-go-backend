@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Query, Request
 
@@ -50,11 +50,13 @@ from app_base.modules.ride.infra.repositories import (
 from app_base.modules.ride.infra.routing_client import DiddiMapRoutingClient
 from app_base.modules.ride.presentation.schemas import (
     PlaceSearchResponseItem,
+    PreRideArrivalResponse,
     PricingEstimateRequest,
     RideCancelRequest,
     RideCreateRequest,
     RideEmergencyRequest,
     RideLocationSamplesRequest,
+    RideLocationSamplesResponse,
     RideRatingRequest,
     RideStartRequest,
     RideStatusUpdateRequest,
@@ -364,7 +366,7 @@ async def start_waiting(
     return result
 
 
-@router.post("/{ride_id}/arrive")
+@router.post("/{ride_id}/arrive", response_model=PreRideArrivalResponse)
 async def mark_driver_arrived(
     request: Request,
     ride_id: UUID,
@@ -526,7 +528,7 @@ async def rate_ride(
     )
 
 
-@router.post("/{ride_id}/location-samples")
+@router.post("/{ride_id}/location-samples", response_model=RideLocationSamplesResponse)
 async def add_location_samples(
     ride_id: UUID,
     payload: RideLocationSamplesRequest,
@@ -538,6 +540,7 @@ async def add_location_samples(
         ride_id,
         [sample.model_dump() for sample in payload.samples],
         actor_user_id=current_user.id,
+        batch_id=payload.batch_id or uuid4(),
     )
 
 

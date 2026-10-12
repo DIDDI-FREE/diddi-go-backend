@@ -79,7 +79,25 @@ class RideLocationSamplePayload(BaseModel):
 
 
 class RideLocationSamplesRequest(BaseModel):
+    batch_id: UUID | None = None
     samples: list[RideLocationSamplePayload] = Field(min_length=1, max_length=120)
+
+
+class RideLocationSamplesResponse(BaseModel):
+    ride_id: UUID
+    batch_id: UUID
+    accepted_samples: int
+    replayed: bool
+
+
+class PreRideArrivalResponse(BaseModel):
+    ride_id: UUID
+    status: str
+    arrived_at: datetime
+    waiting_started_at: datetime
+    free_seconds: int
+    no_show_after_seconds: int
+    price_per_minute_xof: int
 
 
 class RideEmergencyRequest(BaseModel):

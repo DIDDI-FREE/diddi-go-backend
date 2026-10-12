@@ -49,35 +49,40 @@ Content-Type: application/json
 
 Le corps contient `samples`, entre 1 et 120 éléments selon l'OpenAPI. Seul le chauffeur affecté peut écrire les traces de la course.
 
-### Règle temporaire en cas de timeout
+### Rejeu après timeout
 
-La route ne possède pas encore de `batch_id` ni de garantie d'idempotence. Si la requête expire sans réponse :
+Le frontend doit générer un UUID `batch_id` avant chaque envoi et le conserver avec le lot. Si la requête expire sans réponse, il rejoue exactement le même corps avec le même `batch_id`.
 
-- conserver localement le lot et son heure ;
-- enregistrer le `request_id` lorsque le proxy en fournit un ;
-- ne pas conclure que l'écriture a échoué ;
-- ne pas rejouer immédiatement le même lot, car il pourrait déjà être en base ;
-- transmettre le contexte au support jusqu'à la livraison de l'idempotence GPS.
+La réponse contient :
+
+```json
+{
+  "ride_id": "<uuid>",
+  "batch_id": "<uuid stable du client>",
+  "accepted_samples": 12,
+  "replayed": false
+}
+```
+
+`replayed=true` signifie que DiddiGo connaissait déjà ce lot et n'a pas créé de doublon. L'absence de `batch_id` reste acceptée pour compatibilité, mais ne permet pas au client de rejouer une requête dont la réponse a été perdue.
+
+Réutiliser un `batch_id` avec un contenu différent répond `409 GPS_BATCH_IDEMPOTENCY_CONFLICT`. Dans ce cas, ne pas remplacer silencieusement le lot local : générer un nouvel identifiant uniquement s'il s'agit réellement d'un nouveau lot.
 
 Le WebSocket `driver.location_push` sert au temps réel. `location-samples` sert à la trace durable de la course ; ces deux mécanismes ne se remplacent pas.
 
 ## 3. Capacités chauffeur et passage en ligne
 
-`GET /v1/me/capabilities` décrit le profil métier, mais sa valeur `can_go_online` ne couvre pas encore toutes les protections appliquées par `POST /v1/drivers/online`.
-
-La route `/online` reste la source de vérité et peut refuser notamment avec :
+`GET /v1/me/capabilities` et `POST /v1/drivers/online` utilisent désormais la même règle d'éligibilité opérationnelle. Les blocages possibles incluent notamment :
 
 - `DRIVER_NOT_VERIFIED` ;
 - véhicule absent ou non validé ;
 - partenaire suspendu ;
 - `DRIVER_BALANCE_TOO_LOW`.
 
-Jusqu'au correctif backend :
-
-- utiliser `capabilities` pour préparer l'écran ;
-- ne pas présenter `can_go_online=true` comme une garantie ;
-- traiter proprement le refus de `/drivers/online` ;
-- sur `DRIVER_BALANCE_TOO_LOW`, afficher le solde et le minimum fournis dans `details`, puis proposer la recharge.
+- utiliser `can_go_online` et `blocking_reasons` pour préparer l'écran ;
+- lire `online_requirements.wallet` pour afficher `balance`, `min_balance` et `currency` ;
+- continuer à traiter proprement un refus de `/drivers/online`, car l'état peut changer entre la lecture et l'action ;
+- sur `DRIVER_BALANCE_TOO_LOW`, proposer la recharge.
 
 Le frontend ne doit pas dupliquer le calcul du solde minimum comme règle de sécurité.
 
@@ -85,14 +90,15 @@ Le frontend ne doit pas dupliquer le calcul du solde minimum comme règle de sé
 
 Le frontend communique avec DiddiComms, jamais avec le resolver interne DiddiGo.
 
-Le comportement DiddiGo actuellement déployé prévoit :
+Le comportement DiddiGo prévoit :
 
 - messagerie et appel pendant une course active ;
 - appel désactivé après fin ou annulation ;
-- messagerie encore autorisée pendant une grâce de 48 heures après fin ou annulation ;
-- `closes_at` indique la fin de cette grâce.
+- messagerie fermée immédiatement après annulation, avec `closes_at=cancelled_at` ;
+- messagerie encore autorisée pendant une grâce de 48 heures après une course terminée ;
+- `closes_at` indique la fermeture effective.
 
-La fermeture immédiate de l'écriture après annulation est une modification produit planifiée, pas le comportement actuel. Le frontend doit toujours respecter la réponse DiddiComms et ne jamais déduire lui-même les permissions depuis le seul statut de course.
+Le frontend doit toujours respecter la réponse DiddiComms et ne jamais déduire lui-même les permissions depuis le seul statut de course. La lecture de l'historique peut rester disponible quand l'envoi est fermé.
 
 ## 5. SOS et résultats par canal
 
@@ -210,8 +216,5 @@ Le frontend ne valide jamais un KYC ou un KYV. DiddiFiles sécurise le fichier ;
 
 ## 9. Points en attente de correctif backend
 
-- aligner `can_go_online` avec le solde et le statut partenaire ;
-- rendre les lots GPS rejouables de façon idempotente ;
-- confirmer puis appliquer la règle produit de fermeture DiddiComms après annulation ;
-- typer plus précisément les réponses d'attente pré-course dans l'OpenAPI ;
+- typer complètement les réponses `/start` et `/no-show` dans l'OpenAPI ;
 - compléter les purposes DiddiFiles manquants avant d'activer les soumissions concernées.

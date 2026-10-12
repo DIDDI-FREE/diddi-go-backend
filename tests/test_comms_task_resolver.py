@@ -120,6 +120,31 @@ async def test_resolver_keeps_chat_but_disables_calls_during_terminal_grace_peri
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["cancelled_by_passenger", "cancelled_by_driver"])
+async def test_resolver_closes_messages_immediately_after_cancellation(status: str) -> None:
+    from app_base.modules.auth.infra.models import UserModel
+    from app_base.modules.ride.infra.models import DriverProfileModel, RideModel
+
+    cancelled_at = datetime.now(UTC)
+    session = FakeSession(
+        {
+            (RideModel, RIDE_ID): _ride(status=status, cancelled_at=cancelled_at),
+            (UserModel, PASSENGER_ID): SimpleNamespace(phone="+237600000001"),
+            (DriverProfileModel, DRIVER_PROFILE_ID): SimpleNamespace(user_id=DRIVER_USER_ID),
+            (UserModel, DRIVER_USER_ID): SimpleNamespace(phone="+237600000002"),
+        }
+    )
+
+    projection = await RideCommsTaskResolver(session).resolve(task_type="ride", task_id=RIDE_ID)  # type: ignore[arg-type]
+
+    assert projection.state == status
+    assert projection.messaging_allowed is False
+    assert projection.calling_allowed is False
+    assert projection.closes_at == cancelled_at
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_resolver_rejects_unsupported_task_type() -> None:
     with pytest.raises(ApiError) as exc:
         await RideCommsTaskResolver(FakeSession({})).resolve(task_type="delivery", task_id=RIDE_ID)  # type: ignore[arg-type]

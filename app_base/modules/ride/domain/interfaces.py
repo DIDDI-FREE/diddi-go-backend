@@ -115,6 +115,15 @@ class RideRepository(Protocol):
 
     async def save_route_points(self, points: list[RideRoutePoint]) -> None: ...
 
+    async def save_route_point_batch(
+        self,
+        *,
+        batch_id: UUID,
+        actor_user_id: UUID,
+        payload_hash: str,
+        points: list[RideRoutePoint],
+    ) -> tuple[int, bool, bool]: ...
+
     async def latest_route_point(self, ride_id: UUID) -> RideRoutePoint | None: ...
 
     async def list_route_points(self, ride_id: UUID) -> list[RideRoutePoint]: ...

@@ -36,6 +36,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -369,6 +370,33 @@ class RideRoutePointModel(Base):
     accuracy_m: Mapped[Decimal | None] = mapped_column(Numeric(7, 2), nullable=True)
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="driver")
     extra: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
+
+
+class RideLocationBatchModel(Base):
+    """Idempotency receipt for one durable GPS sample batch."""
+
+    __tablename__ = "ride_location_batches"
+    __table_args__ = (
+        UniqueConstraint("ride_id", "batch_id", name="uq_ride_location_batch"),
+        Index("ix_ride_location_batches_ride_created", "ride_id", "created_at"),
+        {"schema": "ride"},
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        _PG_UUID, primary_key=True, server_default=text("uuid_generate_v4()"),
+    )
+    ride_id: Mapped[UUID] = mapped_column(
+        _PG_UUID,
+        ForeignKey("ride.rides.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    batch_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False)
+    actor_user_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False)
+    samples_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(),
+    )
 
 
 class PricingRuleModel(Base):

@@ -1422,9 +1422,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Mark Driver Arrived V1 Rides  Ride Id  Arrive Post"
+                  "$ref": "#/components/schemas/PreRideArrivalResponse"
                 }
               }
             }
@@ -1933,9 +1931,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Add Location Samples V1 Rides  Ride Id  Location Samples Post"
+                  "$ref": "#/components/schemas/RideLocationSamplesResponse"
                 }
               }
             }
@@ -11777,6 +11773,52 @@
         ],
         "title": "PointPayload"
       },
+      "PreRideArrivalResponse": {
+        "properties": {
+          "ride_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ride Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "arrived_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Arrived At"
+          },
+          "waiting_started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Waiting Started At"
+          },
+          "free_seconds": {
+            "type": "integer",
+            "title": "Free Seconds"
+          },
+          "no_show_after_seconds": {
+            "type": "integer",
+            "title": "No Show After Seconds"
+          },
+          "price_per_minute_xof": {
+            "type": "integer",
+            "title": "Price Per Minute Xof"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ride_id",
+          "status",
+          "arrived_at",
+          "waiting_started_at",
+          "free_seconds",
+          "no_show_after_seconds",
+          "price_per_minute_xof"
+        ],
+        "title": "PreRideArrivalResponse"
+      },
       "PricingEstimateRequest": {
         "properties": {
           "pickup": {
@@ -12096,6 +12138,18 @@
       },
       "RideLocationSamplesRequest": {
         "properties": {
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id"
+          },
           "samples": {
             "items": {
               "$ref": "#/components/schemas/RideLocationSamplePayload"
@@ -12111,6 +12165,36 @@
           "samples"
         ],
         "title": "RideLocationSamplesRequest"
+      },
+      "RideLocationSamplesResponse": {
+        "properties": {
+          "ride_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ride Id"
+          },
+          "batch_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Batch Id"
+          },
+          "accepted_samples": {
+            "type": "integer",
+            "title": "Accepted Samples"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ride_id",
+          "batch_id",
+          "accepted_samples",
+          "replayed"
+        ],
+        "title": "RideLocationSamplesResponse"
       },
       "RideRatingRequest": {
         "properties": {

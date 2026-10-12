@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import logging
 import math
 import secrets
@@ -753,7 +754,14 @@ class RideService:
         await self.ride_repo.save_rating(rating_entity)
         return {"id": str(rating_entity.id), "ride_id": str(ride_id), "rating": rating, "rater_role": rater_role}
 
-    async def add_location_samples(self, ride_id: UUID, samples: list[dict], *, actor_user_id: UUID) -> dict:
+    async def add_location_samples(
+        self,
+        ride_id: UUID,
+        samples: list[dict],
+        *,
+        actor_user_id: UUID,
+        batch_id: UUID,
+    ) -> dict:
         ride = await self.load_ride(ride_id)
         if not await self._is_assigned_driver(ride, actor_user_id):
             raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Seul le chauffeur assigne peut envoyer ces traces.")
@@ -770,14 +778,36 @@ class RideService:
             )
             for sample in samples
         ]
-        await self.ride_repo.save_route_points(points)
+        payload_hash = hashlib.sha256(
+            json.dumps(samples, sort_keys=True, separators=(",", ":"), default=_json_default).encode("utf-8")
+        ).hexdigest()
+        accepted_samples, replayed, conflict = await self.ride_repo.save_route_point_batch(
+            batch_id=batch_id,
+            actor_user_id=actor_user_id,
+            payload_hash=payload_hash,
+            points=points,
+        )
+        if conflict:
+            raise ApiError(
+                409,
+                "GPS_BATCH_IDEMPOTENCY_CONFLICT",
+                "Ce batch_id a deja ete utilise avec un lot GPS different.",
+                {"batch_id": str(batch_id)},
+            )
         log_event(
             "ride.location_samples.saved",
             ride_id=ride_id,
             actor_user_id=actor_user_id,
-            samples_count=len(points),
+            batch_id=batch_id,
+            samples_count=accepted_samples,
+            replayed=replayed,
         )
-        return {"ride_id": str(ride_id), "accepted_samples": len(points)}
+        return {
+            "ride_id": str(ride_id),
+            "batch_id": str(batch_id),
+            "accepted_samples": accepted_samples,
+            "replayed": replayed,
+        }
 
     async def create_share_link(self, ride_id: UUID, *, actor_user_id: UUID, actor_role: str) -> dict:
         ride = await self.load_ride(ride_id)
@@ -1055,6 +1085,12 @@ def _paginated_rides(rides: list[Ride], total: int, *, page: int, page_size: int
 
 def _normalise_actor_role(role: str) -> str:
     return "passenger" if role in {"user", "passenger"} else role
+
+
+def _json_default(value: object) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
 
 
 def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -> dict:

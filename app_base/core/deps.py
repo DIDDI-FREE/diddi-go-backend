@@ -50,6 +50,7 @@ from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentRepository
 from app_base.modules.ride.application.breakdown_service import RideBreakdownService
 from app_base.modules.ride.application.capability_projection import DurableDriverCapabilityPublisher
+from app_base.modules.ride.application.driver_online_eligibility import DriverOnlineEligibilityService
 from app_base.modules.ride.application.driver_provisioning_service import DriverProvisioningService
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.application.emergency_contact_service import EmergencyContactService
@@ -335,15 +336,27 @@ async def payment_return_context_store(redis: Redis = Depends(get_redis)) -> Pay
     return PaymentReturnContextStore(redis, ttl_seconds=settings.payment_return_context_ttl_seconds)
 
 
+async def driver_online_eligibility_service(
+    wallets: DriverWalletService = Depends(driver_wallet_service),
+    partner_repo_dep: SqlAlchemyPartnerRepository = Depends(partner_repo),
+) -> DriverOnlineEligibilityService:
+    return DriverOnlineEligibilityService(
+        wallets=wallets,
+        partners=PartnerService(partner_repo=partner_repo_dep),
+    )
+
+
 async def driver_service(
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
     vehicle_repo_dep: SqlAlchemyVehicleRepository = Depends(vehicle_repo),
     capability_publisher: DurableDriverCapabilityPublisher = Depends(capability_projection_publisher),
+    online_eligibility: DriverOnlineEligibilityService = Depends(driver_online_eligibility_service),
 ) -> DriverService:
     return DriverService(
         driver_repo=driver_repo_dep,
         vehicle_repo=vehicle_repo_dep,
         capability_publisher=capability_publisher,
+        online_eligibility=online_eligibility,
     )
 
 
@@ -434,6 +447,7 @@ __all__ = [
     "ride_service",
     "payment_service",
     "driver_wallet_service",
+    "driver_online_eligibility_service",
     "driver_service",
     "scoring_service",
     "device_service",

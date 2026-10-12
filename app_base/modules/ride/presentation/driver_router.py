@@ -18,18 +18,14 @@ from fastapi import APIRouter, Depends, Query
 from app_base.core.auth_deps import get_current_active_user, require_business_driver, require_role
 from app_base.core.deps import (
     capability_projection_publisher,
+    driver_online_eligibility_service,
     driver_service,
-    driver_wallet_service,
     get_driver_locations,
-    partner_service,
 )
-from app_base.core.error_codes import ErrorCode
-from app_base.core.errors import ApiError
 from app_base.core.observability import log_event
 from app_base.modules.auth.infra.models import UserModel
-from app_base.modules.partner.application.services import PartnerService
-from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.ride.application.capability_projection import DurableDriverCapabilityPublisher
+from app_base.modules.ride.application.driver_online_eligibility import DriverOnlineEligibilityService
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.domain.entities import DriverProfile
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
@@ -290,8 +286,7 @@ async def get_vehicle_kyv_detail(
 async def go_online(
     payload: GoOnlineRequest,
     service: DriverService = Depends(driver_service),
-    wallets: DriverWalletService = Depends(driver_wallet_service),
-    partners: PartnerService = Depends(partner_service),
+    eligibility: DriverOnlineEligibilityService = Depends(driver_online_eligibility_service),
     locations: RedisDriverLocationService = Depends(get_driver_locations),
     capabilities: DurableDriverCapabilityPublisher = Depends(capability_projection_publisher),
     current_user: UserModel = Depends(get_current_active_user),
@@ -301,22 +296,7 @@ async def go_online(
     has an active vehicle — matching must never offer a ride to a driver who
     cannot legally take it."""
     profile, vehicle = await service.resolve_driver(current_user.id)
-    blocked, reason = await partners.driver_is_blocked_by_partner(profile.id)
-    if blocked:
-        log_event(
-            "driver.online.blocked",
-            level="warning",
-            driver_id=profile.id,
-            user_id=current_user.id,
-            reason=reason,
-        )
-        raise ApiError(
-            403,
-            ErrorCode.PARTNER_SUSPENDED,
-            "Votre partenaire n'est pas actif. Vous ne pouvez pas passer en ligne.",
-            {"reason": reason},
-        )
-    await wallets.ensure_driver_can_go_online(profile.id)
+    await eligibility.ensure_can_go_online(profile.id)
     position = GeoPoint(lat=payload.lat, lng=payload.lng)
     await locations.update_position(current_user.id, position)
     await locations.set_available(current_user.id, available=True)

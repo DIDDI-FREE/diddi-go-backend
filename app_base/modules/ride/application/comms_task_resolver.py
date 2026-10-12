@@ -19,8 +19,8 @@ ACTIVE_COMMS_STATUSES = {
     RideStatus.IN_PROGRESS.value,
     RideStatus.WAITING.value,
 }
-TERMINAL_WITH_GRACE_STATUSES = {
-    RideStatus.COMPLETED.value,
+TERMINAL_WITH_GRACE_STATUSES = {RideStatus.COMPLETED.value}
+CANCELLED_COMMS_STATUSES = {
     RideStatus.CANCELLED_BY_PASSENGER.value,
     RideStatus.CANCELLED_BY_DRIVER.value,
 }
@@ -125,6 +125,8 @@ def _communication_closes_at(ride: RideModel) -> datetime | None:
     if ride.status in ACTIVE_COMMS_STATUSES:
         return None
     terminal_at = ride.completed_at or ride.cancelled_at
+    if ride.status in CANCELLED_COMMS_STATUSES and terminal_at is not None:
+        return _aware_utc(terminal_at)
     if ride.status in TERMINAL_WITH_GRACE_STATUSES and terminal_at is not None:
         return _aware_utc(terminal_at) + RIDE_COMMS_GRACE_PERIOD
     return None

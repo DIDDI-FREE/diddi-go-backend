@@ -33,6 +33,18 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 - `beneficiary_destination.type` vaut `mobile_money`, `phone` est au format E.164 et `network` identifie le réseau demandé.
 - Le frontend ne choisit pas le processeur de paiement. DiddiPay valide la disponibilité du réseau et exécute le payout.
 
+### Traces GPS durables
+
+- `POST /v1/rides/{ride_id}/location-samples` accepte un `batch_id` UUID optionnel.
+- Un client robuste génère ce `batch_id` avant l'envoi et réutilise exactement le même identifiant lors d'un retry après timeout.
+- La réponse contient `batch_id`, `accepted_samples` et `replayed`; un lot rejoué n'est pas inséré une seconde fois.
+- Réutiliser le même `batch_id` avec un corps différent répond `409 GPS_BATCH_IDEMPOTENCY_CONFLICT`.
+
+### Capacité chauffeur
+
+- `GET /v1/me/capabilities` applique les mêmes contrôles opérationnels que `POST /v1/drivers/online`, notamment le partenaire et le solde minimum.
+- `blocking_reasons` explique les blocages et `online_requirements.wallet` expose le solde, le minimum et la devise utiles à l'interface.
+
 ### Alerte SOS
 
 - `POST /v1/rides/{ride_id}/emergency` persiste l'alerte avant les notifications externes.

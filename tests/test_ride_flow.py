@@ -7,6 +7,8 @@ the PostGIS round-trip of pickup/dropoff geography columns.
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 
 from tests.test_auth_flow import register_and_login
@@ -356,10 +358,12 @@ async def test_rating_out_of_range_is_rejected(client, passenger, driver) -> Non
 
 async def test_driver_location_samples_power_public_share_link(client, passenger, driver) -> None:
     ride_id = await matched_ride(client, passenger, driver)
+    batch_id = str(uuid4())
 
     r = await client.post(
         f"/v1/rides/{ride_id}/location-samples",
         json={
+            "batch_id": batch_id,
             "samples": [
                 {
                     "lat": 5.352,
@@ -375,6 +379,45 @@ async def test_driver_location_samples_power_public_share_link(client, passenger
     )
     assert r.status_code == 200, r.text
     assert r.json()["accepted_samples"] == 1
+    assert r.json()["batch_id"] == batch_id
+    assert r.json()["replayed"] is False
+
+    replay_payload = {
+        "batch_id": batch_id,
+        "samples": [
+            {
+                "lat": 5.352,
+                "lng": -3.997,
+                "heading": 90,
+                "speed_kmh": 25,
+                "accuracy_m": 8,
+                "source": "driver",
+            }
+        ],
+    }
+    replay = await client.post(
+        f"/v1/rides/{ride_id}/location-samples",
+        json=replay_payload,
+        headers=driver,
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == {
+        "ride_id": ride_id,
+        "batch_id": batch_id,
+        "accepted_samples": 1,
+        "replayed": True,
+    }
+
+    conflict = await client.post(
+        f"/v1/rides/{ride_id}/location-samples",
+        json={
+            "batch_id": batch_id,
+            "samples": [{"lat": 5.4, "lng": -4.1, "source": "driver"}],
+        },
+        headers=driver,
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["error"]["code"] == "GPS_BATCH_IDEMPOTENCY_CONFLICT"
 
     r = await client.post(f"/v1/rides/{ride_id}/share-link", headers=passenger)
     assert r.status_code == 200, r.text

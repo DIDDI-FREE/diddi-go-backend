@@ -73,15 +73,28 @@ class DriverWalletService:
         }
 
     async def ensure_driver_can_go_online(self, driver_id: UUID) -> None:
-        min_balance = Decimal(settings.driver_min_balance)
-        wallet = await self.payment_repo.get_or_create_wallet(driver_id)
-        if wallet.balance < min_balance:
+        eligibility = await self.get_online_eligibility(driver_id)
+        if not eligibility["eligible"]:
             raise ApiError(
                 403,
                 ErrorCode.DRIVER_BALANCE_TOO_LOW,
                 "Solde chauffeur insuffisant pour passer en ligne.",
-                {"balance": int(wallet.balance), "min_balance": int(min_balance), "currency": wallet.currency},
+                {
+                    "balance": eligibility["balance"],
+                    "min_balance": eligibility["min_balance"],
+                    "currency": eligibility["currency"],
+                },
             )
+
+    async def get_online_eligibility(self, driver_id: UUID) -> dict:
+        min_balance = Decimal(settings.driver_min_balance)
+        wallet = await self.payment_repo.get_or_create_wallet(driver_id)
+        return {
+            "eligible": wallet.balance >= min_balance,
+            "balance": int(wallet.balance),
+            "min_balance": int(min_balance),
+            "currency": wallet.currency,
+        }
 
     async def create_topup(
         self,
