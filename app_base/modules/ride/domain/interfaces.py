@@ -10,6 +10,7 @@ happens by changing the `infra/` without touching `application/` or `domain/`.
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
 
@@ -31,6 +32,8 @@ from app_base.modules.ride.domain.entities import (
     RideRoutePoint,
     RideStatus,
     RideStatusTransition,
+    RideStop,
+    RideSupplement,
     Vehicle,
     VehicleCategory,
 )
@@ -112,6 +115,22 @@ class RideRepository(Protocol):
     async def save_rating(self, rating: RideRating) -> RideRating: ...
 
     async def has_rated(self, ride_id: UUID, rater_role: str) -> bool: ...
+
+    async def add_stop(self, stop: RideStop) -> RideStop: ...
+
+    async def count_stops(self, ride_id: UUID) -> int: ...
+
+    async def add_supplement(self, supplement: RideSupplement) -> RideSupplement: ...
+
+    async def list_supplements(self, ride_id: UUID) -> list[RideSupplement]: ...
+
+    async def find_supplement_for_update(
+        self, ride_id: UUID, supplement_id: UUID,
+    ) -> RideSupplement | None: ...
+
+    async def save_supplement(self, supplement: RideSupplement) -> RideSupplement: ...
+
+    async def accepted_supplements_total(self, ride_id: UUID) -> Decimal: ...
 
     async def save_route_points(self, points: list[RideRoutePoint]) -> None: ...
 

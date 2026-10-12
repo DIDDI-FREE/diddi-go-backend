@@ -9,8 +9,8 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 
 ## Surface
 
-- **121 chemins**
-- **135 opérations HTTP**
+- **122 chemins**
+- **136 opérations HTTP**
 
 ## Règles comportementales frontend
 
@@ -291,6 +291,7 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 | POST | `/v1/rides/{ride_id}/stops` | Add Ride Stop | 201, 422 | oui |
 | GET | `/v1/rides/{ride_id}/supplements` | List Ride Supplements | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/supplements` | Add Ride Supplement | 201, 422 | oui |
+| POST | `/v1/rides/{ride_id}/supplements/{supplement_id}/decision` | Decide Ride Supplement | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/waiting/start` | Start Waiting | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/waiting/stop` | Stop Waiting | 200, 422 | oui |
 

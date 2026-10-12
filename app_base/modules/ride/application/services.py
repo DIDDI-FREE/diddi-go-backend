@@ -55,6 +55,13 @@ _DEFAULT_PRICE_PER_MIN = Decimal("0")
 _SURGE_CAP = Decimal("1.60")
 _SHARE_TOKEN_BYTES = 24
 _SHARE_TTL_HOURS = 24
+_SUPPLEMENT_FIXED_AMOUNTS = {
+    "toll": Decimal("500"),
+    "parking": Decimal("200"),
+    "baggage_standard": Decimal("500"),
+    "baggage_large": Decimal("1000"),
+}
+_SUPPLEMENT_OTHER_MAX = Decimal("1000")
 
 
 def iso_utc(dt: datetime | None) -> str | None:
@@ -656,24 +663,23 @@ class RideService:
         *,
         actor_user_id: UUID,
         actor_role: str,
-        amount: Decimal,
-        reason: str,
+        supplement_type: str,
+        amount: Decimal | None,
     ) -> dict:
         ride = await self._require_active_ride_for_driver(
             ride_id, actor_user_id=actor_user_id, actor_role=actor_role, action="ajouter un supplement",
         )
-        if amount <= 0:
-            raise ApiError(422, "INVALID_SUPPLEMENT_AMOUNT", "Le montant du supplement doit etre positif.")
+        supplement_type = supplement_type.strip().lower()
+        amount = _supplement_amount(supplement_type, amount)
         supplement = RideSupplement(
-            id=uuid4(), ride_id=ride.id, amount=amount, reason=reason,
-            source="manual", created_by_user_id=actor_user_id, created_at=datetime.now(UTC),
+            id=uuid4(), ride_id=ride.id, amount=amount, reason=supplement_type,
+            source="catalog", status="pending", created_by_user_id=actor_user_id,
+            created_at=datetime.now(UTC),
         )
         await self.ride_repo.add_supplement(supplement)
-        ride.supplements_total += amount
-        await self.ride_repo.save(ride)
         log_event(
-            "ride.supplement.added", ride_id=ride.id, actor_user_id=actor_user_id,
-            amount=str(amount), reason=reason,
+            "ride.supplement.proposed", ride_id=ride.id, actor_user_id=actor_user_id,
+            amount=str(amount), supplement_type=supplement_type,
         )
         return _supplement_payload(supplement)
 
@@ -681,15 +687,58 @@ class RideService:
         self, ride_id: UUID, *, actor_user_id: UUID, actor_role: str
     ) -> dict:
         ride = await self.load_ride(ride_id)
-        if actor_role != "admin" and not await self._is_assigned_driver(ride, actor_user_id):
-            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Acces reserve au chauffeur assigne.")
+        is_participant = ride.passenger_user_id == actor_user_id or await self._is_assigned_driver(
+            ride, actor_user_id,
+        )
+        if actor_role != "admin" and not is_participant:
+            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Acces reserve aux participants de la course.")
         items = await self.ride_repo.list_supplements(ride.id)
         return {
             "items": [_supplement_payload(s) for s in items],
             "supplements_total": int(ride.supplements_total),
         }
-        for transition in ride.status_history:
-            await self.ride_repo.record_status_transition(transition)
+
+    async def decide_supplement(
+        self,
+        ride_id: UUID,
+        supplement_id: UUID,
+        *,
+        actor_user_id: UUID,
+        actor_role: str,
+        decision: str,
+    ) -> dict:
+        ride = await self.load_ride(ride_id)
+        if actor_role != "admin" and ride.passenger_user_id != actor_user_id:
+            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Seul le passager peut valider ce supplement.")
+        if ride.status not in {RideStatus.IN_PROGRESS, RideStatus.WAITING}:
+            raise ApiError(409, "RIDE_NOT_ACTIVE", "Le supplement doit etre traite pendant la course.")
+        supplement = await self.ride_repo.find_supplement_for_update(ride.id, supplement_id)
+        if supplement is None:
+            raise ApiError(404, "SUPPLEMENT_NOT_FOUND", "Supplement introuvable pour cette course.")
+        if supplement.status == decision:
+            return _supplement_payload(supplement)
+        if supplement.status != "pending":
+            raise ApiError(
+                409,
+                "SUPPLEMENT_ALREADY_DECIDED",
+                "Le supplement a deja ete accepte ou conteste.",
+                {"status": supplement.status},
+            )
+        supplement.status = decision
+        supplement.decided_by_user_id = actor_user_id
+        supplement.decided_at = datetime.now(UTC)
+        await self.ride_repo.save_supplement(supplement)
+        ride.supplements_total = await self.ride_repo.accepted_supplements_total(ride.id)
+        await self.ride_repo.save(ride)
+        log_event(
+            "ride.supplement.decided",
+            ride_id=ride.id,
+            supplement_id=supplement.id,
+            actor_user_id=actor_user_id,
+            decision=decision,
+            supplements_total=str(ride.supplements_total),
+        )
+        return _supplement_payload(supplement)
 
     async def cancel(self, ride_id: UUID, reason: str, *, actor_user_id: UUID, actor_role: str) -> dict:
         if reason not in VALID_CANCEL_REASONS:
@@ -1206,12 +1255,46 @@ def _supplement_payload(supplement: RideSupplement) -> dict:
         "ride_id": str(supplement.ride_id),
         "amount": int(supplement.amount),
         "reason": supplement.reason,
+        "type": supplement.reason,
         "source": supplement.source,
+        "status": supplement.status,
         "created_by_user_id": str(supplement.created_by_user_id)
         if supplement.created_by_user_id
         else None,
         "created_at": iso_utc(supplement.created_at) if supplement.created_at else None,
+        "decided_by_user_id": str(supplement.decided_by_user_id)
+        if supplement.decided_by_user_id
+        else None,
+        "decided_at": iso_utc(supplement.decided_at) if supplement.decided_at else None,
     }
+
+
+def _supplement_amount(supplement_type: str, requested_amount: Decimal | None) -> Decimal:
+    fixed = _SUPPLEMENT_FIXED_AMOUNTS.get(supplement_type)
+    if fixed is not None:
+        if requested_amount is not None and requested_amount != fixed:
+            raise ApiError(
+                422,
+                "INVALID_SUPPLEMENT_AMOUNT",
+                "Le montant ne correspond pas au tarif du supplement.",
+                {"type": supplement_type, "expected_amount": int(fixed)},
+            )
+        return fixed
+    if supplement_type != "other":
+        raise ApiError(
+            422,
+            "INVALID_SUPPLEMENT_TYPE",
+            "Type de supplement inconnu.",
+            {"allowed": [*_SUPPLEMENT_FIXED_AMOUNTS, "other"]},
+        )
+    if requested_amount is None or requested_amount <= 0 or requested_amount > _SUPPLEMENT_OTHER_MAX:
+        raise ApiError(
+            422,
+            "INVALID_SUPPLEMENT_AMOUNT",
+            "Le montant autre frais doit etre compris entre 1 et 1000 XOF.",
+            {"minimum_amount": 1, "maximum_amount": int(_SUPPLEMENT_OTHER_MAX)},
+        )
+    return requested_amount
 
 
 def _waiting_payload(ride: Ride) -> dict:

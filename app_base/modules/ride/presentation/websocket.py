@@ -178,6 +178,12 @@ class ConnectionManager:
             {"event": "ride.waiting_changed", **payload, "at": _now_iso()},
         )
 
+    async def broadcast_supplement_changed(self, ride_id: UUID, payload: dict[str, Any]) -> None:
+        await self.send_to_ride(
+            ride_id,
+            {"event": "ride.supplement_changed", "supplement": payload, "at": _now_iso()},
+        )
+
 
 manager = ConnectionManager()
 

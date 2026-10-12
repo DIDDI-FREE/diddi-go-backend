@@ -1771,6 +1771,77 @@
         }
       }
     },
+    "/v1/rides/{ride_id}/supplements/{supplement_id}/decision": {
+      "post": {
+        "tags": [
+          "ride"
+        ],
+        "summary": "Decide Ride Supplement",
+        "description": "Passenger accepts or disputes a driver supplement proposal.",
+        "operationId": "decide_ride_supplement_v1_rides__ride_id__supplements__supplement_id__decision_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ride_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ride Id"
+            }
+          },
+          {
+            "name": "supplement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supplement Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RideSupplementDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Decide Ride Supplement V1 Rides  Ride Id  Supplements  Supplement Id  Decision Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/rides/{ride_id}/cancel": {
       "post": {
         "tags": [
@@ -12295,6 +12366,19 @@
       },
       "RideSupplementCreateRequest": {
         "properties": {
+          "type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          },
           "amount": {
             "anyOf": [
               {
@@ -12304,23 +12388,43 @@
               {
                 "type": "string",
                 "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
               }
             ],
             "title": "Amount"
           },
           "reason": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Reason"
           }
         },
         "type": "object",
-        "required": [
-          "amount",
-          "reason"
-        ],
         "title": "RideSupplementCreateRequest"
+      },
+      "RideSupplementDecisionRequest": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "pattern": "^(accepted|disputed)$",
+            "title": "Decision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "RideSupplementDecisionRequest"
       },
       "ValidationError": {
         "properties": {

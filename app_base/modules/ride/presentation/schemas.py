@@ -11,7 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class PointPayload(BaseModel):
@@ -64,8 +64,23 @@ class RideStopCreateRequest(BaseModel):
 
 
 class RideSupplementCreateRequest(BaseModel):
-    amount: Decimal = Field(gt=0)
-    reason: str = Field(min_length=1, max_length=120)
+    type: str | None = Field(default=None, min_length=1, max_length=40)
+    amount: Decimal | None = Field(default=None, gt=0)
+    reason: str | None = Field(default=None, min_length=1, max_length=120)
+
+    @model_validator(mode="after")
+    def normalize_legacy_reason(self) -> RideSupplementCreateRequest:
+        # `reason` was the original category field. Keep accepting it during
+        # the migration while exposing the clearer `type` contract.
+        if self.type is None:
+            self.type = self.reason
+        if self.type is None:
+            raise ValueError("type is required")
+        return self
+
+
+class RideSupplementDecisionRequest(BaseModel):
+    decision: str = Field(pattern="^(accepted|disputed)$")
 
 
 class RideLocationSamplePayload(BaseModel):

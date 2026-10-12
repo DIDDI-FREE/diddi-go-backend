@@ -62,6 +62,7 @@ from app_base.modules.ride.presentation.schemas import (
     RideStatusUpdateRequest,
     RideStopCreateRequest,
     RideSupplementCreateRequest,
+    RideSupplementDecisionRequest,
 )
 from app_base.modules.ride.presentation.websocket import manager
 from app_base.shared_kernel.types import GeoPoint
@@ -467,13 +468,15 @@ async def add_ride_supplement(
     _driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
     """Driver adds a commissionable fare supplement mid-ride (SCRUM-524 #2)."""
-    return await service.add_supplement(
+    result = await service.add_supplement(
         ride_id,
         actor_user_id=current_user.id,
         actor_role=current_user.role,
         amount=payload.amount,
-        reason=payload.reason,
+        supplement_type=payload.type or "",
     )
+    await manager.broadcast_supplement_changed(ride_id, result)
+    return result
 
 
 @router.get("/{ride_id}/supplements")
@@ -481,7 +484,6 @@ async def list_ride_supplements(
     ride_id: UUID,
     service: RideService = Depends(ride_service),
     current_user: UserModel = Depends(get_current_user),
-    _driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
     """List a ride's fare supplements (SCRUM-524 #2)."""
     return await service.list_supplements(
@@ -489,6 +491,26 @@ async def list_ride_supplements(
         actor_user_id=current_user.id,
         actor_role=current_user.role,
     )
+
+
+@router.post("/{ride_id}/supplements/{supplement_id}/decision")
+async def decide_ride_supplement(
+    ride_id: UUID,
+    supplement_id: UUID,
+    payload: RideSupplementDecisionRequest,
+    service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    """Passenger accepts or disputes a driver supplement proposal."""
+    result = await service.decide_supplement(
+        ride_id,
+        supplement_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+        decision=payload.decision,
+    )
+    await manager.broadcast_supplement_changed(ride_id, result)
+    return result
 
 
 @router.post("/{ride_id}/cancel")

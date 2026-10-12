@@ -62,6 +62,21 @@ def _from_orm_geo(value: object) -> GeoPoint:
     return GeoPoint(lat=float(pt.y), lng=float(pt.x))
 
 
+def _supplement_to_domain(row: orm.RideSupplementModel) -> RideSupplement:
+    return RideSupplement(
+        id=row.id,
+        ride_id=row.ride_id,
+        amount=Decimal(str(row.amount)),
+        reason=row.reason,
+        source=row.source,
+        status=row.status,
+        created_by_user_id=row.created_by_user_id,
+        created_at=row.created_at,
+        decided_by_user_id=row.decided_by_user_id,
+        decided_at=row.decided_at,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Rides
 # ---------------------------------------------------------------------------
@@ -257,8 +272,11 @@ class SqlAlchemyRideRepository:
             amount=supplement.amount,
             reason=supplement.reason,
             source=supplement.source,
+            status=supplement.status,
             created_by_user_id=supplement.created_by_user_id,
             created_at=supplement.created_at or datetime.now(UTC),
+            decided_by_user_id=supplement.decided_by_user_id,
+            decided_at=supplement.decided_at,
         )
         self._session.add(row)
         await self._session.flush()
@@ -270,18 +288,45 @@ class SqlAlchemyRideRepository:
             .where(orm.RideSupplementModel.ride_id == ride_id)
             .order_by(orm.RideSupplementModel.created_at.asc()),
         )
-        return [
-            RideSupplement(
-                id=row.id,
-                ride_id=row.ride_id,
-                amount=Decimal(str(row.amount)),
-                reason=row.reason,
-                source=row.source,
-                created_by_user_id=row.created_by_user_id,
-                created_at=row.created_at,
+        return [_supplement_to_domain(row) for row in result.scalars().all()]
+
+    async def find_supplement_for_update(
+        self, ride_id: UUID, supplement_id: UUID,
+    ) -> RideSupplement | None:
+        # Serialize decisions for one ride so two accepted proposals cannot
+        # overwrite the aggregate fare total with stale values.
+        await self._session.execute(
+            select(orm.RideModel.id).where(orm.RideModel.id == ride_id).with_for_update(),
+        )
+        result = await self._session.execute(
+            select(orm.RideSupplementModel)
+            .where(
+                orm.RideSupplementModel.id == supplement_id,
+                orm.RideSupplementModel.ride_id == ride_id,
             )
-            for row in result.scalars().all()
-        ]
+            .with_for_update(),
+        )
+        row = result.scalar_one_or_none()
+        return _supplement_to_domain(row) if row is not None else None
+
+    async def save_supplement(self, supplement: RideSupplement) -> RideSupplement:
+        row = await self._session.get(orm.RideSupplementModel, supplement.id)
+        if row is None:
+            raise ValueError("supplement not found")
+        row.status = supplement.status
+        row.decided_by_user_id = supplement.decided_by_user_id
+        row.decided_at = supplement.decided_at
+        await self._session.flush()
+        return supplement
+
+    async def accepted_supplements_total(self, ride_id: UUID) -> Decimal:
+        result = await self._session.execute(
+            select(func.coalesce(func.sum(orm.RideSupplementModel.amount), 0)).where(
+                orm.RideSupplementModel.ride_id == ride_id,
+                orm.RideSupplementModel.status == "accepted",
+            ),
+        )
+        return Decimal(str(result.scalar_one()))
 
     async def save_route_points(self, points: list[RideRoutePoint]) -> None:
         for point in points:

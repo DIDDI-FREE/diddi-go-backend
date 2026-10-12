@@ -450,17 +450,18 @@ class RideStop:
 
 @dataclass
 class RideSupplement:
-    """A fare add-on line item (SCRUM-524 #2). source='manual' for a
-    driver-entered amount; 'auto' is reserved for routing-based pricing
-    (SCRUM-537). Commissionable -- included in the ride total at completion."""
+    """A fare add-on proposed by the driver and decided by the passenger."""
 
     id: UUID
     ride_id: UUID
     amount: Decimal
     reason: str
     source: str = "manual"
+    status: str = "pending"
     created_by_user_id: UUID | None = None
     created_at: datetime | None = None
+    decided_by_user_id: UUID | None = None
+    decided_at: datetime | None = None
 
 
 @dataclass

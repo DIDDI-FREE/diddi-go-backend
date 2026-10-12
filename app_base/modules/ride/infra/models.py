@@ -480,11 +480,15 @@ class RideStopModel(Base):
 
 
 class RideSupplementModel(Base):
-    """Fare add-on line item (SCRUM-524 #2). Commissionable; source manual|auto."""
+    """Fare add-on proposal. Only accepted rows contribute to the ride fare."""
 
     __tablename__ = "ride_supplements"
     __table_args__ = (
         CheckConstraint("amount > 0", name="ride_supplements_amount_positive"),
+        CheckConstraint(
+            "status IN ('pending', 'accepted', 'disputed')",
+            name="ride_supplements_status_valid",
+        ),
         {"schema": "ride"},
     )
 
@@ -500,10 +504,13 @@ class RideSupplementModel(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     reason: Mapped[str] = mapped_column(String(120), nullable=False)
     source: Mapped[str] = mapped_column(String(10), nullable=False, default="manual")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     created_by_user_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()"),
     )
+    decided_by_user_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class EmergencyContactModel(Base):
