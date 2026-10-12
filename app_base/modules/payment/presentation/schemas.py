@@ -6,6 +6,7 @@ Shape matches the API contract (`DiddiGo_Contrat_API.md` §3):
 """
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -38,11 +39,20 @@ class DriverWithdrawalQuoteRequest(BaseModel):
     amount: int = Field(gt=0)
 
 
+class MobileMoneyBeneficiaryDestination(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["mobile_money"] = "mobile_money"
+    phone: str = Field(pattern=r"^\+[1-9]\d{7,14}$", max_length=16)
+    network: str = Field(min_length=1, max_length=32)
+
+
 class DriverWithdrawalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     quote_id: UUID
     beneficiary_reference: str = Field(min_length=1, max_length=128)
+    beneficiary_destination: MobileMoneyBeneficiaryDestination
 
 
 class DriverWithdrawalQuoteResponse(BaseModel):
@@ -63,6 +73,7 @@ class DriverWithdrawalResponse(BaseModel):
     net_amount: int
     currency: str
     beneficiary_reference: str
+    beneficiary_destination: MobileMoneyBeneficiaryDestination | None = None
     status: str
     payout_id: UUID | None = None
     business_reference: str | None = None

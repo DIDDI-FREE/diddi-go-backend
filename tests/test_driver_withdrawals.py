@@ -70,7 +70,12 @@ async def test_driver_withdrawal_succeeds_without_double_debit(client, driver) -
         "/v1/drivers/me/wallet/withdrawals",
         json={
             "quote_id": quote.json()["quote_id"],
-            "beneficiary_reference": "mobile-money:+2250700000000",
+            "beneficiary_reference": "driver:test",
+            "beneficiary_destination": {
+                "type": "mobile_money",
+                "phone": "+2250700000000",
+                "network": "mtn",
+            },
         },
         headers=driver,
     )
@@ -79,6 +84,12 @@ async def test_driver_withdrawal_succeeds_without_double_debit(client, driver) -
     assert response.json()["status"] == "succeeded"
     assert response.json()["net_amount"] == 5_000
     assert gateway.created["amount"] == 5_000
+    assert gateway.created["beneficiary_destination"] == {
+        "type": "mobile_money",
+        "phone": "+2250700000000",
+        "network": "mtn",
+    }
+    assert response.json()["beneficiary_destination"] == gateway.created["beneficiary_destination"]
     wallet = (await client.get("/v1/drivers/me/wallet", headers=driver)).json()
     assert wallet["balance"] == 0
 
@@ -99,7 +110,12 @@ async def test_failed_withdrawal_releases_reserved_balance(client, driver) -> No
         "/v1/drivers/me/wallet/withdrawals",
         json={
             "quote_id": quote.json()["quote_id"],
-            "beneficiary_reference": "mobile-money:+2250700000000",
+            "beneficiary_reference": "driver:test",
+            "beneficiary_destination": {
+                "type": "mobile_money",
+                "phone": "+2250700000000",
+                "network": "orange",
+            },
         },
         headers=driver,
     )
@@ -138,7 +154,12 @@ async def test_processing_withdrawal_exposes_available_and_reserved_balances(cli
         "/v1/drivers/me/wallet/withdrawals",
         json={
             "quote_id": quote.json()["quote_id"],
-            "beneficiary_reference": "mobile-money:+2250700000000",
+            "beneficiary_reference": "driver:test",
+            "beneficiary_destination": {
+                "type": "mobile_money",
+                "phone": "+2250700000000",
+                "network": "moov",
+            },
         },
         headers=driver,
     )
@@ -164,7 +185,12 @@ async def test_replaying_consumed_quote_returns_same_withdrawal_without_double_d
     )
     payload = {
         "quote_id": quote.json()["quote_id"],
-        "beneficiary_reference": "mobile-money:+2250700000000",
+        "beneficiary_reference": "driver:test",
+        "beneficiary_destination": {
+            "type": "mobile_money",
+            "phone": "+2250700000000",
+            "network": "mtn",
+        },
     }
 
     first = await client.post("/v1/drivers/me/wallet/withdrawals", json=payload, headers=driver)
@@ -173,4 +199,38 @@ async def test_replaying_consumed_quote_returns_same_withdrawal_without_double_d
 
     assert replay.status_code == 201
     assert replay.json()["id"] == first.json()["id"]
+    assert replay.json()["beneficiary_destination"] == payload["beneficiary_destination"]
     assert wallet["balance"] == 3_000
+
+
+@pytest.mark.asyncio
+async def test_withdrawal_requires_a_valid_mobile_money_destination(client, driver) -> None:
+    wallet = (await client.get("/v1/drivers/me/wallet", headers=driver)).json()
+    await _credit_wallet(UUID(wallet["driver_id"]), 2_000)
+    quote = await client.post(
+        "/v1/drivers/me/wallet/withdrawals/quote",
+        json={"amount": 2_000},
+        headers=driver,
+    )
+
+    missing = await client.post(
+        "/v1/drivers/me/wallet/withdrawals",
+        json={"quote_id": quote.json()["quote_id"], "beneficiary_reference": "driver:test"},
+        headers=driver,
+    )
+    invalid_phone = await client.post(
+        "/v1/drivers/me/wallet/withdrawals",
+        json={
+            "quote_id": quote.json()["quote_id"],
+            "beneficiary_reference": "driver:test",
+            "beneficiary_destination": {
+                "type": "mobile_money",
+                "phone": "0700000000",
+                "network": "mtn",
+            },
+        },
+        headers=driver,
+    )
+
+    assert missing.status_code == 422
+    assert invalid_phone.status_code == 422

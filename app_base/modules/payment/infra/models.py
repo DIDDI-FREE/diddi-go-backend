@@ -196,6 +196,7 @@ class DriverWithdrawalModel(Base):
     net_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="XOF")
     beneficiary_reference: Mapped[str] = mapped_column(String(128), nullable=False)
+    beneficiary_destination: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     payout_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     business_reference: Mapped[str] = mapped_column(String(128), nullable=False)

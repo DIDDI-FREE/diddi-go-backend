@@ -206,7 +206,14 @@ class DriverWalletService:
             "expires_at": quote.expires_at.isoformat(),
         }
 
-    async def request_withdrawal(self, *, driver_user_id: UUID, quote_id: UUID, beneficiary_reference: str) -> dict:
+    async def request_withdrawal(
+        self,
+        *,
+        driver_user_id: UUID,
+        quote_id: UUID,
+        beneficiary_reference: str,
+        beneficiary_destination: dict,
+    ) -> dict:
         driver_id = await self._driver_id_for_user(driver_user_id)
         if not beneficiary_reference.strip():
             raise ApiError(422, "WITHDRAWAL_BENEFICIARY_REQUIRED", "Le beneficiaire est requis.")
@@ -220,6 +227,7 @@ class DriverWalletService:
             fees=Decimal("0"),
             net_amount=Decimal("0"),
             beneficiary_reference=beneficiary_reference.strip(),
+            beneficiary_destination=beneficiary_destination,
             business_reference=f"diddigo:driver_withdrawal:{withdrawal_id}",
             idempotency_key=f"diddigo:driver_withdrawal:{withdrawal_id}:v1",
             reserved_at=now,
@@ -243,6 +251,7 @@ class DriverWalletService:
                 {
                     "business_reference": withdrawal.business_reference,
                     "beneficiary_reference": withdrawal.beneficiary_reference,
+                    "beneficiary_destination": withdrawal.beneficiary_destination,
                     "amount": int(withdrawal.net_amount),
                     "currency": withdrawal.currency,
                     "metadata": {
@@ -504,6 +513,7 @@ def _withdrawal_payload(withdrawal: DriverWithdrawal) -> dict:
         "net_amount": int(withdrawal.net_amount),
         "currency": withdrawal.currency,
         "beneficiary_reference": withdrawal.beneficiary_reference,
+        "beneficiary_destination": withdrawal.beneficiary_destination,
         "status": withdrawal.status.value,
         "payout_id": str(withdrawal.payout_id) if withdrawal.payout_id else None,
         "business_reference": withdrawal.business_reference,

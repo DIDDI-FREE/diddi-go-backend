@@ -148,6 +148,7 @@ async def request_driver_withdrawal(
         driver_user_id=current_user.id,
         quote_id=payload.quote_id,
         beneficiary_reference=payload.beneficiary_reference,
+        beneficiary_destination=payload.beneficiary_destination.model_dump(),
     )
 
 

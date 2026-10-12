@@ -26,6 +26,13 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 - Si l'intention précédente est `failed`, `cancelled` ou expirée, le même appel crée une nouvelle intention et retourne ses nouveaux `payment_intent_id` et `next_action`.
 - `GET /v1/payments/{ride_id}` reste la source de vérité après retour navigateur.
 
+### Retrait chauffeur Mobile Money
+
+- `POST /v1/drivers/me/wallet/withdrawals` exige `quote_id`, `beneficiary_reference` et `beneficiary_destination`.
+- `beneficiary_reference` est une référence métier opaque et stable ; elle ne remplace pas la destination de paiement.
+- `beneficiary_destination.type` vaut `mobile_money`, `phone` est au format E.164 et `network` identifie le réseau demandé.
+- Le frontend ne choisit pas le processeur de paiement. DiddiPay valide la disponibilité du réseau et exécute le payout.
+
 ### Alerte SOS
 
 - `POST /v1/rides/{ride_id}/emergency` persiste l'alerte avant les notifications externes.

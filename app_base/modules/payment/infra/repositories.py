@@ -389,6 +389,9 @@ class SqlAlchemyPaymentRepository:
             )
             row = existing.scalar_one_or_none()
             if row is not None:
+                if row.beneficiary_destination is None and withdrawal.beneficiary_destination is not None:
+                    row.beneficiary_destination = withdrawal.beneficiary_destination
+                    await self._session.flush()
                 return self._withdrawal_to_domain(row)
             raise LookupError("WITHDRAWAL_QUOTE_ALREADY_USED")
         expires_at = quote.expires_at
@@ -428,6 +431,7 @@ class SqlAlchemyPaymentRepository:
             net_amount=withdrawal.net_amount,
             currency=withdrawal.currency,
             beneficiary_reference=withdrawal.beneficiary_reference,
+            beneficiary_destination=withdrawal.beneficiary_destination,
             status=WithdrawalStatus.RESERVED.value,
             business_reference=withdrawal.business_reference,
             idempotency_key=withdrawal.idempotency_key,
@@ -667,6 +671,7 @@ class SqlAlchemyPaymentRepository:
             net_amount=Decimal(str(row.net_amount)),
             currency=row.currency,
             beneficiary_reference=row.beneficiary_reference,
+            beneficiary_destination=row.beneficiary_destination,
             status=WithdrawalStatus(row.status),
             payout_id=row.payout_id,
             business_reference=row.business_reference,

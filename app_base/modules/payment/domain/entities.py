@@ -198,6 +198,7 @@ class DriverWithdrawal:
     fees: Decimal
     net_amount: Decimal
     beneficiary_reference: str
+    beneficiary_destination: dict[str, Any] | None = None
     status: WithdrawalStatus = WithdrawalStatus.RESERVED
     currency: str = "XOF"
     payout_id: UUID | None = None

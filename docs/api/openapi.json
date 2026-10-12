@@ -10306,13 +10306,17 @@
             "maxLength": 128,
             "minLength": 1,
             "title": "Beneficiary Reference"
+          },
+          "beneficiary_destination": {
+            "$ref": "#/components/schemas/MobileMoneyBeneficiaryDestination"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "quote_id",
-          "beneficiary_reference"
+          "beneficiary_reference",
+          "beneficiary_destination"
         ],
         "title": "DriverWithdrawalRequest"
       },
@@ -10352,6 +10356,16 @@
           "beneficiary_reference": {
             "type": "string",
             "title": "Beneficiary Reference"
+          },
+          "beneficiary_destination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MobileMoneyBeneficiaryDestination"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "status": {
             "type": "string",
@@ -10565,6 +10579,35 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "MobileMoneyBeneficiaryDestination": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "mobile_money",
+            "title": "Type",
+            "default": "mobile_money"
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 16,
+            "pattern": "^\\+[1-9]\\d{7,14}$",
+            "title": "Phone"
+          },
+          "network": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Network"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "phone",
+          "network"
+        ],
+        "title": "MobileMoneyBeneficiaryDestination"
       },
       "OTPRequest": {
         "properties": {
