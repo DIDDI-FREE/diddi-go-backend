@@ -22,6 +22,13 @@ Format standard :
 | 422 | `INVALID_SUPPLEMENT_TYPE` | Type de supplement inconnu | Recharger le catalogue |
 | 422 | `INVALID_SUPPLEMENT_AMOUNT` | Montant hors regle | Afficher le tarif contractuel |
 | 409 | `SUPPLEMENT_ALREADY_DECIDED` | Proposition deja traitee | Relire les supplements |
+| 422 | `VALIDATION_ERROR` | Corps, chemin ou paramètres invalides | Corriger `details.violations` |
+| 422 | `INVALID_PAYMENT_METHOD` | Moyen ou réseau de paiement invalide | Utiliser le contrat typé |
+| 409 | `PAYMENT_OPERATION_CONFLICT` | Choix ou état de paiement incompatible | Relire la course et le paiement |
+| 409 | `EARLY_STOP_INVALID_RIDE_STATUS` | Arrêt anticipé indisponible dans cet état | Relire la course |
+| 409 | `EARLY_STOP_NOT_REQUESTED` | Aucune demande active | Le passager doit demander l'arrêt |
+| 409 | `EARLY_STOP_REQUEST_EXPIRED` | Fenêtre de deux minutes expirée | Refaire la demande |
+| 503 | `EARLY_STOP_PRICING_UNAVAILABLE` | Trace chauffeur insuffisante | Conserver la course active et réessayer |
 
 Ce catalogue complete l'OpenAPI. Chaque nouveau code stable doit etre ajoute
 ici et dans le changelog du jour.

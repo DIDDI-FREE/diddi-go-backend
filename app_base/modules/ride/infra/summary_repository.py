@@ -94,7 +94,7 @@ class SqlAlchemyRideSummaryRepository:
                 func.coalesce(
                     func.sum(
                         case(
-                            (RideModel.payment_method.in_(("diddipay", "wave")), RideModel.final_fare),
+                            (RideModel.payment_method == "mobile_money", RideModel.final_fare),
                             else_=0,
                         )
                     ),
@@ -112,7 +112,7 @@ class SqlAlchemyRideSummaryRepository:
                             (
                                 or_(
                                     and_(RideModel.payment_method == "cash", collected_cash),
-                                    and_(RideModel.payment_method.in_(("diddipay", "wave")), succeeded_digital),
+                                    and_(RideModel.payment_method == "mobile_money", succeeded_digital),
                                 ),
                                 RideModel.driver_payout_estimate,
                             ),

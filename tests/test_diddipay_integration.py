@@ -268,7 +268,7 @@ def make_completed_ride() -> Ride:
         estimated_fare=Decimal("3100"),
         final_fare=Decimal("3100"),
         currency="XOF",
-        payment_method=RidePaymentMethod.WAVE,
+        payment_method=RidePaymentMethod.MOBILE_MONEY,
         driver_id=uuid4(),
         platform_commission=Decimal("248"),
         driver_payout_estimate=Decimal("2852"),
@@ -295,10 +295,11 @@ async def test_prepare_wave_creates_diddipay_intent(monkeypatch) -> None:
 
     payload = await service.prepare_payment(
         ride.id,
-        "wave",
+        "mobile_money",
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
         customer_phone="+2250700000000",
+        mobile_money_network="wave",
     )
 
     assert payload["status"] == "requires_action"
@@ -332,7 +333,7 @@ async def test_prepare_wave_replaces_failed_intent_and_then_reuses_retry(monkeyp
         id=uuid4(),
         ride_id=ride.id,
         amount=ride.final_fare,
-        method=PaymentDomainMethod.WAVE,
+        method=PaymentDomainMethod.MOBILE_MONEY,
         status=PaymentStatus.FAILED,
         payment_intent_id=failed_intent_id,
         idempotency_key=f"diddigo:ride:{ride.id}:collection:v1",
@@ -348,15 +349,17 @@ async def test_prepare_wave_replaces_failed_intent_and_then_reuses_retry(monkeyp
 
     retried = await service.prepare_payment(
         ride.id,
-        "wave",
+        "mobile_money",
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
+        mobile_money_network="wave",
     )
     reused = await service.prepare_payment(
         ride.id,
-        "wave",
+        "mobile_money",
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
+        mobile_money_network="wave",
     )
 
     assert retried["payment_intent_id"] == str(retry_intent_id)
@@ -369,7 +372,11 @@ async def test_prepare_wave_replaces_failed_intent_and_then_reuses_retry(monkeyp
 
 def test_payment_requests_reject_client_owned_callback_urls() -> None:
     with pytest.raises(ValidationError):
-        PaymentPreparationRequest(method="wave", callback_url="https://attacker.test/redirect")
+        PaymentPreparationRequest(
+            method="mobile_money",
+            mobile_money_network="wave",
+            callback_url="https://attacker.test/redirect",
+        )
 
     with pytest.raises(ValidationError):
         DriverTopupRequest(
@@ -393,7 +400,12 @@ async def test_prepare_diddipay_requires_email() -> None:
     )
 
     with pytest.raises(ApiError) as exc_info:
-        await service.prepare_payment(ride.id, "wave", payer_user_id=ride.passenger_user_id)
+        await service.prepare_payment(
+            ride.id,
+            "mobile_money",
+            payer_user_id=ride.passenger_user_id,
+            mobile_money_network="wave",
+        )
 
     assert exc_info.value.status_code == 422
     assert exc_info.value.code == "PAYMENT_EMAIL_REQUIRED"
@@ -407,9 +419,10 @@ async def test_diddipay_webhook_marks_payment_succeeded(monkeypatch) -> None:
     service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddipay=FakeDiddiPay(intent_id))
     await service.prepare_payment(
         ride.id,
-        "wave",
+        "mobile_money",
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
+        mobile_money_network="wave",
     )
 
     monkeypatch.setattr("app_base.modules.payment.application.services.settings.diddipay_callback_secret", "secret")
@@ -489,9 +502,10 @@ async def test_digital_payment_webhook_credits_driver_payout_once(monkeypatch) -
     service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddipay=FakeDiddiPay(intent_id))
     await service.prepare_payment(
         ride.id,
-        "wave",
+        "mobile_money",
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
+        mobile_money_network="wave",
     )
 
     monkeypatch.setattr("app_base.modules.payment.application.services.settings.diddipay_callback_secret", "secret")

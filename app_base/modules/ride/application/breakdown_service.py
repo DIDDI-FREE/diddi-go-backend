@@ -25,8 +25,7 @@ from app_base.modules.ride.domain.interfaces import RideBreakdownCache, RideBrea
 ABIDJAN_TIMEZONE = ZoneInfo("Africa/Abidjan")
 LABELS = {
     "cash": "Espèces",
-    "wave": "Wave",
-    "diddipay": "DiddiPay",
+    "mobile_money": "Mobile Money",
     "standard": "Standard",
     "comfort": "Confort",
     "van": "Van",

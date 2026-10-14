@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
@@ -74,8 +74,9 @@ class FakeRideRepo:
 
 
 class CompletedRideRepo:
-    def __init__(self, ride):
+    def __init__(self, ride, points=None):
         self.ride = ride
+        self.points = points or []
         self.save_calls = 0
 
     async def find_by_id(self, ride_id):
@@ -84,6 +85,12 @@ class CompletedRideRepo:
     async def save(self, ride):
         self.save_calls += 1
         return ride
+
+    async def list_route_points(self, ride_id):
+        return self.points
+
+    async def record_status_transition(self, transition):
+        return None
 
 
 class FakePricingRules:
@@ -374,3 +381,72 @@ async def test_actual_pricing_analytics_are_admin_only():
     assert passenger["pricing"]["pricing_delta"] is None
     assert admin["pricing"]["actual_pricing_fare"] == 3250
     assert admin["pricing"]["pricing_delta"] == 150
+
+
+@pytest.mark.asyncio
+async def test_passenger_requests_early_stop_with_two_minute_provisional_quote():
+    now = datetime.now(UTC)
+    ride = Ride(
+        id=uuid4(),
+        passenger_user_id=uuid4(),
+        status=RideStatus.IN_PROGRESS,
+        started_at=now,
+        base_fare=Decimal("250"),
+        distance_fare=Decimal("2850"),
+        distance_km=Decimal("11.876"),
+        duration_fare=Decimal("0"),
+        duration_seconds=983,
+        estimated_fare=Decimal("3100"),
+    )
+    repo = CompletedRideRepo(ride)
+    service = RideService(ride_repo=repo, routing=FakeRouting(), pricing_rules=FakePricingRules())
+
+    result = await service.request_early_stop(ride.id, passenger_user_id=ride.passenger_user_id)
+
+    assert result["provisional"] is True
+    assert result["amount"] >= 250
+    assert ride.early_stop_requested_at is not None
+    assert (ride.early_stop_expires_at - ride.early_stop_requested_at).total_seconds() == 120
+
+
+@pytest.mark.asyncio
+async def test_driver_confirms_early_stop_using_actual_trace_price():
+    ride_id = uuid4()
+    now = datetime.now(UTC)
+    points = [
+        RideRoutePoint(
+            ride_id=ride_id,
+            location=GeoPoint(lat=5.352, lng=-3.997),
+            recorded_at=now,
+        ),
+    ]
+    ride = Ride(
+        id=ride_id,
+        passenger_user_id=uuid4(),
+        status=RideStatus.IN_PROGRESS,
+        started_at=now,
+        pickup_location=GeoPoint(lat=5.3599, lng=-4.0083),
+        dropoff_location=GeoPoint(lat=5.3167, lng=-4.0333),
+        base_fare=Decimal("250"),
+        distance_fare=Decimal("2850"),
+        distance_km=Decimal("11.876"),
+        duration_fare=Decimal("0"),
+        duration_seconds=983,
+        estimated_fare=Decimal("3100"),
+        final_fare=Decimal("3100"),
+        early_stop_requested_at=now,
+        early_stop_expires_at=now + timedelta(minutes=2),
+    )
+    repo = CompletedRideRepo(ride, points)
+    service = RideService(ride_repo=repo, routing=FakeRouting(), pricing_rules=FakePricingRules())
+
+    result = await service.confirm_early_stop(
+        ride.id,
+        actor_user_id=uuid4(),
+        actor_role="admin",
+    )
+
+    assert result["provisional"] is False
+    assert result["amount"] == 3250
+    assert ride.status is RideStatus.COMPLETED
+    assert ride.completion_reason == "early_stop"

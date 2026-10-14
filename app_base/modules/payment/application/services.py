@@ -174,6 +174,7 @@ class PaymentService:
         payer_user_id: UUID,
         customer_email: str | None = None,
         customer_phone: str | None = None,
+        mobile_money_network: str | None = None,
     ) -> dict:
         ride = await self.ride_repo.find_by_id(ride_id)
         if ride is None:
@@ -189,6 +190,26 @@ class PaymentService:
         if payment_method is PaymentMethod.CASH:
             return await self._prepare_cash(ride_id)
 
+        if ride.payment_method.value != payment_method.value:
+            raise ApiError(
+                409,
+                ErrorCode.PAYMENT_OPERATION_CONFLICT,
+                "La methode de paiement doit correspondre au choix effectue lors de la creation de la course.",
+            )
+        if payment_method is PaymentMethod.MOBILE_MONEY and mobile_money_network not in {
+            "orange",
+            "wave",
+            "mtn",
+        }:
+            raise ApiError(
+                422,
+                ErrorCode.INVALID_PAYMENT_METHOD,
+                "Un reseau mobile money valide est requis.",
+                {"field": "mobile_money_network", "allowed": ["orange", "wave", "mtn"]},
+            )
+        if not customer_email and customer_phone:
+            normalized_phone = "".join(character for character in customer_phone if character.isdigit())
+            customer_email = f"{normalized_phone}@diddifree.com"
         if not customer_email:
             raise ApiError(
                 422,
@@ -202,6 +223,7 @@ class PaymentService:
             payer_user_id=payer_user_id,
             customer_email=customer_email,
             customer_phone=customer_phone,
+            mobile_money_network=mobile_money_network,
         )
 
     async def apply_diddipay_webhook(
@@ -677,6 +699,7 @@ class PaymentService:
         payer_user_id: UUID,
         customer_email: str,
         customer_phone: str | None,
+        mobile_money_network: str | None,
     ) -> dict:
         ride = await self.ride_repo.find_by_id(ride_id)
         if ride is None:
@@ -731,7 +754,7 @@ class PaymentService:
                 "payer_user_id": str(payer_user_id),
                 "payee_user_id": str(ride.driver_id) if ride.driver_id else None,
                 "channel": "mobile_money",
-                "network": "wave" if payment_method is PaymentMethod.WAVE else None,
+                "network": mobile_money_network,
                 "customer_email": customer_email,
                 "customer_phone": customer_phone,
                 "callback_url": callback_url,
@@ -815,7 +838,7 @@ class PaymentService:
                 ),
             )
             return
-        is_digital_payment = ride.payment_method.value in {PaymentMethod.DIDDIPAY.value, PaymentMethod.WAVE.value}
+        is_digital_payment = ride.payment_method.value == PaymentMethod.MOBILE_MONEY.value
         if is_digital_payment and payment_status is PaymentStatus.SUCCEEDED:
             await self.payment_repo.record_ledger_entry_once(
                 DriverLedgerEntry(

@@ -95,9 +95,10 @@ async def test_lost_callback_on_ride_payment_settles_the_driver() -> None:
     service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddipay=gateway)
     await service.prepare_payment(
         ride.id,
-        "wave",
+        "mobile_money",
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
+        mobile_money_network="wave",
     )
 
     gateway.read_status = "succeeded"
@@ -192,9 +193,10 @@ async def test_provider_error_does_not_abort_the_sweep() -> None:
         diddipay=ride_gateway,
     ).prepare_payment(
         ride.id,
-        "wave",
+        "mobile_money",
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
+        mobile_money_network="wave",
     )
     await _pending_topup(repo, topup_gateway)
 

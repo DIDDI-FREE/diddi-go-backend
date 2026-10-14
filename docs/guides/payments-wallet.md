@@ -1,11 +1,13 @@
 # Paiements et wallet chauffeur
 
-DiddiGo possede le prix metier, les commissions et le grand livre chauffeur.
-DiddiPay execute les paiements numeriques, remboursements et retraits.
+DiddiGo possède le prix métier, les commissions et le grand livre chauffeur.
+DiddiPay exécute les paiements numériques, remboursements et retraits.
 
-- Cash : confirmation explicite de la course.
-- DiddiPay/Wave : PaymentIntent, action utilisateur eventuelle, webhook puis
-  reconciliation.
+- Course cash : choix à la création puis confirmation par le chauffeur uniquement.
+- Course Mobile Money : choix à la création, puis réseau `orange`, `wave` ou `mtn`
+  lors de la préparation. DiddiPay reste le fournisseur technique.
+- Course normale : devis figé + attentes + suppléments acceptés.
+- Arrêt anticipé : tarif calculé depuis la trace GPS chauffeur réelle.
 - Recharge : creation d'un top-up et suivi jusqu'au statut terminal.
 - Retrait : destination beneficiaire obligatoire, puis suivi du payout.
 

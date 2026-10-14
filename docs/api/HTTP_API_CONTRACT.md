@@ -1,7 +1,7 @@
 # Contrat HTTP DiddiGo
 
 **Source :** `app_base.main:app.openapi()`
-**Généré le :** 2026-10-12
+**Généré le :** 2026-10-14
 **Version applicative :** 0.1.0
 
 La spécification complète, incluant les schémas de requête et de réponse, est dans [`openapi.json`](openapi.json). Ce fichier est généré depuis le code ; ne pas le modifier manuellement.
@@ -9,8 +9,8 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 
 ## Surface
 
-- **122 chemins**
-- **136 opérations HTTP**
+- **124 chemins**
+- **138 opérations HTTP**
 
 ## Règles comportementales frontend
 
@@ -281,6 +281,8 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 | POST | `/v1/rides/{ride_id}/cancel` | Cancel Ride | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/decline` | Decline Ride | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/emergency` | Request Emergency | 200, 422 | oui |
+| POST | `/v1/rides/{ride_id}/early-stop/request` | Request Early Stop | 200, 422 | oui |
+| POST | `/v1/rides/{ride_id}/early-stop/confirm` | Confirm Early Stop | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/location-samples` | Add Location Samples | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/no-show` | Mark Passenger No Show | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/rating` | Rate Ride | 201, 422 | oui |

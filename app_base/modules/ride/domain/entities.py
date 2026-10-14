@@ -86,8 +86,7 @@ class ComfortLevel(str, Enum):
 
 class PaymentMethod(str, Enum):
     CASH = "cash"
-    WAVE = "wave"
-    DIDDIPAY = "diddipay"
+    MOBILE_MONEY = "mobile_money"
 
 
 class VehicleVerificationStatus(str, Enum):
@@ -150,6 +149,11 @@ class Ride:
     completed_at: datetime | None = None
     cancelled_at: datetime | None = None
     cancellation_reason: str | None = None
+    completion_reason: str | None = None
+    early_stop_requested_at: datetime | None = None
+    early_stop_expires_at: datetime | None = None
+    early_stop_requested_by_user_id: UUID | None = None
+    early_stop_confirmed_at: datetime | None = None
 
     # Pricing
     estimated_fare: Decimal | None = None

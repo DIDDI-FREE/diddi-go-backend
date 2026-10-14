@@ -536,6 +536,11 @@ class SqlAlchemyRideRepository:
         row.completed_at = ride.completed_at
         row.cancelled_at = ride.cancelled_at
         row.cancellation_reason = ride.cancellation_reason
+        row.completion_reason = ride.completion_reason
+        row.early_stop_requested_at = ride.early_stop_requested_at
+        row.early_stop_expires_at = ride.early_stop_expires_at
+        row.early_stop_requested_by_user_id = ride.early_stop_requested_by_user_id
+        row.early_stop_confirmed_at = ride.early_stop_confirmed_at
         row.estimated_fare = ride.estimated_fare
         row.final_fare = ride.final_fare
         row.waiting_started_at = ride.waiting_started_at
@@ -604,6 +609,11 @@ class SqlAlchemyRideRepository:
             completed_at=row.completed_at,
             cancelled_at=row.cancelled_at,
             cancellation_reason=row.cancellation_reason,
+            completion_reason=row.completion_reason,
+            early_stop_requested_at=row.early_stop_requested_at,
+            early_stop_expires_at=row.early_stop_expires_at,
+            early_stop_requested_by_user_id=row.early_stop_requested_by_user_id,
+            early_stop_confirmed_at=row.early_stop_confirmed_at,
             estimated_fare=Decimal(str(row.estimated_fare)) if row.estimated_fare is not None else None,
             final_fare=Decimal(str(row.final_fare)) if row.final_fare is not None else None,
             waiting_started_at=row.waiting_started_at,

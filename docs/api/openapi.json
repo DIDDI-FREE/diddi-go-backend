@@ -1392,6 +1392,102 @@
         }
       }
     },
+    "/v1/rides/{ride_id}/early-stop/request": {
+      "post": {
+        "tags": [
+          "ride"
+        ],
+        "summary": "Request Early Stop",
+        "operationId": "request_early_stop_v1_rides__ride_id__early_stop_request_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ride_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ride Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EarlyStopResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/rides/{ride_id}/early-stop/confirm": {
+      "post": {
+        "tags": [
+          "ride"
+        ],
+        "summary": "Confirm Early Stop",
+        "operationId": "confirm_early_stop_v1_rides__ride_id__early_stop_confirm_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ride_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ride Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EarlyStopResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/rides/{ride_id}/arrive": {
       "post": {
         "tags": [
@@ -10557,6 +10653,87 @@
         ],
         "title": "DriverWithdrawalResponse"
       },
+      "EarlyStopResponse": {
+        "properties": {
+          "ride_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ride Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "completion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Reason"
+          },
+          "requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested At"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "provisional": {
+            "type": "boolean",
+            "title": "Provisional"
+          },
+          "amount": {
+            "type": "integer",
+            "title": "Amount"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ride_id",
+          "status",
+          "provisional",
+          "amount",
+          "currency"
+        ],
+        "title": "EarlyStopResponse"
+      },
       "EmergencyContactUpsertRequest": {
         "properties": {
           "contact_name": {
@@ -11583,8 +11760,28 @@
         "properties": {
           "method": {
             "type": "string",
+            "enum": [
+              "cash",
+              "mobile_money"
+            ],
             "title": "Method",
             "default": "cash"
+          },
+          "mobile_money_network": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "orange",
+                  "wave",
+                  "mtn"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Money Network"
           },
           "customer_email": {
             "anyOf": [
@@ -12091,6 +12288,10 @@
           },
           "payment_method": {
             "type": "string",
+            "enum": [
+              "cash",
+              "mobile_money"
+            ],
             "title": "Payment Method",
             "default": "cash"
           },

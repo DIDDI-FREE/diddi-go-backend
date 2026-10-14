@@ -41,6 +41,8 @@ class PaymentStatus(str, Enum):
 
 class PaymentMethod(str, Enum):
     CASH = "cash"
+    MOBILE_MONEY = "mobile_money"
+    # Legacy top-up values remain accepted until the wallet contract migrates.
     WAVE = "wave"
     DIDDIPAY = "diddipay"
 

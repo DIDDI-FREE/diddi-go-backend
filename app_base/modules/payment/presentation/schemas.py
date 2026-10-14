@@ -5,11 +5,13 @@ Shape matches the API contract (`DiddiGo_Contrat_API.md` §3):
     sub-unit). The domain service handles Decimal conversion.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class CashConfirmationRequest(BaseModel):
@@ -19,9 +21,18 @@ class CashConfirmationRequest(BaseModel):
 class PaymentPreparationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    method: str = Field(default="cash")
+    method: Literal["cash", "mobile_money"] = "cash"
+    mobile_money_network: Literal["orange", "wave", "mtn"] | None = None
     customer_email: str | None = Field(default=None, min_length=3, max_length=255)
     customer_phone: str | None = Field(default=None, min_length=4, max_length=32)
+
+    @model_validator(mode="after")
+    def validate_network(self) -> PaymentPreparationRequest:
+        if self.method == "mobile_money" and self.mobile_money_network is None:
+            raise ValueError("mobile_money_network is required for mobile_money")
+        if self.method == "cash" and self.mobile_money_network is not None:
+            raise ValueError("mobile_money_network is only valid for mobile_money")
+        return self
 
 
 class DriverTopupRequest(BaseModel):

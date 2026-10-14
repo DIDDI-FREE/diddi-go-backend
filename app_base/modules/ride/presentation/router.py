@@ -49,6 +49,7 @@ from app_base.modules.ride.infra.repositories import (
 )
 from app_base.modules.ride.infra.routing_client import DiddiMapRoutingClient
 from app_base.modules.ride.presentation.schemas import (
+    EarlyStopResponse,
     PlaceSearchResponseItem,
     PreRideArrivalResponse,
     PricingEstimateRequest,
@@ -364,6 +365,37 @@ async def start_waiting(
     )
     await manager.broadcast_status_changed(ride_id, RideStatus.WAITING.value)
     await manager.broadcast_waiting_changed(ride_id, result)
+    return result
+
+
+@router.post("/{ride_id}/early-stop/request", response_model=EarlyStopResponse)
+async def request_early_stop(
+    ride_id: UUID,
+    service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    result = await service.request_early_stop(ride_id, passenger_user_id=current_user.id)
+    await manager.broadcast_status_changed(ride_id, "early_stop_requested")
+    return result
+
+
+@router.post("/{ride_id}/early-stop/confirm", response_model=EarlyStopResponse)
+async def confirm_early_stop(
+    ride_id: UUID,
+    service: RideService = Depends(ride_service),
+    matching: MatchingService = Depends(matching_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    if current_user.role != "admin" and _driver_profile is None:
+        raise ApiError(403, "DRIVER_PROFILE_REQUIRED", "Un profil chauffeur est requis.")
+    result = await service.confirm_early_stop(
+        ride_id,
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
+    )
+    await matching.release_driver(await service.load_ride(ride_id))
+    await manager.broadcast_status_changed(ride_id, RideStatus.COMPLETED.value)
     return result
 
 

@@ -52,6 +52,7 @@ async def prepare_payment(
         payer_user_id=current_user.id,
         customer_email=payload.customer_email,
         customer_phone=payload.customer_phone or current_user.phone,
+        mobile_money_network=payload.mobile_money_network,
     )
 
 

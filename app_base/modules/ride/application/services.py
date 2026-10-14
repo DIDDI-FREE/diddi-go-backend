@@ -408,6 +408,7 @@ class RideService:
                 {"current_status": ride.status.value, "attempted_status": new_status.value},
             ) from exc
         if new_status is RideStatus.COMPLETED:
+            ride.completion_reason = ride.completion_reason or "destination_reached"
             base_fare = ride.final_fare or ride.estimated_fare or Decimal("0")
             ride.final_fare = base_fare + ride.pre_ride_wait_fee + ride.waiting_fee + ride.supplements_total
             ride.platform_commission = (ride.final_fare * ride.commission_rate).quantize(Decimal("1"))
@@ -425,6 +426,88 @@ class RideService:
         )
         viewer_role = "admin" if actor_role == "admin" else "driver"
         return _ride_detail_payload(ride, driver=None, viewer_role=viewer_role)
+
+    async def request_early_stop(self, ride_id: UUID, *, passenger_user_id: UUID) -> dict:
+        ride = await self.load_ride(ride_id)
+        if ride.passenger_user_id != passenger_user_id:
+            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Cette course ne vous appartient pas.")
+        if ride.status not in {RideStatus.IN_PROGRESS, RideStatus.WAITING}:
+            raise ApiError(409, "EARLY_STOP_INVALID_RIDE_STATUS", "L'arret anticipe exige une course en cours.")
+        now = datetime.now(UTC)
+        ride.early_stop_requested_at = now
+        ride.early_stop_expires_at = now + timedelta(minutes=2)
+        ride.early_stop_requested_by_user_id = passenger_user_id
+        await self.ride_repo.save(ride)
+        amount = await self._provisional_early_stop_amount(ride, now=now)
+        log_event("ride.early_stop.requested", ride_id=ride.id, expires_at=ride.early_stop_expires_at)
+        return _early_stop_payload(ride, amount=amount, provisional=True)
+
+    async def confirm_early_stop(
+        self,
+        ride_id: UUID,
+        *,
+        actor_user_id: UUID,
+        actor_role: str,
+    ) -> dict:
+        ride = await self.load_ride(ride_id)
+        if actor_role != "admin" and not await self._is_assigned_driver(ride, actor_user_id):
+            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Seul le chauffeur assigne peut confirmer l'arret.")
+        if ride.status not in {RideStatus.IN_PROGRESS, RideStatus.WAITING}:
+            raise ApiError(409, "EARLY_STOP_INVALID_RIDE_STATUS", "Cette course ne peut plus etre arretee.")
+        now = datetime.now(UTC)
+        if ride.early_stop_requested_at is None or ride.early_stop_expires_at is None:
+            raise ApiError(409, "EARLY_STOP_NOT_REQUESTED", "Aucune demande d'arret anticipe active.")
+        if ride.early_stop_expires_at <= now:
+            raise ApiError(409, "EARLY_STOP_REQUEST_EXPIRED", "La demande d'arret anticipe a expire.")
+        if ride.status is RideStatus.WAITING:
+            await self.stop_waiting(
+                ride_id,
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                reason="early_stop",
+            )
+            ride = await self.load_ride(ride_id)
+        await self._apply_actual_pricing_if_possible(ride)
+        if ride.trace_analysis_status != "applied" or ride.actual_pricing_fare is None:
+            raise ApiError(
+                503,
+                "EARLY_STOP_PRICING_UNAVAILABLE",
+                "La trace chauffeur ne permet pas encore de calculer le prix de l'arret anticipe.",
+            )
+        ride.final_fare = max(ride.base_fare or _DEFAULT_BASE_FARE, ride.actual_pricing_fare)
+        ride.final_fare += ride.pre_ride_wait_fee + ride.waiting_fee + ride.supplements_total
+        ride.platform_commission = (ride.final_fare * ride.commission_rate).quantize(Decimal("1"))
+        ride.driver_payout_estimate = ride.final_fare - ride.platform_commission
+        ride.completion_reason = "early_stop"
+        ride.early_stop_confirmed_at = now
+        ride.transition(RideStatus.COMPLETED, when=now, metadata={"completion_reason": "early_stop"})
+        await self.ride_repo.save(ride)
+        for transition in ride.status_history:
+            await self.ride_repo.record_status_transition(transition)
+        await self._record_priority_outcome(ride)
+        log_event("ride.early_stop.confirmed", ride_id=ride.id, final_fare=ride.final_fare)
+        return _early_stop_payload(ride, amount=ride.final_fare, provisional=False)
+
+    async def _provisional_early_stop_amount(self, ride: Ride, *, now: datetime) -> Decimal:
+        points = await self.ride_repo.list_route_points(ride.id)
+        distance_km = sum(
+            (Decimal(str(_distance_meters(previous.location, current.location) / 1000))
+             for previous, current in zip(points, points[1:], strict=False)),
+            Decimal("0"),
+        )
+        duration_seconds = max(0, int((now - ride.started_at).total_seconds())) if ride.started_at else 0
+        pricing = _pricing_breakdown(
+            distance_km=distance_km,
+            duration_seconds=duration_seconds,
+            base_fare=ride.base_fare or _DEFAULT_BASE_FARE,
+            price_per_km=_infer_price_per_km(ride),
+            price_per_min=_infer_price_per_min(ride),
+            surge_multiplier=min(ride.surge_multiplier, _SURGE_CAP),
+            comfort_multiplier=_comfort_multiplier(ride.comfort_level),
+        )
+        return max(ride.base_fare or _DEFAULT_BASE_FARE, pricing["total_fare"]) + (
+            ride.pre_ride_wait_fee + ride.waiting_fee + ride.supplements_total
+        )
 
     async def mark_arrived(
         self,
@@ -1117,6 +1200,7 @@ def _ride_summary_payload(ride: Ride) -> dict:
     return {
         "id": str(ride.id),
         "status": ride.status.value,
+        "completion_reason": ride.completion_reason,
         "final_fare": int(ride.final_fare) if ride.final_fare is not None else None,
         "completed_at": iso_utc(ride.completed_at),
         "pickup_address": ride.pickup_address,
@@ -1148,6 +1232,7 @@ def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -
     return {
         "id": str(ride.id),
         "status": ride.status.value,
+        "completion_reason": ride.completion_reason,
         "passenger": {"id": str(ride.passenger_user_id), "full_name": None},
         "driver": driver,
         "pickup": _point_payload(ride.pickup_location, ride.pickup_address),
@@ -1208,6 +1293,11 @@ def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -
             "transaction_id": str(ride.payment_transaction_id) if ride.payment_transaction_id else None,
         },
         "quote_id": str(ride.quote_id) if ride.quote_id else None,
+        "early_stop": {
+            "requested_at": iso_utc(ride.early_stop_requested_at),
+            "expires_at": iso_utc(ride.early_stop_expires_at),
+            "confirmed_at": iso_utc(ride.early_stop_confirmed_at),
+        },
         "arrival": {
             "arrived_at": iso_utc(ride.arrived_at),
             "waiting_started_at": iso_utc(ride.pre_ride_wait_started_at),
@@ -1266,6 +1356,20 @@ def _supplement_payload(supplement: RideSupplement) -> dict:
         if supplement.decided_by_user_id
         else None,
         "decided_at": iso_utc(supplement.decided_at) if supplement.decided_at else None,
+    }
+
+
+def _early_stop_payload(ride: Ride, *, amount: Decimal, provisional: bool) -> dict:
+    return {
+        "ride_id": str(ride.id),
+        "status": ride.status.value,
+        "completion_reason": ride.completion_reason,
+        "requested_at": iso_utc(ride.early_stop_requested_at),
+        "expires_at": iso_utc(ride.early_stop_expires_at),
+        "confirmed_at": iso_utc(ride.early_stop_confirmed_at),
+        "provisional": provisional,
+        "amount": int(amount),
+        "currency": ride.currency,
     }
 
 

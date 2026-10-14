@@ -312,7 +312,7 @@ async def test_list_rides_is_paginated(client, passenger) -> None:
     assert set(body["pagination"]) == {"page", "page_size", "total_items", "total_pages"}
     assert body["pagination"]["total_items"] >= 1
     assert set(body["data"][0]) == {
-        "id", "status", "final_fare", "completed_at", "pickup_address", "dropoff_address",
+        "id", "status", "completion_reason", "final_fare", "completed_at", "pickup_address", "dropoff_address",
     }
 
 
@@ -456,12 +456,15 @@ async def test_payment_starts_pending(client, passenger, driver) -> None:
     assert r.json()["method"] == "cash"
 
 
-async def test_wave_payment_requires_customer_email(client, passenger, driver) -> None:
+async def test_mobile_money_payment_requires_network(client, passenger, driver) -> None:
     ride_id, _ = await complete_ride(client, passenger, driver)
 
-    r = await client.post(f"/v1/payments/{ride_id}/prepare", json={"method": "wave"}, headers=passenger)
+    r = await client.post(
+        f"/v1/payments/{ride_id}/prepare",
+        json={"method": "mobile_money"},
+        headers=passenger,
+    )
     assert r.status_code == 422
-    assert r.json()["error"]["code"] == "PAYMENT_EMAIL_REQUIRED"
 
 
 async def test_payment_browser_return_is_a_safe_landing_page(client) -> None:

@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from redis.exceptions import RedisError
@@ -9,6 +10,7 @@ from app_base.core.errors import (
     ApiError,
     api_error_handler,
     infrastructure_error_handler,
+    request_validation_error_handler,
     unhandled_exception_handler,
 )
 from app_base.core.lifespan import lifespan
@@ -51,6 +53,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_exception_handler(ApiError, api_error_handler)
+app.add_exception_handler(RequestValidationError, request_validation_error_handler)
 app.add_exception_handler(SQLAlchemyError, infrastructure_error_handler)
 app.add_exception_handler(RedisError, infrastructure_error_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)

@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from fastapi import Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
@@ -51,6 +53,21 @@ async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
         exc.status_code,
         exc.code,
         exc.message,
+        details,
+        request_id=request_id,
+    )
+    if request_id:
+        response.headers["X-Request-ID"] = request_id
+    return response
+
+
+async def request_validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+    details = {"violations": jsonable_encoder(exc.errors())}
+    response = api_error_response(
+        422,
+        "VALIDATION_ERROR",
+        "La requete ne respecte pas le contrat attendu.",
         details,
         request_id=request_id,
     )

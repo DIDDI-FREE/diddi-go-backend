@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
@@ -35,12 +36,24 @@ class PricingEstimateRequest(BaseModel):
 
 class RideCreateRequest(BaseModel):
     quote_id: UUID
-    payment_method: str = Field(default="cash")
+    payment_method: Literal["cash", "mobile_money"] = "cash"
     scheduled_at: datetime | None = None  # null = ride immédiat, sinon ISO 8601
 
 
 class RideStatusUpdateRequest(BaseModel):
     status: str
+
+
+class EarlyStopResponse(BaseModel):
+    ride_id: UUID
+    status: str
+    completion_reason: str | None = None
+    requested_at: datetime | None = None
+    expires_at: datetime | None = None
+    confirmed_at: datetime | None = None
+    provisional: bool
+    amount: int
+    currency: str
 
 
 class RideStartRequest(BaseModel):
