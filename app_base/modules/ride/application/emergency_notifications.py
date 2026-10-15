@@ -11,6 +11,7 @@ import httpx
 from app_base.core.observability import log_event
 from app_base.core.settings import settings
 from app_base.modules.ride.domain.entities import EmergencyContact, Ride
+from app_base.shared_kernel.contracts.sms import SmsProvider
 
 
 @dataclass(frozen=True)
@@ -20,7 +21,10 @@ class EmergencyRecipient:
     recipient: str | None
 
 
+@dataclass
 class EmergencyNotificationService:
+    sms_provider: SmsProvider | None = None
+
     async def notify(
         self,
         *,
@@ -40,12 +44,14 @@ class EmergencyNotificationService:
         recipients = [
             EmergencyRecipient("support", "email", settings.emergency_support_email),
             EmergencyRecipient("support", "whatsapp", settings.emergency_support_whatsapp),
+            EmergencyRecipient("support", "sms", settings.emergency_support_sms),
         ]
         if contact is not None and include_contact:
             recipients.extend(
                 [
                     EmergencyRecipient("emergency_contact", "email", contact.email),
                     EmergencyRecipient("emergency_contact", "whatsapp", contact.phone),
+                    EmergencyRecipient("emergency_contact", "sms", contact.phone),
                 ]
             )
         elif include_contact:
@@ -67,7 +73,26 @@ class EmergencyNotificationService:
                 results.append(await self._send_email(ride, recipient, payload))
             elif recipient.channel == "whatsapp":
                 results.append(await self._send_whatsapp(ride, recipient, payload))
+            elif recipient.channel == "sms":
+                results.append(await self._send_sms(ride, recipient, payload))
         return results
+
+    async def _send_sms(self, ride: Ride, recipient: EmergencyRecipient, payload: dict) -> dict:
+        if self.sms_provider is None:
+            return await self._skip(ride, recipient, "sms_provider_not_configured")
+        try:
+            delivery = await self.sms_provider.send(
+                recipient=recipient.recipient or "",
+                message=_human_message(payload),
+                idempotency_key=f"diddigo-sos-{ride.id}-{recipient.target}",
+            )
+        except Exception as exc:
+            return self._failed(ride, recipient, str(exc))
+        result = self._sent(ride, recipient)
+        result["provider"] = delivery.provider
+        result["provider_status"] = delivery.status
+        result["message_id"] = delivery.message_id
+        return result
 
     async def _send_whatsapp(self, ride: Ride, recipient: EmergencyRecipient, payload: dict) -> dict:
         if not settings.evolution_api_url:

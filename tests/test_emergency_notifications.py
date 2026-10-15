@@ -11,6 +11,7 @@ from app_base.modules.ride.application.emergency_notifications import (
     EmergencyRecipient,
     _evolution_number,
 )
+from app_base.shared_kernel.contracts.sms import SmsDelivery
 
 
 def test_evolution_number_keeps_only_digits():
@@ -72,3 +73,41 @@ async def test_whatsapp_uses_evolution_send_text(monkeypatch):
         "text": emergency_notifications._human_message(payload),
     }
     assert captured["timeout"] == 20.0
+
+
+class FakeSmsProvider:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def send(self, **kwargs) -> SmsDelivery:
+        self.calls.append(kwargs)
+        return SmsDelivery(provider="fake", status="queued", message_id="sms-1")
+
+    async def close(self) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+async def test_sms_uses_injected_provider():
+    provider = FakeSmsProvider()
+    service = EmergencyNotificationService(sms_provider=provider)
+    ride = SimpleNamespace(id="ride-1")
+    recipient = EmergencyRecipient("emergency_contact", "sms", "+2250700000000")
+    payload = {
+        "ride_id": "ride-1",
+        "status": "in_progress",
+        "actor_role": "passenger",
+        "actor_user_id": "user-1",
+        "passenger_user_id": "user-1",
+        "driver_id": "driver-1",
+        "pickup": {},
+        "dropoff": {},
+        "note": "Urgence",
+    }
+
+    result = await service._send_sms(ride, recipient, payload)
+
+    assert result["status"] == "sent"
+    assert result["provider"] == "fake"
+    assert result["message_id"] == "sms-1"
+    assert provider.calls[0]["idempotency_key"] == "diddigo-sos-ride-1-emergency_contact"

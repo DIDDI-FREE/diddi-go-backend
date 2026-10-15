@@ -44,7 +44,7 @@ from app_base.modules.ride.domain.interfaces import (
     VehicleRepository,
 )
 from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
-from app_base.shared_kernel.contracts.routing import RoutingProvider
+from app_base.shared_kernel.contracts.routing import MapProvider, TraceProvider
 from app_base.shared_kernel.types import GeoPoint
 
 logger = logging.getLogger("uvicorn.error")
@@ -75,8 +75,9 @@ def iso_utc(dt: datetime | None) -> str | None:
 @dataclass
 class RideService:
     ride_repo: RideRepository
-    routing: RoutingProvider
+    routing: MapProvider
     pricing_rules: PricingRuleRepository
+    trace_provider: TraceProvider | None = None
     quote_repo: RideQuoteRepository | None = None
     driver_repo: DriverProfileRepository | None = None
     vehicle_repo: VehicleRepository | None = None
@@ -1086,9 +1087,10 @@ class RideService:
             logger.error("ride_actual_pricing_failed ride_id=%s reason=missing_map_trace_id", ride.id)
             raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Trace DiddiMap absente.")
 
-        await self.routing.append_trace_positions(ride.map_trace_id, points)
-        await self.routing.finish_trace(ride.map_trace_id, finished_at=datetime.now(UTC))
-        analysis = await self.routing.analyze_trace(ride.map_trace_id)
+        traces = self.trace_provider or self.routing
+        await traces.append_trace_positions(ride.map_trace_id, points)  # type: ignore[attr-defined]
+        await traces.finish_trace(ride.map_trace_id, finished_at=datetime.now(UTC))  # type: ignore[attr-defined]
+        analysis = await traces.analyze_trace(ride.map_trace_id)  # type: ignore[attr-defined]
         ride.trace_recommendation = analysis.recommendation
         ride.trace_quality_label = analysis.quality_label
         ride.trace_quality_score = analysis.quality_score
@@ -1173,7 +1175,8 @@ class RideService:
         if ride.pickup_location is None or ride.dropoff_location is None:
             logger.error("ride_map_trace_failed ride_id=%s reason=missing_pickup_or_dropoff", ride.id)
             raise ApiError(502, "DIDDIMAP_INVALID_RESPONSE", "Coordonnees course incompletes.")
-        ride.map_trace_id = await self.routing.start_trace(
+        traces = self.trace_provider or self.routing
+        ride.map_trace_id = await traces.start_trace(  # type: ignore[attr-defined]
             start=ride.pickup_location,
             end=ride.dropoff_location,
             planned_distance_km=ride.distance_km,

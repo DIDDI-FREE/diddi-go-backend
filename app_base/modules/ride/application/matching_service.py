@@ -46,7 +46,7 @@ from app_base.modules.ride.domain.interfaces import (
     VehicleRepository,
 )
 from app_base.modules.ride.domain.priority import DEFAULT_ZONE_ID, DispatchConfig
-from app_base.shared_kernel.contracts.routing import RoutingProvider
+from app_base.shared_kernel.contracts.routing import MapProvider
 
 # Uvicorn wires this logger to the Docker console.
 logger = logging.getLogger("uvicorn.error")
@@ -74,7 +74,7 @@ class MatchingService:
     offers: OfferStore
     partner_service: object | None = None
     payment_repo: PaymentRepository | None = None
-    routing: RoutingProvider | None = None
+    routing: MapProvider | None = None
     priority: PriorityProvider | None = None
     config: DispatchConfig | None = None
 

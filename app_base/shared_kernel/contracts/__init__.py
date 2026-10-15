@@ -1,5 +1,6 @@
 from .payment import PaymentProvider, PaymentTransaction
-from .routing import GeocodeResult, GeoPoint, RouteEstimate, RoutingProvider
+from .routing import GeocodeResult, GeoPoint, MapProvider, RouteEstimate, RoutingProvider, TraceProvider
+from .sms import SmsDelivery, SmsProvider
 
 __all__ = [
     "GeocodeResult",
@@ -8,4 +9,8 @@ __all__ = [
     "PaymentTransaction",
     "RouteEstimate",
     "RoutingProvider",
+    "MapProvider",
+    "TraceProvider",
+    "SmsDelivery",
+    "SmsProvider",
 ]

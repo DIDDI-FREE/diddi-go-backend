@@ -27,6 +27,7 @@ from fastapi import FastAPI
 from app_base.core.database import ping_db
 from app_base.core.redis import create_redis_pool
 from app_base.core.settings import settings
+from app_base.modules.notification.infra.sms import build_sms_provider
 from app_base.modules.payment.application.reconciliation import reconciliation_loop
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.ride.application.capability_projection_worker import capability_projection_loop
@@ -50,6 +51,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         service_client_secret=settings.diddimap_service_client_secret,
         service_audience=settings.diddimap_service_audience,
         service_token_url=settings.diddimap_service_token_url,
+    )
+    if settings.map_provider.strip().lower() != "diddimap":
+        raise RuntimeError(f"Unsupported MAP_PROVIDER: {settings.map_provider}")
+    # Route estimates/place search are replaceable; GPS traces deliberately
+    # continue to use the DiddiMap client directly.
+    app.state.map_provider = app.state.diddimap
+    app.state.sms_provider = build_sms_provider(
+        provider=settings.sms_provider,
+        senndo_api_key=settings.senndo_api_key,
+        senndo_base_url=settings.senndo_base_url,
+        senndo_sender=settings.senndo_sender,
+        yellika_api_token=settings.yellika_api_token,
+        yellika_base_url=settings.yellika_base_url,
+        yellika_sender_id=settings.yellika_sender_id,
+        timeout_seconds=settings.sms_timeout_seconds,
     )
     app.state.driver_locations = RedisDriverLocationService(
         redis=app.state.redis,
@@ -108,6 +124,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await task
         diddimap: DiddiMapRoutingClient = app.state.diddimap  # type: ignore[assignment]
         await diddimap.close()
+        await app.state.sms_provider.close()
         identity_capabilities: IdentityCapabilityClient = app.state.identity_capabilities  # type: ignore[assignment]
         await identity_capabilities.close()
         diddifiles: DiddiFilesClient = app.state.diddifiles  # type: ignore[assignment]

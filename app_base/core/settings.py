@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     diddimap_service_client_secret: str | None = None
     diddimap_service_audience: str = "diddimap"
     diddimap_service_token_url: str | None = None
+    map_provider: str = "diddimap"
 
     # Dispatch ranking (SCRUM-63 / UC-283): among the nearest-first eligible
     # drivers, re-rank a bounded shortlist by real DiddiMap ETA to the pickup.
@@ -152,10 +153,19 @@ class Settings(BaseSettings):
 
     emergency_support_email: str = "direction.generale@diddifree.com"
     emergency_support_whatsapp: str | None = None
+    emergency_support_sms: str | None = None
     evolution_api_url: str | None = None
     evolution_api_key: str | None = None
     evolution_instance: str | None = None
     evolution_api_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
+    sms_provider: str = "disabled"
+    sms_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
+    senndo_api_key: str | None = None
+    senndo_base_url: str = "https://api.senndo.com"
+    senndo_sender: str | None = None
+    yellika_api_token: str | None = None
+    yellika_base_url: str = "https://panel.yellikasms.com"
+    yellika_sender_id: str = "DiddiFree"
     emergency_email_from: str = "alerts@diddifree.com"
     emergency_smtp_host: str | None = None
     emergency_smtp_port: int = 587

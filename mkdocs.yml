@@ -60,6 +60,7 @@ nav:
       - DiddiFiles: integrations/diddifiles.md
       - DiddiPay: integrations/diddipay.md
       - DiddiMap: integrations/diddimap.md
+      - SMS: integrations/sms.md
       - DiddiComms: integrations/diddicomms.md
   - Références:
       - Statuts: reference/statuses.md

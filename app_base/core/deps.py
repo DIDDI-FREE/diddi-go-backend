@@ -41,6 +41,7 @@ from app_base.modules.auth.infra.repositories import (
 from app_base.modules.notification.application import DeviceService, PushNotificationService
 from app_base.modules.notification.infra.fcm import build_push_gateway
 from app_base.modules.notification.infra.repositories import SqlAlchemyUserDeviceRepository
+from app_base.modules.notification.infra.sms import DisabledSmsProvider
 from app_base.modules.partner.application.services import PartnerService
 from app_base.modules.partner.infra.repositories import SqlAlchemyPartnerRepository
 from app_base.modules.payment.application.return_contexts import PaymentReturnContextStore
@@ -81,6 +82,8 @@ from app_base.modules.ride.infra.repositories import (
 )
 from app_base.modules.ride.infra.routing_client import DiddiMapRoutingClient
 from app_base.modules.ride.infra.summary_repository import SqlAlchemyRideSummaryRepository
+from app_base.shared_kernel.contracts.routing import MapProvider, TraceProvider
+from app_base.shared_kernel.contracts.sms import SmsProvider
 
 # --- sessions & resources --------------------------------------------------
 
@@ -99,6 +102,27 @@ def get_diddimap(request: Request) -> DiddiMapRoutingClient:
     if client is None:
         raise RuntimeError("DiddiMap client not initialized — lifespan may not have run.")
     return client
+
+
+def get_map_provider(request: Request) -> MapProvider:
+    provider: MapProvider | None = getattr(request.app.state, "map_provider", None)
+    if provider is None:
+        # Test applications created without lifespan historically only mount
+        # app.state.diddimap; retain that compatibility without a silent
+        # geographic fallback.
+        provider = getattr(request.app.state, "diddimap", None)
+    if provider is None:
+        raise RuntimeError("Map provider not initialized — lifespan may not have run.")
+    return provider
+
+
+def get_trace_provider(request: Request) -> TraceProvider:
+    return get_diddimap(request)
+
+
+def get_sms_provider(request: Request) -> SmsProvider:
+    provider: SmsProvider | None = getattr(request.app.state, "sms_provider", None)
+    return provider if provider is not None else DisabledSmsProvider()
 
 
 def get_diddipay(request: Request) -> DiddiPayClient:
@@ -276,7 +300,9 @@ async def ride_service(
     ride_repo_dep: SqlAlchemyRideRepository = Depends(ride_repo),
     pricing_rule_repo_dep: SqlAlchemyPricingRuleRepository = Depends(pricing_rule_repo),
     quote_repo_dep: SqlAlchemyRideQuoteRepository = Depends(ride_quote_repo),
-    diddimap: DiddiMapRoutingClient = Depends(get_diddimap),
+    maps: MapProvider = Depends(get_map_provider),
+    traces: TraceProvider = Depends(get_trace_provider),
+    sms: SmsProvider = Depends(get_sms_provider),
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
     vehicle_repo_dep: SqlAlchemyVehicleRepository = Depends(vehicle_repo),
     user_repo_dep: SqlAlchemyUserRepository = Depends(user_repo),
@@ -287,14 +313,15 @@ async def ride_service(
 ) -> RideService:
     return RideService(
         ride_repo=ride_repo_dep,
-        routing=diddimap,
+        routing=maps,
+        trace_provider=traces,
         pricing_rules=pricing_rule_repo_dep,
         quote_repo=quote_repo_dep,
         driver_repo=driver_repo_dep,
         vehicle_repo=vehicle_repo_dep,
         user_repo=user_repo_dep,
         emergency_contact_repo=emergency_contact_repo_dep,
-        emergency_notifications=EmergencyNotificationService(),
+        emergency_notifications=EmergencyNotificationService(sms_provider=sms),
         diddifiles=diddifiles,
         priority_ledger=PriorityLedger(priority_ledger_repo_dep, await config_store.load()),
     )
@@ -416,7 +443,7 @@ async def matching_service(
     partner_service_dep: PartnerService = Depends(partner_service),
     locations: RedisDriverLocationService = Depends(get_driver_locations),
     offers: RedisOfferStore = Depends(get_offer_store),
-    diddimap: DiddiMapRoutingClient = Depends(get_diddimap),
+    maps: MapProvider = Depends(get_map_provider),
     priority_ledger_repo_dep: SqlAlchemyPriorityLedgerRepository = Depends(priority_ledger_repo),
     config_store: SqlAlchemyDispatchConfigStore = Depends(dispatch_config_store),
 ) -> MatchingService:
@@ -429,7 +456,7 @@ async def matching_service(
         locations=locations,
         offers=offers,
         payment_repo=payment_repo_dep,
-        routing=diddimap,
+        routing=maps,
         priority=DriverPriorityService(priority_ledger_repo_dep, config),
         config=config,
     )
@@ -439,6 +466,9 @@ __all__ = [
     "Depends",
     "Redis",
     "get_diddimap",
+    "get_map_provider",
+    "get_trace_provider",
+    "get_sms_provider",
     "get_driver_locations",
     "get_offer_store",
     "get_redis",

@@ -35,9 +35,8 @@ class RouteTraceAnalysis(Protocol):
     usable_points_count: int | None
 
 
-class RoutingProvider(Protocol):
-    """External routing/geocoding port. Implementations are always async since
-    the underlying HTTP client is async (batch 8 uses httpx.AsyncClient)."""
+class MapProvider(Protocol):
+    """Interchangeable provider for route estimates and place search."""
 
     async def estimate(self, origin: GeoPoint, destination: GeoPoint, profile: str) -> RouteEstimate: ...
 
@@ -47,6 +46,10 @@ class RoutingProvider(Protocol):
         bias: GeoPoint | None = None,
         limit: int | None = None,
     ) -> list[GeocodeResult]: ...
+
+
+class TraceProvider(Protocol):
+    """DiddiMap-owned GPS trace lifecycle used for ride evidence and scoring."""
 
     async def start_trace(
         self,
@@ -64,3 +67,7 @@ class RoutingProvider(Protocol):
     async def finish_trace(self, trace_id: str, *, finished_at: datetime) -> None: ...
 
     async def analyze_trace(self, trace_id: str) -> RouteTraceAnalysis: ...
+
+
+class RoutingProvider(MapProvider, TraceProvider, Protocol):
+    """Compatibility port for implementations supporting maps and traces."""

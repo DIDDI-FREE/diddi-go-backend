@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from app_base.core.auth_deps import get_current_user, require_business_driver
 from app_base.core.database import async_session_factory
 from app_base.core.deps import (
-    get_diddimap,
+    get_map_provider,
     matching_service,
     push_notification_service,
     ride_service,
@@ -47,7 +47,6 @@ from app_base.modules.ride.infra.repositories import (
     SqlAlchemyRideRepository,
     SqlAlchemyVehicleRepository,
 )
-from app_base.modules.ride.infra.routing_client import DiddiMapRoutingClient
 from app_base.modules.ride.presentation.schemas import (
     EarlyStopResponse,
     PlaceSearchResponseItem,
@@ -66,6 +65,7 @@ from app_base.modules.ride.presentation.schemas import (
     RideSupplementDecisionRequest,
 )
 from app_base.modules.ride.presentation.websocket import manager
+from app_base.shared_kernel.contracts.routing import MapProvider
 from app_base.shared_kernel.types import GeoPoint
 
 router = APIRouter(prefix="/rides", tags=["ride"])
@@ -148,7 +148,7 @@ async def search_places(
     bias_lat: float | None = Query(default=None, ge=-90, le=90),
     bias_lng: float | None = Query(default=None, ge=-180, le=180),
     limit: int = Query(default=10, ge=1, le=20),
-    diddimap: DiddiMapRoutingClient = Depends(get_diddimap),
+    diddimap: MapProvider = Depends(get_map_provider),
 ) -> list[PlaceSearchResponseItem]:
     """Search pickup/dropoff places through DiddiMap/AbidjanMaps.
 
