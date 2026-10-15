@@ -1,0 +1,119 @@
+site_name: DiddiGo Documentation
+site_description: Contrats API, parcours métier et intégrations du module DiddiGo
+site_author: DiddiFree
+site_url: https://docs-go-staging.diddifree.com/
+
+docs_dir: docs
+site_dir: site
+use_directory_urls: true
+strict: true
+
+theme:
+  name: material
+  language: fr
+  logo: assets/diddigo-mark.svg
+  favicon: assets/diddigo-mark.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Passer au thème sombre
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Passer au thème clair
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+
+nav:
+  - Accueil: README.md
+  - Produit:
+      - MVP figé: product/DIDDIGO-MVP-FIGE.md
+  - API:
+      - Vue d'ensemble: api/index.md
+  - Parcours métier:
+      - Passager: guides/passenger-ride-flow.md
+      - Chauffeur: guides/driver-ride-flow.md
+      - KYC et KYV: guides/driver-kyc-kyv.md
+      - Paiements et wallet: guides/payments-wallet.md
+      - SOS et sécurité: guides/sos-safety.md
+  - Frontend:
+      - Brief du 12 octobre: frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-12.md
+      - Clarifications V2: frontend/DIDDIGO_FRONTEND_CLARIFICATIONS_2026-10-12_V2.md
+      - Retraits chauffeur: frontend/DIDDIGO_DRIVER_WITHDRAWALS_BRIEF_2026-10-10.md
+  - Intégrations:
+      - DiddiFiles: integrations/diddifiles.md
+      - DiddiPay: integrations/diddipay.md
+      - DiddiMap: integrations/diddimap.md
+      - DiddiComms: integrations/diddicomms.md
+  - Références:
+      - Statuts: reference/statuses.md
+      - Permissions: reference/permissions.md
+      - Configuration: reference/configuration.md
+      - Cas différés: reference/deferred-edge-cases.md
+  - Changelog:
+      - 14 octobre 2026: changelog/2026-10-14.md
+      - 12 octobre 2026: changelog/2026-10-12.md
+
+exclude_docs: |
+  archive/
+  configuration/
+  api/API_CONTRACT.md
+  api/asyncapi.yaml
+  api/open-questions.md
+  api/openapi.yaml
+  architecture/RUNTIME_ARCHITECTURE.md
+  changelog/2026-10-15.md
+  frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-10 - Copie.md
+  jira/
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+plugins:
+  - search:
+      lang: fr
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/DIDDI-FREE/diddi-go-backend
+
+copyright: Documentation interne DiddiFree - DiddiGo

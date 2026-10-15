@@ -1,0 +1,26 @@
+:root {
+  --md-primary-fg-color: #087f73;
+  --md-primary-fg-color--light: #20a596;
+  --md-primary-fg-color--dark: #075f58;
+  --md-accent-fg-color: #e09b24;
+}
+
+.md-header {
+  background: linear-gradient(110deg, #075f58, #087f73 58%, #0d9488);
+}
+
+.md-typeset h1,
+.md-typeset h2 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.md-typeset code {
+  border-radius: 0.28rem;
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: 0.55rem;
+}
+
