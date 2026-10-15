@@ -64,7 +64,8 @@ nav:
   - Références:
       - Statuts: reference/statuses.md
       - Permissions: reference/permissions.md
-      - Configuration: reference/configuration.md
+      - Configuration technique: configuration/CONFIGURATION_REFERENCE.md
+      - Valeurs métier: reference/configuration.md
       - Cas différés: reference/deferred-edge-cases.md
   - Changelog:
       - 14 octobre 2026: changelog/2026-10-14.md
@@ -72,7 +73,6 @@ nav:
 
 exclude_docs: |
   archive/
-  configuration/
   api/API_CONTRACT.md
   api/asyncapi.yaml
   api/open-questions.md
