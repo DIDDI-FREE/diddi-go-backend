@@ -61,6 +61,8 @@ nav:
       - DiddiPay: integrations/diddipay.md
       - DiddiMap: integrations/diddimap.md
       - SMS: integrations/sms.md
+  - Tests:
+      - Checklist stateful: testing/DIDDIGO_STATEFUL_TEST_CHECKLIST.md
       - DiddiComms: integrations/diddicomms.md
   - Références:
       - Statuts: reference/statuses.md
