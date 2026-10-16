@@ -1,8 +1,11 @@
 # DiddiGo - Checklist stateful des tests happy path
 
-Version du registre : `1.0`  
-Derniere mise a jour : `2026-10-16`  
-Branche de reference : `stage`  
+Version du registre : `1.0`
+
+Derniere mise a jour : `2026-10-16`
+
+Branche de reference : `stage`
+
 Responsable de mise a jour : `non assigne`
 
 Ce fichier est le registre durable de validation de DiddiGo. Il ne doit pas
