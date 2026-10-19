@@ -46,6 +46,7 @@ async def _decide(
     decision: str,
     driver_id: UUID,
     notes: str | None,
+    documents: list[dict],
     request: Request,
     request_id: UUID,
     idempotency_key: str,
@@ -60,13 +61,24 @@ async def _decide(
     reservation = await commands.reserve(
         client_id=client_id,
         idempotency_key=idempotency_key,
-        payload={"decision": decision, "driver_id": str(driver_id), "actor_user_id": str(actor.id), "notes": notes},
+        payload={
+            "decision": decision,
+            "driver_id": str(driver_id),
+            "actor_user_id": str(actor.id),
+            "notes": notes,
+            "documents": documents,
+        },
     )
     if reservation.cached_response is not None:
         return reservation.cached_response
     try:
         operation = service.approve_kyc if decision == "approve" else service.reject_kyc
-        result = await operation(driver_id, reviewed_by_user_id=actor.id, notes=notes)
+        result = await operation(
+            driver_id,
+            reviewed_by_user_id=actor.id,
+            notes=notes,
+            documents=documents,
+        )
         audit_event = await audit.record(
             BackofficeAuditEvent(
                 client_id=client_id,
@@ -114,7 +126,8 @@ async def approve_driver_kyc(
     session: AsyncSession = Depends(session_dep),
 ) -> dict:
     return await _decide(
-        decision="approve", driver_id=driver_id, notes=payload.notes, request=request,
+        decision="approve", driver_id=driver_id, notes=payload.notes,
+        documents=[item.model_dump() for item in payload.documents], request=request,
         request_id=request_id, idempotency_key=idempotency_key, claims=claims, actor=actor,
         service=service, commands=commands, audit=audit, session=session,
     )
@@ -135,7 +148,8 @@ async def reject_driver_kyc(
     session: AsyncSession = Depends(session_dep),
 ) -> dict:
     return await _decide(
-        decision="reject", driver_id=driver_id, notes=payload.notes, request=request,
+        decision="reject", driver_id=driver_id, notes=payload.notes,
+        documents=[item.model_dump() for item in payload.documents], request=request,
         request_id=request_id, idempotency_key=idempotency_key, claims=claims, actor=actor,
         service=service, commands=commands, audit=audit, session=session,
     )

@@ -214,6 +214,16 @@ class PricingRuleRepository(Protocol):
         at time `as_of` (defaults to now). None if no rule has been seeded yet."""
         ...
 
+    async def list_by_kyc_status(
+        self,
+        statuses: list[str],
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[DriverProfile], int]:
+        """Return profiles filtered by the independent KYC dossier status."""
+        ...
+
 
 class RideQuoteRepository(Protocol):
     async def save(self, quote: RideQuote) -> RideQuote: ...

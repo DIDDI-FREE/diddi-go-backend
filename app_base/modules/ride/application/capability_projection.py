@@ -143,10 +143,12 @@ class DriverCapabilityProjectionDispatcher:
 
 
 def _candidate_status(candidate: DriverProjectionCandidate) -> tuple[str, list[str]]:
+    if candidate.kyc_status == "rejected":
+        return "kyc_rejected", ["resubmit_kyc"]
     if candidate.profile_status == "pending_verification":
         return "pending_verification", ["await_kyc_review"]
     if candidate.profile_status == "suspended":
-        return "kyc_rejected", ["resubmit_kyc"]
+        return "suspended", ["contact_support"]
     if candidate.vehicle_status is None:
         return "vehicle_missing", ["add_vehicle"]
     if candidate.vehicle_status == "pending_verification":

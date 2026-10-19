@@ -26,5 +26,6 @@ class DriverCapabilityProjectionEvent:
 class DriverProjectionCandidate:
     user_id: UUID
     profile_status: str
+    kyc_status: str
     vehicle_status: str | None
     vehicle_active: bool | None

@@ -34,6 +34,11 @@ class FakeDriverRepo:
             return [self.profile], 1
         return [], 0
 
+    async def list_by_kyc_status(self, statuses, *, page=1, page_size=20):
+        if self.profile and self.profile.kyc_status.value in statuses:
+            return [self.profile], 1
+        return [], 0
+
 
 class FakeVehicleRepo:
     def __init__(self) -> None:
@@ -167,6 +172,13 @@ async def test_driver_can_resubmit_rejected_kyc() -> None:
         driver_id=UUID(created["id"]),
         reviewed_by_user_id=admin_id,
         notes="Photo illisible",
+        documents=[{
+            "document_type": "license_front",
+            "decision": "rejected",
+            "reason_code": "unreadable",
+            "reason": "La photo du permis est illisible.",
+            "expected_correction": "Renvoyer une photo nette sans reflet.",
+        }],
     )
 
     payload = await service.resubmit_kyc(
@@ -182,7 +194,58 @@ async def test_driver_can_resubmit_rejected_kyc() -> None:
     assert payload["kyc"]["license_back_document_file_id"] == str(new_license_back_file_id)
     assert payload["kyc"]["reviewed_at"] is None
     assert payload["kyc"]["review_notes"] is None
+    assert payload["kyc"]["status"] == "pending_verification"
+    reviews = {item["document_type"]: item for item in payload["kyc"]["document_reviews"]}
+    assert reviews["license_front"]["status"] == "pending"
     assert repo.profile.license_verified_at is None
+
+
+@pytest.mark.asyncio
+async def test_kyc_rejection_is_distinct_from_operational_suspension() -> None:
+    repo = FakeDriverRepo()
+    service = DriverService(driver_repo=repo, vehicle_repo=FakeVehicleRepo())
+    created = await service.create_profile(
+        user_id=uuid4(), license_number="CI-123456", **full_kyc_documents(),
+    )
+
+    rejected = await service.reject_kyc(
+        UUID(created["id"]),
+        reviewed_by_user_id=uuid4(),
+        documents=[{
+            "document_type": "national_id_back",
+            "decision": "rejected",
+            "reason_code": "expired",
+            "reason": "La date de validite est depassee.",
+            "expected_correction": "Renvoyer une CNI en cours de validite.",
+        }],
+    )
+
+    assert rejected["status"] == "pending_verification"
+    assert rejected["kyc"]["status"] == "rejected"
+    assert rejected["kyc"]["document_reviews"] == [{
+        "document_type": "national_id_back",
+        "status": "rejected",
+        "reason_code": "expired",
+        "reason": "La date de validite est depassee.",
+        "expected_correction": "Renvoyer une CNI en cours de validite.",
+        "reviewed_at": rejected["kyc"]["reviewed_at"],
+    }]
+
+
+@pytest.mark.asyncio
+async def test_kyc_rejection_requires_actionable_document_details() -> None:
+    repo = FakeDriverRepo()
+    service = DriverService(driver_repo=repo, vehicle_repo=FakeVehicleRepo())
+    created = await service.create_profile(
+        user_id=uuid4(), license_number="CI-123456", **full_kyc_documents(),
+    )
+
+    with pytest.raises(ApiError) as exc_info:
+        await service.reject_kyc(
+            UUID(created["id"]), reviewed_by_user_id=uuid4(), notes="Document incorrect",
+        )
+
+    assert exc_info.value.code == "DOCUMENT_REJECTION_DETAILS_REQUIRED"
 
 
 @pytest.mark.asyncio

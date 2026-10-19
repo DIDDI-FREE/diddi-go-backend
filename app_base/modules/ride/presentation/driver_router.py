@@ -34,6 +34,7 @@ from app_base.modules.ride.presentation.driver_schemas import (
     DriverKycReviewRequest,
     DriverProfileCreateRequest,
     DriverProfilePhotoUpdateRequest,
+    DriverProfileResponse,
     GoOnlineRequest,
     VehicleCreateRequest,
     VehicleKyvResubmitRequest,
@@ -186,11 +187,11 @@ async def resubmit_vehicle_kyv(
     )
 
 
-@router.get("/me")
+@router.get("/me", response_model=DriverProfileResponse)
 async def get_my_profile(
     service: DriverService = Depends(driver_service),
     current_user: UserModel = Depends(get_current_active_user),
-) -> dict:
+) -> DriverProfileResponse:
     return await service.get_profile(current_user.id)
 
 
@@ -225,6 +226,7 @@ async def approve_driver_kyc(
         driver_id,
         reviewed_by_user_id=current_user.id,
         notes=payload.notes,
+        documents=[item.model_dump() for item in payload.documents],
     )
 
 
@@ -239,6 +241,7 @@ async def reject_driver_kyc(
         driver_id,
         reviewed_by_user_id=current_user.id,
         notes=payload.notes,
+        documents=[item.model_dump() for item in payload.documents],
     )
 
 
@@ -249,7 +252,12 @@ async def approve_vehicle_kyv(
     service: DriverService = Depends(driver_service),
     current_user: UserModel = Depends(require_role("admin")),
 ) -> dict:
-    return await service.approve_vehicle_kyv(vehicle_id, reviewed_by_user_id=current_user.id, notes=payload.notes)
+    return await service.approve_vehicle_kyv(
+        vehicle_id,
+        reviewed_by_user_id=current_user.id,
+        notes=payload.notes,
+        documents=[item.model_dump() for item in payload.documents],
+    )
 
 
 @router.post("/vehicles/{vehicle_id}/kyv/reject")
@@ -259,7 +267,12 @@ async def reject_vehicle_kyv(
     service: DriverService = Depends(driver_service),
     current_user: UserModel = Depends(require_role("admin")),
 ) -> dict:
-    return await service.reject_vehicle_kyv(vehicle_id, reviewed_by_user_id=current_user.id, notes=payload.notes)
+    return await service.reject_vehicle_kyv(
+        vehicle_id,
+        reviewed_by_user_id=current_user.id,
+        notes=payload.notes,
+        documents=[item.model_dump() for item in payload.documents],
+    )
 
 
 @admin_vehicle_router.get("/kyv")

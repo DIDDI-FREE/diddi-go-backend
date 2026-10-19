@@ -23,6 +23,7 @@ from app_base.modules.ride.domain.entities import (
     DriverProfile,
     DriverStatus,
     EmergencyContact,
+    KycStatus,
     PaymentMethod,
     PricingRule,
     Ride,
@@ -794,6 +795,9 @@ class SqlAlchemyDriverProfileRepository:
         row.kyc_submitted_at = profile.kyc_submitted_at
         row.kyc_reviewed_at = profile.kyc_reviewed_at
         row.kyc_review_notes = profile.kyc_review_notes
+        row.kyc_status = profile.kyc_status.value
+        row.kyc_document_reviews = profile.kyc_document_reviews
+        row.kyc_review_history = profile.kyc_review_history
         row.updated_at = datetime.now(UTC)
         await self._session.flush()
         return profile
@@ -843,6 +847,24 @@ class SqlAlchemyDriverProfileRepository:
         result = await self._session.execute(q)
         return [self._to_domain(row) for row in result.scalars().all()], int(total)
 
+    async def list_by_kyc_status(
+        self,
+        statuses: list[str],
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[DriverProfile], int]:
+        q = select(orm.DriverProfileModel).where(orm.DriverProfileModel.kyc_status.in_(statuses))
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self._session.execute(count_q)).scalar() or 0
+        q = (
+            q.order_by(orm.DriverProfileModel.kyc_submitted_at.asc(), orm.DriverProfileModel.created_at.asc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        result = await self._session.execute(q)
+        return [self._to_domain(row) for row in result.scalars().all()], int(total)
+
     @staticmethod
     def _to_domain(row: orm.DriverProfileModel) -> DriverProfile:
         return DriverProfile(
@@ -850,6 +872,9 @@ class SqlAlchemyDriverProfileRepository:
             user_id=row.user_id,
             license_number=row.license_number,
             status=DriverStatus(row.status),
+            kyc_status=KycStatus(row.kyc_status),
+            kyc_document_reviews=row.kyc_document_reviews or {},
+            kyc_review_history=row.kyc_review_history or [],
             rating_avg=row.rating_avg,
             rating_count=row.rating_count,
             license_verified_at=row.license_verified_at,
@@ -917,6 +942,8 @@ class SqlAlchemyVehicleRepository:
         row.verified_at = vehicle.verified_at
         row.reviewed_at = vehicle.reviewed_at
         row.review_notes = vehicle.review_notes
+        row.document_reviews = vehicle.document_reviews
+        row.review_history = vehicle.review_history
         row.owner_type = vehicle.owner_type
         row.partner_id = vehicle.partner_id
         row.category = vehicle.category.value
@@ -999,6 +1026,8 @@ class SqlAlchemyVehicleRepository:
             verified_at=row.verified_at,
             reviewed_at=row.reviewed_at,
             review_notes=row.review_notes,
+            document_reviews=row.document_reviews or {},
+            review_history=row.review_history or [],
             owner_type=row.owner_type,
             partner_id=row.partner_id,
             active=row.active,

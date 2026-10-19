@@ -164,6 +164,7 @@ async def test_reconciliation_enqueues_divergent_state_and_refreshes_stale_proje
             DriverProjectionCandidate(
                 user_id=user_id,
                 profile_status="active",
+                kyc_status="approved",
                 vehicle_status="active",
                 vehicle_active=True,
             ),
@@ -176,3 +177,26 @@ async def test_reconciliation_enqueues_divergent_state_and_refreshes_stale_proje
     assert result == {"enqueued": 1, "refreshed": 1}
     assert repository.events[0].operational_status == "online"
     assert repository.events[0].actions == ["go_offline"]
+
+
+async def test_reconciliation_preserves_rejected_kyc_projection() -> None:
+    repository = FakeRepository()
+    dispatcher = DriverCapabilityProjectionDispatcher(repository, RecordingClient())  # type: ignore[arg-type]
+
+    await dispatcher.reconcile(
+        candidates=[
+            DriverProjectionCandidate(
+                user_id=uuid4(),
+                profile_status="pending_verification",
+                kyc_status="rejected",
+                vehicle_status="active",
+                vehicle_active=True,
+            ),
+        ],
+        online_user_ids=set(),
+        refresh_before=datetime.now(UTC),
+        batch_size=10,
+    )
+
+    assert repository.events[0].operational_status == "kyc_rejected"
+    assert repository.events[0].actions == ["resubmit_kyc"]

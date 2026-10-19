@@ -82,6 +82,11 @@ class DriverProfileModel(Base):
     kyc_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     kyc_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     kyc_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    kyc_status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="pending_verification",
+    )
+    kyc_document_reviews: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    kyc_review_history: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending_verification",
     )  # pending_verification | active | suspended | offline
@@ -139,6 +144,8 @@ class VehicleModel(Base):
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    document_reviews: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    review_history: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     owner_type: Mapped[str] = mapped_column(String(20), nullable=False, default="driver")
     partner_id: Mapped[UUID | None] = mapped_column(_PG_UUID, ForeignKey("partner.partners.id"), nullable=True)
     category: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")  # standard | comfort | van

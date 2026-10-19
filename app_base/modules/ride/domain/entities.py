@@ -109,6 +109,18 @@ class DriverStatus(str, Enum):
     OFFLINE = "offline"
 
 
+class DocumentReviewStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class KycStatus(str, Enum):
+    PENDING_VERIFICATION = "pending_verification"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 class CancelReason(str, Enum):
     PASSENGER_CHANGED_MIND = "passenger_changed_mind"
     PASSENGER_NO_SHOW = "passenger_no_show"
@@ -290,6 +302,9 @@ class DriverProfile:
     user_id: UUID
     license_number: str
     status: DriverStatus = DriverStatus.PENDING_VERIFICATION
+    kyc_status: KycStatus = KycStatus.PENDING_VERIFICATION
+    kyc_document_reviews: dict[str, dict] = field(default_factory=dict)
+    kyc_review_history: list[dict] = field(default_factory=list)
     rating_avg: Decimal | None = Decimal("5.00")
     rating_count: int = 0
     license_verified_at: datetime | None = None
@@ -358,6 +373,8 @@ class Vehicle:
     verified_at: datetime | None = None
     reviewed_at: datetime | None = None
     review_notes: str | None = None
+    document_reviews: dict[str, dict] = field(default_factory=dict)
+    review_history: list[dict] = field(default_factory=list)
     owner_type: str = "driver"
     partner_id: UUID | None = None
     active: bool = True

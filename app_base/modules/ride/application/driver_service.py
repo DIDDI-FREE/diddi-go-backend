@@ -21,6 +21,7 @@ from app_base.modules.ride.domain.entities import (
     ComfortLevel,
     DriverProfile,
     DriverStatus,
+    KycStatus,
     Vehicle,
     VehicleCategory,
     VehicleVerificationStatus,
@@ -32,6 +33,27 @@ from app_base.modules.ride.domain.interfaces import (
 from app_base.shared_kernel.contracts.capabilities import CapabilityStatusPublisher
 
 from .driver_online_eligibility import DriverOnlineEligibilityService
+
+KYC_DOCUMENT_TYPES = {
+    "license_front",
+    "license_back",
+    "national_id_front",
+    "national_id_back",
+    "selfie",
+}
+VEHICLE_DOCUMENT_TYPES = {
+    "registration",
+    "insurance",
+    "technical_inspection",
+    "transport_authorization",
+    "vehicle_front",
+    "vehicle_back",
+    "vehicle_left",
+    "vehicle_right",
+    "vehicle_interior",
+    "vehicle_plate",
+}
+REQUIRED_VEHICLE_DOCUMENT_TYPES = VEHICLE_DOCUMENT_TYPES - {"transport_authorization"}
 
 
 @dataclass
@@ -161,6 +183,24 @@ class DriverService:
         )
         now = datetime.now(UTC)
         profile.status = DriverStatus.PENDING_VERIFICATION
+        profile.kyc_status = KycStatus.PENDING_VERIFICATION
+        _mark_resubmitted_documents_pending(
+            profile.kyc_document_reviews,
+            profile.kyc_review_history,
+            _submitted_kyc_document_types(
+                license_document_file_id=license_document_file_id,
+                license_back_document_file_id=license_back_document_file_id,
+                national_id_document_file_id=national_id_document_file_id,
+                national_id_back_document_file_id=national_id_back_document_file_id,
+                selfie_document_file_id=selfie_document_file_id,
+                license_document_url=license_document_url,
+                license_back_document_url=license_back_document_url,
+                national_id_document_url=national_id_document_url,
+                national_id_back_document_url=national_id_back_document_url,
+                selfie_document_url=selfie_document_url,
+            ),
+            now=now,
+        )
         profile.license_verified_at = None
         profile.kyc_submitted_at = now
         profile.kyc_reviewed_at = None
@@ -171,13 +211,34 @@ class DriverService:
         await self._publish_profile_status(profile)
         return _profile_payload(profile)
 
-    async def approve_kyc(self, driver_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None = None) -> dict:
+    async def approve_kyc(
+        self,
+        driver_id: UUID,
+        *,
+        reviewed_by_user_id: UUID,
+        notes: str | None = None,
+        documents: list[dict] | None = None,
+    ) -> dict:
         profile = await self.driver_repo.find_by_id(driver_id)
         if profile is None:
             raise ApiError(404, "DRIVER_PROFILE_NOT_FOUND", "Aucun profil chauffeur pour cet identifiant.")
         _ensure_kyc_documents_complete(profile)
         now = datetime.now(UTC)
+        decisions = documents or [
+            {"document_type": document_type, "decision": "approved"}
+            for document_type in KYC_DOCUMENT_TYPES
+        ]
+        _apply_document_decisions(
+            profile.kyc_document_reviews,
+            profile.kyc_review_history,
+            decisions,
+            allowed_types=KYC_DOCUMENT_TYPES,
+            reviewed_by_user_id=reviewed_by_user_id,
+            reviewed_at=now,
+        )
+        _ensure_all_documents_approved(profile.kyc_document_reviews, KYC_DOCUMENT_TYPES, "KYC")
         profile.status = DriverStatus.ACTIVE
+        profile.kyc_status = KycStatus.APPROVED
         profile.license_verified_at = now
         profile.kyc_reviewed_at = now
         profile.kyc_review_notes = _review_note(notes, reviewed_by_user_id)
@@ -192,12 +253,28 @@ class DriverService:
         await self._publish_profile_status(profile)
         return _profile_payload(profile)
 
-    async def reject_kyc(self, driver_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None = None) -> dict:
+    async def reject_kyc(
+        self,
+        driver_id: UUID,
+        *,
+        reviewed_by_user_id: UUID,
+        notes: str | None = None,
+        documents: list[dict] | None = None,
+    ) -> dict:
         profile = await self.driver_repo.find_by_id(driver_id)
         if profile is None:
             raise ApiError(404, "DRIVER_PROFILE_NOT_FOUND", "Aucun profil chauffeur pour cet identifiant.")
         now = datetime.now(UTC)
-        profile.status = DriverStatus.SUSPENDED
+        _apply_rejection_decisions(
+            profile.kyc_document_reviews,
+            profile.kyc_review_history,
+            documents,
+            allowed_types=KYC_DOCUMENT_TYPES,
+            reviewed_by_user_id=reviewed_by_user_id,
+            reviewed_at=now,
+        )
+        profile.status = DriverStatus.PENDING_VERIFICATION
+        profile.kyc_status = KycStatus.REJECTED
         profile.license_verified_at = None
         profile.kyc_reviewed_at = now
         profile.kyc_review_notes = _review_note(notes, reviewed_by_user_id)
@@ -438,6 +515,15 @@ class DriverService:
             vehicle_plate_photo_url=vehicle_plate_photo_url,
         )
         vehicle.verification_status = VehicleVerificationStatus.PENDING_VERIFICATION
+        _mark_resubmitted_documents_pending(
+            vehicle.document_reviews,
+            vehicle.review_history,
+            _submitted_vehicle_document_types(**{
+                key: value for key, value in locals().copy().items()
+                if key.endswith("_file_id") or key.endswith("_url")
+            }),
+            now=datetime.now(UTC),
+        )
         vehicle.verified_at = None
         vehicle.reviewed_at = None
         vehicle.review_notes = None
@@ -452,10 +538,26 @@ class DriverService:
         *,
         reviewed_by_user_id: UUID,
         notes: str | None = None,
+        documents: list[dict] | None = None,
     ) -> dict:
         vehicle = await self._require_vehicle(vehicle_id)
         _ensure_vehicle_kyv_documents_complete(vehicle)
         now = datetime.now(UTC)
+        decisions = documents or [
+            {"document_type": document_type, "decision": "approved"}
+            for document_type in REQUIRED_VEHICLE_DOCUMENT_TYPES
+        ]
+        _apply_document_decisions(
+            vehicle.document_reviews,
+            vehicle.review_history,
+            decisions,
+            allowed_types=VEHICLE_DOCUMENT_TYPES,
+            reviewed_by_user_id=reviewed_by_user_id,
+            reviewed_at=now,
+        )
+        _ensure_all_documents_approved(
+            vehicle.document_reviews, REQUIRED_VEHICLE_DOCUMENT_TYPES, "KYV",
+        )
         vehicle.verification_status = VehicleVerificationStatus.ACTIVE
         vehicle.verified_at = now
         vehicle.reviewed_at = now
@@ -472,13 +574,25 @@ class DriverService:
         *,
         reviewed_by_user_id: UUID,
         notes: str | None = None,
+        documents: list[dict] | None = None,
     ) -> dict:
         vehicle = await self._require_vehicle(vehicle_id)
+        now = datetime.now(UTC)
+        _apply_rejection_decisions(
+            vehicle.document_reviews,
+            vehicle.review_history,
+            documents,
+            allowed_types=VEHICLE_DOCUMENT_TYPES,
+            reviewed_by_user_id=reviewed_by_user_id,
+            reviewed_at=now,
+        )
         vehicle.verification_status = VehicleVerificationStatus.REJECTED
         vehicle.verified_at = None
-        vehicle.reviewed_at = datetime.now(UTC)
+        vehicle.reviewed_at = now
         vehicle.review_notes = _review_note(notes, reviewed_by_user_id)
-        vehicle.active = False
+        # Keep the vehicle record visible/editable during correction. Matching
+        # still rejects it because verification_status is not active.
+        vehicle.active = True
         await self.vehicle_repo.save(vehicle)
         log_event("driver.vehicle.kyv.rejected", level="warning", vehicle_id=vehicle.id, driver_id=vehicle.driver_id)
         await self._publish_status_for_driver_id(vehicle.driver_id)
@@ -571,23 +685,18 @@ class DriverService:
         page: int = 1,
         page_size: int = 20,
     ) -> dict:
-        if status == "all":
-            statuses = [
-                DriverStatus.PENDING_VERIFICATION,
-                DriverStatus.ACTIVE,
-                DriverStatus.SUSPENDED,
-            ]
-        else:
-            try:
-                statuses = [DriverStatus(status)]
-            except ValueError as exc:
-                raise ApiError(
-                    422,
-                    ErrorCode.DRIVER_KYC_STATUS_INVALID,
-                    "Statut KYC chauffeur invalide.",
-                    {"field": "status", "allowed": ["pending_verification", "active", "suspended", "all"]},
-                ) from exc
-        profiles, total = await self.driver_repo.list_by_status(statuses, page=page, page_size=page_size)
+        allowed = {item.value for item in KycStatus}
+        if status != "all" and status not in allowed:
+            raise ApiError(
+                422,
+                ErrorCode.DRIVER_KYC_STATUS_INVALID,
+                "Statut KYC chauffeur invalide.",
+                {"field": "status", "allowed": sorted([*allowed, "all"])},
+            )
+        statuses = sorted(allowed) if status == "all" else [status]
+        profiles, total = await self.driver_repo.list_by_kyc_status(
+            statuses, page=page, page_size=page_size,
+        )
         return {
             "data": [_profile_payload(profile) for profile in profiles],
             "pagination": {"page": page, "page_size": page_size, "total": total},
@@ -709,6 +818,7 @@ def _profile_payload(profile: DriverProfile) -> dict:
         "rating_count": profile.rating_count,
         "profile_photo_file_id": str(profile.profile_photo_file_id) if profile.profile_photo_file_id else None,
         "kyc": {
+            "status": profile.kyc_status.value,
             "legal_name": profile.legal_name,
             "birth_date": profile.birth_date.isoformat() if profile.birth_date else None,
             "residence_address": profile.residence_address,
@@ -735,6 +845,7 @@ def _profile_payload(profile: DriverProfile) -> dict:
             "submitted_at": profile.kyc_submitted_at.isoformat() if profile.kyc_submitted_at else None,
             "reviewed_at": profile.kyc_reviewed_at.isoformat() if profile.kyc_reviewed_at else None,
             "review_notes": profile.kyc_review_notes,
+            "document_reviews": list(profile.kyc_document_reviews.values()),
             "license_expires_at": profile.license_expires_at.isoformat()
             if profile.license_expires_at
             else None,
@@ -896,6 +1007,7 @@ def _vehicle_payload(vehicle: Vehicle) -> dict:
         "verified_at": vehicle.verified_at.isoformat() if vehicle.verified_at else None,
         "reviewed_at": vehicle.reviewed_at.isoformat() if vehicle.reviewed_at else None,
         "review_notes": vehicle.review_notes,
+        "document_reviews": list(vehicle.document_reviews.values()),
         "owner_type": vehicle.owner_type,
         "partner_id": str(vehicle.partner_id) if vehicle.partner_id else None,
         "active": vehicle.active,
@@ -924,11 +1036,12 @@ def _driver_capability_payload(profile: DriverProfile | None, *, vehicle: Vehicl
     elif vehicle.verification_status != VehicleVerificationStatus.ACTIVE:
         blocking_reasons.append("vehicle_not_verified")
 
+    capability_status = "kyc_rejected" if profile.kyc_status is KycStatus.REJECTED else profile.status.value
     return {
         "type": "driver",
         "exists": True,
-        "status": profile.status.value,
-        "verification_status": profile.status.value,
+        "status": capability_status,
+        "verification_status": profile.kyc_status.value,
         "can_go_online": not blocking_reasons,
         "blocking_reasons": blocking_reasons,
         "driver_profile_id": str(profile.id),
@@ -938,10 +1051,12 @@ def _driver_capability_payload(profile: DriverProfile | None, *, vehicle: Vehicl
 
 
 def _operational_status(profile: DriverProfile, vehicle: Vehicle | None) -> tuple[str, list[str]]:
+    if profile.kyc_status is KycStatus.REJECTED:
+        return "kyc_rejected", ["resubmit_kyc"]
     if profile.status is DriverStatus.PENDING_VERIFICATION:
         return "pending_verification", ["await_kyc_review"]
     if profile.status is DriverStatus.SUSPENDED:
-        return "kyc_rejected", ["resubmit_kyc"]
+        return "suspended", ["contact_support"]
     if vehicle is None:
         return "vehicle_missing", ["add_vehicle"]
     if vehicle.verification_status is VehicleVerificationStatus.PENDING_VERIFICATION:
@@ -1079,3 +1194,139 @@ def _review_note(notes: str | None, reviewed_by_user_id: UUID) -> str:
     cleaned = _blank_to_none(notes)
     suffix = f"reviewed_by={reviewed_by_user_id}"
     return f"{cleaned} ({suffix})" if cleaned else suffix
+
+
+def _apply_rejection_decisions(
+    current: dict[str, dict],
+    history: list[dict],
+    decisions: list[dict] | None,
+    *,
+    allowed_types: set[str],
+    reviewed_by_user_id: UUID,
+    reviewed_at: datetime,
+) -> None:
+    if not decisions or not any(item.get("decision") == "rejected" for item in decisions):
+        raise ApiError(
+            422,
+            "DOCUMENT_REJECTION_DETAILS_REQUIRED",
+            "Un rejet doit identifier au moins une piece rejetee et la correction attendue.",
+        )
+    for item in decisions:
+        if item.get("decision") == "rejected" and not all(
+            item.get(key) for key in ("reason_code", "reason", "expected_correction")
+        ):
+            raise ApiError(
+                422,
+                "DOCUMENT_REJECTION_DETAILS_REQUIRED",
+                "Chaque piece rejetee exige reason_code, reason et expected_correction.",
+                {"document_type": item.get("document_type")},
+            )
+    _apply_document_decisions(
+        current,
+        history,
+        decisions,
+        allowed_types=allowed_types,
+        reviewed_by_user_id=reviewed_by_user_id,
+        reviewed_at=reviewed_at,
+    )
+
+
+def _apply_document_decisions(
+    current: dict[str, dict],
+    history: list[dict],
+    decisions: list[dict],
+    *,
+    allowed_types: set[str],
+    reviewed_by_user_id: UUID,
+    reviewed_at: datetime,
+) -> None:
+    seen: set[str] = set()
+    for raw in decisions:
+        item = dict(raw)
+        document_type = str(item.get("document_type") or "")
+        if document_type not in allowed_types:
+            raise ApiError(
+                422,
+                "INVALID_DOCUMENT_TYPE",
+                "Type de piece inconnu pour ce dossier.",
+                {"document_type": document_type, "allowed": sorted(allowed_types)},
+            )
+        if document_type in seen:
+            raise ApiError(422, "DUPLICATE_DOCUMENT_DECISION", "Une piece ne peut etre decidee qu'une fois.")
+        seen.add(document_type)
+        decision = {
+            "document_type": document_type,
+            "status": item["decision"],
+            "reason_code": item.get("reason_code"),
+            "reason": item.get("reason"),
+            "expected_correction": item.get("expected_correction"),
+            "reviewed_at": reviewed_at.isoformat(),
+        }
+        current[document_type] = decision
+        history.append({**decision, "reviewed_by_user_id": str(reviewed_by_user_id)})
+
+
+def _ensure_all_documents_approved(current: dict[str, dict], required: set[str], dossier: str) -> None:
+    missing = sorted(
+        document_type
+        for document_type in required
+        if current.get(document_type, {}).get("status") != "approved"
+    )
+    if missing:
+        raise ApiError(
+            422,
+            "DOCUMENT_DECISIONS_INCOMPLETE",
+            f"Toutes les pieces obligatoires du dossier {dossier} doivent etre approuvees.",
+            {"missing_decisions": missing},
+        )
+
+
+def _mark_resubmitted_documents_pending(
+    current: dict[str, dict], history: list[dict], document_types: set[str], *, now: datetime,
+) -> None:
+    for document_type in document_types:
+        decision = {
+            "document_type": document_type,
+            "status": "pending",
+            "reason_code": None,
+            "reason": None,
+            "expected_correction": None,
+            "reviewed_at": None,
+        }
+        current[document_type] = decision
+        history.append({**decision, "resubmitted_at": now.isoformat()})
+
+
+def _submitted_kyc_document_types(**values: object) -> set[str]:
+    mapping = {
+        "license_document": "license_front",
+        "license_back_document": "license_back",
+        "national_id_document": "national_id_front",
+        "national_id_back_document": "national_id_back",
+        "selfie_document": "selfie",
+    }
+    return {
+        document_type
+        for prefix, document_type in mapping.items()
+        if values.get(f"{prefix}_file_id") is not None or values.get(f"{prefix}_url") is not None
+    }
+
+
+def _submitted_vehicle_document_types(**values: object) -> set[str]:
+    mapping = {
+        "registration_document": "registration",
+        "insurance_document": "insurance",
+        "technical_inspection_document": "technical_inspection",
+        "transport_authorization_document": "transport_authorization",
+        "vehicle_front_photo": "vehicle_front",
+        "vehicle_back_photo": "vehicle_back",
+        "vehicle_left_photo": "vehicle_left",
+        "vehicle_right_photo": "vehicle_right",
+        "vehicle_interior_photo": "vehicle_interior",
+        "vehicle_plate_photo": "vehicle_plate",
+    }
+    return {
+        document_type
+        for prefix, document_type in mapping.items()
+        if values.get(f"{prefix}_file_id") is not None or values.get(f"{prefix}_url") is not None
+    }

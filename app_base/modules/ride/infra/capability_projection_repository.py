@@ -211,6 +211,7 @@ class SqlAlchemyDriverCapabilityProjectionRepository:
                 select(
                     DriverProfileModel.user_id,
                     DriverProfileModel.status,
+                    DriverProfileModel.kyc_status,
                     active_vehicle.c.verification_status,
                     active_vehicle.c.active,
                 )
@@ -223,7 +224,11 @@ class SqlAlchemyDriverCapabilityProjectionRepository:
         ).all()
         return [
             DriverProjectionCandidate(
-                user_id=row[0], profile_status=row[1], vehicle_status=row[2], vehicle_active=row[3],
+                user_id=row[0],
+                profile_status=row[1],
+                kyc_status=row[2],
+                vehicle_status=row[3],
+                vehicle_active=row[4],
             )
             for row in rows
         ]

@@ -62,11 +62,15 @@ class FakeDriverService:
     async def get_kyc_detail(self, driver_id: UUID) -> dict:
         return {"driver_id": str(driver_id)}
 
-    async def approve_kyc(self, driver_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None) -> dict:
+    async def approve_kyc(
+        self, driver_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None, documents=None,
+    ) -> dict:
         self.calls.append(("approve", driver_id, reviewed_by_user_id, notes))
         return {"id": str(driver_id), "status": "active"}
 
-    async def reject_kyc(self, driver_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None) -> dict:
+    async def reject_kyc(
+        self, driver_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None, documents=None,
+    ) -> dict:
         self.calls.append(("reject", driver_id, reviewed_by_user_id, notes))
         return {"id": str(driver_id), "status": "suspended"}
 
