@@ -188,7 +188,13 @@ Ne pas confondre ce purpose avec `profile_avatar`, qui reste privé et génériq
 | `vehicle_interior_photo_file_id` | `diddigo_vehicle_interior_photo` | privée |
 | `vehicle_plate_photo_file_id` | `diddigo_vehicle_plate_photo` | privée |
 
-### Purposes encore manquants ou ambigus
+### Mise a jour du 19 octobre 2026
+
+Cette section historique est remplacee par
+`DIDDIGO_FRONTEND_KYC_KYV_BRIEF_2026-10-19.md`. Les purposes chauffeur qui
+etaient manquants sont maintenant publies dans DiddiFiles.
+
+### Purposes encore manquants ou ambigus (historique, ne plus appliquer)
 
 Les champs suivants existent dans DiddiGo, mais aucun purpose DiddiFiles dédié n'est actuellement publié :
 
@@ -217,4 +223,4 @@ Le frontend ne valide jamais un KYC ou un KYV. DiddiFiles sécurise le fichier ;
 ## 9. Points en attente de correctif backend
 
 - typer complètement les réponses `/start` et `/no-show` dans l'OpenAPI ;
-- compléter les purposes DiddiFiles manquants avant d'activer les soumissions concernées.
+- utiliser la matrice DiddiFiles actualisee du brief du 19 octobre 2026.

@@ -57,8 +57,14 @@ KYV obligatoire : carte grise, assurance, controle technique et six photos
 (avant, arriere, gauche, droite, interieur, plaque). L'autorisation de transport
 est stockee mais n'est pas bloquante actuellement.
 
-Les purposes DiddiFiles manquants restent un blocage d'integration. Ne pas
-inventer de purpose cote application.
+Les purposes DiddiFiles du dossier chauffeur sont publies. Utiliser la matrice
+de `docs/integrations/diddifiles.md`, notamment :
+
+- `diddigo_driver_kyc_license_back` ;
+- `diddigo_driver_kyc_national_id_back` ;
+- `diddigo_vehicle_insurance` ;
+- `diddigo_vehicle_technical_inspection` ;
+- `diddigo_vehicle_transport_authorization`.
 
 ## Hors MVP
 
