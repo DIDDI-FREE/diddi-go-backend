@@ -44,6 +44,26 @@ async def get_driver_kyc_detail(
     return await service.get_kyc_detail(driver_id)
 
 
+@router.get("/vehicles/kyv")
+async def list_vehicle_kyv_queue(
+    status: str = Query(default="pending_verification"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    _claims: dict = Depends(require_kyc_read),
+    service: DriverService = Depends(driver_service),
+) -> dict:
+    return await service.list_vehicle_kyv_queue(status=status, page=page, page_size=page_size)
+
+
+@router.get("/vehicles/{vehicle_id}/kyv")
+async def get_vehicle_kyv_detail(
+    vehicle_id: UUID,
+    _claims: dict = Depends(require_kyc_read),
+    service: DriverService = Depends(driver_service),
+) -> dict:
+    return await service.get_vehicle_kyv_detail(vehicle_id)
+
+
 async def _decide(
     *,
     decision: str,
@@ -114,6 +134,76 @@ async def _decide(
     return result
 
 
+async def _decide_vehicle(
+    *,
+    decision: str,
+    vehicle_id: UUID,
+    notes: str | None,
+    documents: list[dict],
+    request: Request,
+    request_id: UUID,
+    idempotency_key: str,
+    claims: dict,
+    actor: User,
+    service: DriverService,
+    commands: S2SCommandStore,
+    audit: BackofficeAuditRepository,
+    session: AsyncSession,
+) -> dict:
+    client_id = request.headers["X-Client-ID"]
+    reservation = await commands.reserve(
+        client_id=client_id,
+        idempotency_key=idempotency_key,
+        payload={
+            "decision": decision,
+            "vehicle_id": str(vehicle_id),
+            "actor_user_id": str(actor.id),
+            "notes": notes,
+            "documents": documents,
+        },
+    )
+    if reservation.cached_response is not None:
+        return reservation.cached_response
+    try:
+        operation = service.approve_vehicle_kyv if decision == "approve" else service.reject_vehicle_kyv
+        result = await operation(
+            vehicle_id,
+            reviewed_by_user_id=actor.id,
+            notes=notes,
+            documents=documents,
+        )
+        audit_event = await audit.record(
+            BackofficeAuditEvent(
+                client_id=client_id,
+                service_subject=str(claims.get("sub") or ""),
+                actor_user_id=actor.id,
+                action=f"vehicle.kyv.{decision}",
+                target_type="vehicle",
+                target_id=vehicle_id,
+                request_id=request_id,
+                idempotency_key=idempotency_key,
+                reason=notes or "backoffice_kyv_decision",
+                context={"result_status": result.get("verification_status")},
+            ),
+        )
+        await session.commit()
+        await commands.complete(reservation, result)
+    except Exception:
+        await commands.release(reservation)
+        raise
+    log_event(
+        "driver.vehicle.kyv.s2s_decision",
+        decision=decision,
+        vehicle_id=vehicle_id,
+        actor_user_id=actor.id,
+        service_subject=claims.get("sub"),
+        client_id=client_id,
+        idempotency_key=idempotency_key,
+        audit_id=audit_event.id,
+    )
+    return result
+
+
 @router.post("/{driver_id}/kyc/approve")
 async def approve_driver_kyc(
     driver_id: UUID,
@@ -152,6 +242,50 @@ async def reject_driver_kyc(
 ) -> dict:
     return await _decide(
         decision="reject", driver_id=driver_id, notes=payload.notes,
+        documents=[item.model_dump() for item in payload.documents], request=request,
+        request_id=request_id, idempotency_key=idempotency_key, claims=claims, actor=actor,
+        service=service, commands=commands, audit=audit, session=session,
+    )
+
+
+@router.post("/vehicles/{vehicle_id}/kyv/approve")
+async def approve_vehicle_kyv(
+    vehicle_id: UUID,
+    payload: DriverKycApproveRequest,
+    request: Request,
+    request_id: UUID = Header(alias="X-Request-ID"),
+    idempotency_key: str = Header(alias="Idempotency-Key", min_length=8, max_length=160),
+    claims: dict = Depends(require_kyc_decide),
+    actor: User = Depends(require_s2s_admin_actor),
+    service: DriverService = Depends(driver_service),
+    commands: S2SCommandStore = Depends(kyc_command_store),
+    audit: BackofficeAuditRepository = Depends(backoffice_audit_repo),
+    session: AsyncSession = Depends(session_dep),
+) -> dict:
+    return await _decide_vehicle(
+        decision="approve", vehicle_id=vehicle_id, notes=payload.notes,
+        documents=[item.model_dump() for item in payload.documents], request=request,
+        request_id=request_id, idempotency_key=idempotency_key, claims=claims, actor=actor,
+        service=service, commands=commands, audit=audit, session=session,
+    )
+
+
+@router.post("/vehicles/{vehicle_id}/kyv/reject")
+async def reject_vehicle_kyv(
+    vehicle_id: UUID,
+    payload: DriverKycRejectRequest,
+    request: Request,
+    request_id: UUID = Header(alias="X-Request-ID"),
+    idempotency_key: str = Header(alias="Idempotency-Key", min_length=8, max_length=160),
+    claims: dict = Depends(require_kyc_decide),
+    actor: User = Depends(require_s2s_admin_actor),
+    service: DriverService = Depends(driver_service),
+    commands: S2SCommandStore = Depends(kyc_command_store),
+    audit: BackofficeAuditRepository = Depends(backoffice_audit_repo),
+    session: AsyncSession = Depends(session_dep),
+) -> dict:
+    return await _decide_vehicle(
+        decision="reject", vehicle_id=vehicle_id, notes=payload.notes,
         documents=[item.model_dump() for item in payload.documents], request=request,
         request_id=request_id, idempotency_key=idempotency_key, claims=claims, actor=actor,
         service=service, commands=commands, audit=audit, session=session,

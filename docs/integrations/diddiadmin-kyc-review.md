@@ -86,11 +86,13 @@ toutes les pieces KYC obligatoires ne sont pas approuvees.
 
 ## KYV vehicule
 
-Les routes humaines existantes restent disponibles :
+Le Backend Backoffice utilise les routes S2S suivantes :
 
 ```text
-POST /v1/drivers/vehicles/{vehicle_id}/kyv/approve
-POST /v1/drivers/vehicles/{vehicle_id}/kyv/reject
+GET /internal/v1/drivers/vehicles/kyv
+GET /internal/v1/drivers/vehicles/{vehicle_id}/kyv
+POST /internal/v1/drivers/vehicles/{vehicle_id}/kyv/approve
+POST /internal/v1/drivers/vehicles/{vehicle_id}/kyv/reject
 ```
 
 Elles utilisent les memes structures de decisions. Les types vehicule sont :

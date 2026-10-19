@@ -74,6 +74,24 @@ class FakeDriverService:
         self.calls.append(("reject", driver_id, reviewed_by_user_id, notes))
         return {"id": str(driver_id), "status": "suspended"}
 
+    async def list_vehicle_kyv_queue(self, *, status: str, page: int, page_size: int) -> dict:
+        return {"status": status, "page": page, "page_size": page_size}
+
+    async def get_vehicle_kyv_detail(self, vehicle_id: UUID) -> dict:
+        return {"vehicle_id": str(vehicle_id)}
+
+    async def approve_vehicle_kyv(
+        self, vehicle_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None, documents=None,
+    ) -> dict:
+        self.calls.append(("approve_vehicle", vehicle_id, reviewed_by_user_id, notes))
+        return {"id": str(vehicle_id), "verification_status": "active"}
+
+    async def reject_vehicle_kyv(
+        self, vehicle_id: UUID, *, reviewed_by_user_id: UUID, notes: str | None, documents=None,
+    ) -> dict:
+        self.calls.append(("reject_vehicle", vehicle_id, reviewed_by_user_id, notes))
+        return {"id": str(vehicle_id), "verification_status": "rejected"}
+
 
 class FakeUserRepository:
     def __init__(self, user: User | None) -> None:
@@ -313,3 +331,35 @@ async def test_s2s_kyc_openapi_distinguishes_approval_and_rejection_contracts(ky
     assert reject["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith(
         "/DriverKycRejectRequest",
     )
+
+
+async def test_s2s_backoffice_can_read_and_reject_vehicle_kyv(kyc_api) -> None:
+    app, service, actor, scopes = kyc_api
+    vehicle_id = uuid4()
+    headers = _headers(actor_id=actor.id, idempotency_key="kyv-decision-001")
+    payload = {
+        "documents": [{
+            "document_type": "insurance",
+            "decision": "rejected",
+            "reason_code": "expired",
+            "reason": "L'attestation est expiree.",
+            "expected_correction": "Renvoyer une attestation en cours de validite.",
+        }],
+    }
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        detail = await client.get(f"/internal/v1/drivers/vehicles/{vehicle_id}/kyv", headers=_headers())
+        rejected = await client.post(
+            f"/internal/v1/drivers/vehicles/{vehicle_id}/kyv/reject",
+            headers=headers,
+            json=payload,
+        )
+
+    assert detail.status_code == 200
+    assert rejected.status_code == 200
+    assert rejected.json()["verification_status"] == "rejected"
+    assert service.calls[-1] == ("reject_vehicle", vehicle_id, actor.id, None)
+    assert scopes[-1] == {KYC_DECIDE}
+    event = app.state.audit.events[-1]
+    assert event.action == "vehicle.kyv.reject"
+    assert event.target_type == "vehicle"
+    assert event.target_id == vehicle_id
