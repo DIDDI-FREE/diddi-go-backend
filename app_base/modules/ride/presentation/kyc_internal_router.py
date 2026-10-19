@@ -14,7 +14,10 @@ from app_base.modules.audit.domain.entities import BackofficeAuditEvent
 from app_base.modules.audit.domain.interfaces import BackofficeAuditRepository
 from app_base.modules.auth.domain.entities import User
 from app_base.modules.ride.application.driver_service import DriverService
-from app_base.modules.ride.presentation.driver_schemas import DriverKycReviewRequest
+from app_base.modules.ride.presentation.driver_schemas import (
+    DriverKycApproveRequest,
+    DriverKycRejectRequest,
+)
 
 router = APIRouter(prefix="/internal/v1/drivers", tags=["internal-driver-kyc"])
 require_kyc_read = require_backoffice_service_token(required_scope=KYC_READ)
@@ -114,7 +117,7 @@ async def _decide(
 @router.post("/{driver_id}/kyc/approve")
 async def approve_driver_kyc(
     driver_id: UUID,
-    payload: DriverKycReviewRequest,
+    payload: DriverKycApproveRequest,
     request: Request,
     request_id: UUID = Header(alias="X-Request-ID"),
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=8, max_length=160),
@@ -136,7 +139,7 @@ async def approve_driver_kyc(
 @router.post("/{driver_id}/kyc/reject")
 async def reject_driver_kyc(
     driver_id: UUID,
-    payload: DriverKycReviewRequest,
+    payload: DriverKycRejectRequest,
     request: Request,
     request_id: UUID = Header(alias="X-Request-ID"),
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=8, max_length=160),

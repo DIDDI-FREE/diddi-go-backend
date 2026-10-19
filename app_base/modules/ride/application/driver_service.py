@@ -1208,7 +1208,7 @@ def _apply_rejection_decisions(
     if not decisions or not any(item.get("decision") == "rejected" for item in decisions):
         raise ApiError(
             422,
-            "DOCUMENT_REJECTION_DETAILS_REQUIRED",
+            ErrorCode.DOCUMENT_REJECTION_DETAILS_REQUIRED,
             "Un rejet doit identifier au moins une piece rejetee et la correction attendue.",
         )
     for item in decisions:
@@ -1217,7 +1217,7 @@ def _apply_rejection_decisions(
         ):
             raise ApiError(
                 422,
-                "DOCUMENT_REJECTION_DETAILS_REQUIRED",
+                ErrorCode.DOCUMENT_REJECTION_DETAILS_REQUIRED,
                 "Chaque piece rejetee exige reason_code, reason et expected_correction.",
                 {"document_type": item.get("document_type")},
             )
@@ -1247,12 +1247,16 @@ def _apply_document_decisions(
         if document_type not in allowed_types:
             raise ApiError(
                 422,
-                "INVALID_DOCUMENT_TYPE",
+                ErrorCode.INVALID_DOCUMENT_TYPE,
                 "Type de piece inconnu pour ce dossier.",
                 {"document_type": document_type, "allowed": sorted(allowed_types)},
             )
         if document_type in seen:
-            raise ApiError(422, "DUPLICATE_DOCUMENT_DECISION", "Une piece ne peut etre decidee qu'une fois.")
+            raise ApiError(
+                422,
+                ErrorCode.DUPLICATE_DOCUMENT_DECISION,
+                "Une piece ne peut etre decidee qu'une fois.",
+            )
         seen.add(document_type)
         decision = {
             "document_type": document_type,
@@ -1275,7 +1279,7 @@ def _ensure_all_documents_approved(current: dict[str, dict], required: set[str],
     if missing:
         raise ApiError(
             422,
-            "DOCUMENT_DECISIONS_INCOMPLETE",
+            ErrorCode.DOCUMENT_DECISIONS_INCOMPLETE,
             f"Toutes les pieces obligatoires du dossier {dossier} doivent etre approuvees.",
             {"missing_decisions": missing},
         )

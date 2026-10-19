@@ -30,8 +30,9 @@ from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.domain.entities import DriverProfile
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.presentation.driver_schemas import (
+    DriverKycApproveRequest,
+    DriverKycRejectRequest,
     DriverKycResubmitRequest,
-    DriverKycReviewRequest,
     DriverProfileCreateRequest,
     DriverProfilePhotoUpdateRequest,
     DriverProfileResponse,
@@ -218,7 +219,7 @@ async def get_driver_kyc_detail(
 @router.post("/{driver_id}/kyc/approve")
 async def approve_driver_kyc(
     driver_id: UUID,
-    payload: DriverKycReviewRequest,
+    payload: DriverKycApproveRequest,
     service: DriverService = Depends(driver_service),
     current_user: UserModel = Depends(require_role("admin")),
 ) -> dict:
@@ -233,7 +234,7 @@ async def approve_driver_kyc(
 @router.post("/{driver_id}/kyc/reject")
 async def reject_driver_kyc(
     driver_id: UUID,
-    payload: DriverKycReviewRequest,
+    payload: DriverKycRejectRequest,
     service: DriverService = Depends(driver_service),
     current_user: UserModel = Depends(require_role("admin")),
 ) -> dict:
@@ -248,7 +249,7 @@ async def reject_driver_kyc(
 @router.post("/vehicles/{vehicle_id}/kyv/approve")
 async def approve_vehicle_kyv(
     vehicle_id: UUID,
-    payload: DriverKycReviewRequest,
+    payload: DriverKycApproveRequest,
     service: DriverService = Depends(driver_service),
     current_user: UserModel = Depends(require_role("admin")),
 ) -> dict:
@@ -263,7 +264,7 @@ async def approve_vehicle_kyv(
 @router.post("/vehicles/{vehicle_id}/kyv/reject")
 async def reject_vehicle_kyv(
     vehicle_id: UUID,
-    payload: DriverKycReviewRequest,
+    payload: DriverKycRejectRequest,
     service: DriverService = Depends(driver_service),
     current_user: UserModel = Depends(require_role("admin")),
 ) -> dict:

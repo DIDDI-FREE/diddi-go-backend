@@ -6,7 +6,25 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+DocumentType = Literal[
+    "license_front",
+    "license_back",
+    "national_id_front",
+    "national_id_back",
+    "selfie",
+    "registration",
+    "insurance",
+    "technical_inspection",
+    "transport_authorization",
+    "vehicle_front",
+    "vehicle_back",
+    "vehicle_left",
+    "vehicle_right",
+    "vehicle_interior",
+    "vehicle_plate",
+]
 
 
 class DriverProfileCreateRequest(BaseModel):
@@ -135,16 +153,44 @@ class GoOnlineRequest(BaseModel):
 
 
 class DocumentReviewDecision(BaseModel):
-    document_type: str = Field(min_length=1, max_length=80)
+    document_type: DocumentType
     decision: Literal["approved", "rejected"]
     reason_code: str | None = Field(default=None, min_length=1, max_length=80)
     reason: str | None = Field(default=None, min_length=3, max_length=1000)
     expected_correction: str | None = Field(default=None, min_length=3, max_length=1000)
 
+    @model_validator(mode="after")
+    def validate_rejection_details(self) -> DocumentReviewDecision:
+        if self.decision == "rejected" and not all(
+            (self.reason_code, self.reason, self.expected_correction)
+        ):
+            raise ValueError(
+                "A rejected document requires reason_code, reason and expected_correction.",
+            )
+        return self
+
 
 class DriverKycReviewRequest(BaseModel):
     notes: str | None = Field(default=None, max_length=1000)
     documents: list[DocumentReviewDecision] = Field(default_factory=list, max_length=20)
+
+
+class DriverKycApproveRequest(DriverKycReviewRequest):
+    @model_validator(mode="after")
+    def approvals_only(self) -> DriverKycApproveRequest:
+        if any(item.decision != "approved" for item in self.documents):
+            raise ValueError("The approval route only accepts approved document decisions.")
+        return self
+
+
+class DriverKycRejectRequest(DriverKycReviewRequest):
+    documents: list[DocumentReviewDecision] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def contains_rejection(self) -> DriverKycRejectRequest:
+        if not any(item.decision == "rejected" for item in self.documents):
+            raise ValueError("The rejection route requires at least one rejected document.")
+        return self
 
 
 class DocumentReviewResponse(BaseModel):

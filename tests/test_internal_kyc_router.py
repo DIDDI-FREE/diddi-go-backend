@@ -228,6 +228,19 @@ async def test_s2s_kyc_decision_requires_request_id(kyc_api) -> None:
     assert response.status_code == 422
 
 
+async def test_s2s_kyc_rejection_requires_actionable_document_details(kyc_api) -> None:
+    app, _, actor, _ = kyc_api
+    headers = _headers(actor_id=actor.id, idempotency_key="kyc-rejection-details-001")
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            f"/internal/v1/drivers/{uuid4()}/kyc/reject",
+            headers=headers,
+            json={"notes": "illisible"},
+        )
+
+    assert response.status_code == 422
+
+
 async def test_s2s_kyc_decision_is_replayed_once_and_uses_decide_scope(kyc_api) -> None:
     app, service, actor, scopes = kyc_api
     driver_id = uuid4()
@@ -257,13 +270,46 @@ async def test_s2s_kyc_rejects_divergent_reuse(kyc_api) -> None:
     app, _, actor, _ = kyc_api
     driver_id = uuid4()
     headers = _headers(actor_id=actor.id, idempotency_key="kyc-decision-002")
+    first_payload = {
+        "documents": [{
+            "document_type": "national_id_back",
+            "decision": "rejected",
+            "reason_code": "unreadable",
+            "reason": "Le numero est illisible.",
+            "expected_correction": "Renvoyer une photo nette.",
+        }],
+    }
+    second_payload = {
+        "documents": [{
+            "document_type": "national_id_back",
+            "decision": "rejected",
+            "reason_code": "expired",
+            "reason": "La piece est expiree.",
+            "expected_correction": "Renvoyer une piece valide.",
+        }],
+    }
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            f"/internal/v1/drivers/{driver_id}/kyc/reject", headers=headers, json={"notes": "illisible"},
+            f"/internal/v1/drivers/{driver_id}/kyc/reject", headers=headers, json=first_payload,
         )
         conflict = await client.post(
-            f"/internal/v1/drivers/{driver_id}/kyc/reject", headers=headers, json={"notes": "expire"},
+            f"/internal/v1/drivers/{driver_id}/kyc/reject", headers=headers, json=second_payload,
         )
     assert response.status_code == 200
     assert conflict.status_code == 409
     assert conflict.json()["error"]["code"] == "IDEMPOTENCY_CONFLICT"
+
+
+async def test_s2s_kyc_openapi_distinguishes_approval_and_rejection_contracts(kyc_api) -> None:
+    app, _, _, _ = kyc_api
+    schema = app.openapi()
+
+    approve = schema["paths"]["/internal/v1/drivers/{driver_id}/kyc/approve"]["post"]
+    reject = schema["paths"]["/internal/v1/drivers/{driver_id}/kyc/reject"]["post"]
+
+    assert approve["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/DriverKycApproveRequest",
+    )
+    assert reject["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/DriverKycRejectRequest",
+    )
