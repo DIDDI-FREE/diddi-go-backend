@@ -17,6 +17,8 @@ from app_base.modules.payment.domain.entities import (
     KEEP,
     PENDING_PAYMENT_STATUSES,
     PENDING_TOPUP_STATUSES,
+    PassengerDebt,
+    PassengerDebtStatus,
     PaymentStatus,
     Transaction,
     WalletEntryDirection,
@@ -40,6 +42,38 @@ class FakePaymentRepo:
         self.ledger = []
         self.wallets = {}
         self.topups = {}
+        self.debts = {}
+
+    async def find_open_debt_for_passenger(self, passenger_user_id):
+        return next(
+            (
+                debt
+                for debt in self.debts.values()
+                if debt.passenger_user_id == passenger_user_id and debt.status is not PassengerDebtStatus.SETTLED
+            ),
+            None,
+        )
+
+    async def find_debt_by_id(self, debt_id):
+        return self.debts.get(debt_id)
+
+    async def find_debt_by_ride_id(self, ride_id):
+        return next((debt for debt in self.debts.values() if debt.ride_id == ride_id), None)
+
+    async def list_debts_for_passenger(self, passenger_user_id, *, page=1, page_size=20):
+        debts = [debt for debt in self.debts.values() if debt.passenger_user_id == passenger_user_id]
+        return debts[(page - 1) * page_size : page * page_size], len(debts)
+
+    async def save_debt(self, debt):
+        self.debts[debt.id] = debt
+        return debt
+
+    async def update_debt_status(self, debt_id, *, status, settled_at=None, settled_by=None):
+        debt = self.debts[debt_id]
+        debt.status = status
+        debt.settled_at = settled_at
+        debt.settled_by = settled_by
+        return debt
 
     async def save(self, transaction):
         self.payment = transaction
@@ -365,9 +399,68 @@ async def test_prepare_wave_replaces_failed_intent_and_then_reuses_retry(monkeyp
     assert retried["payment_intent_id"] == str(retry_intent_id)
     assert retried["status"] == "requires_action"
     assert reused["payment_intent_id"] == str(retry_intent_id)
-    assert gateway.last_idempotency_key == (
-        f"diddigo:ride:{ride.id}:collection:retry:{failed_intent_id}"
+    assert gateway.last_idempotency_key == (f"diddigo:ride:{ride.id}:collection:retry:{failed_intent_id}")
+
+
+@pytest.mark.asyncio
+async def test_failed_mobile_money_for_completed_ride_opens_passenger_debt() -> None:
+    ride = make_completed_ride()
+    repo = FakePaymentRepo()
+    payment = Transaction(
+        id=uuid4(),
+        ride_id=ride.id,
+        amount=ride.final_fare,
+        method=PaymentDomainMethod.MOBILE_MONEY,
+        status=PaymentStatus.PROCESSING,
     )
+    await repo.save(payment)
+    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride))
+
+    await service._apply_transaction_status(
+        payment,
+        status=PaymentStatus.FAILED,
+        provider_status="failed",
+        paid_at=None,
+    )
+
+    debt = await repo.find_debt_by_ride_id(ride.id)
+    assert debt is not None
+    assert debt.passenger_user_id == ride.passenger_user_id
+    assert debt.amount == Decimal("3100")
+    assert debt.status is PassengerDebtStatus.OPEN
+    assert debt.reason == "mobile_money_failed"
+
+
+@pytest.mark.asyncio
+async def test_successful_retry_settles_existing_passenger_debt() -> None:
+    ride = make_completed_ride()
+    repo = FakePaymentRepo()
+    debt = PassengerDebt(
+        id=uuid4(),
+        passenger_user_id=ride.passenger_user_id,
+        ride_id=ride.id,
+        amount=Decimal("3100"),
+        status=PassengerDebtStatus.MOBILE_MONEY_PENDING,
+    )
+    await repo.save_debt(debt)
+    payment = Transaction(
+        id=uuid4(),
+        ride_id=ride.id,
+        amount=Decimal("3100"),
+        method=PaymentDomainMethod.MOBILE_MONEY,
+        status=PaymentStatus.PROCESSING,
+    )
+    await repo.save(payment)
+    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride))
+
+    await service._apply_transaction_status(
+        payment,
+        status=PaymentStatus.SUCCEEDED,
+        provider_status="succeeded",
+        paid_at=datetime.now(UTC),
+    )
+
+    assert (await repo.find_debt_by_id(debt.id)).status is PassengerDebtStatus.SETTLED
 
 
 def test_payment_requests_reject_client_owned_callback_urls() -> None:

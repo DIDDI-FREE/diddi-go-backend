@@ -25,6 +25,8 @@ from app_base.modules.payment.domain.entities import (
     DriverLedgerEntry,
     DriverTopup,
     DriverWithdrawal,
+    PassengerDebt,
+    PassengerDebtStatus,
     PaymentMethod,
     PaymentStatus,
     TopupStatus,
@@ -77,12 +79,111 @@ def _iso(dt: datetime | None) -> str | None:
     return dt.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _fallback_customer_email(phone: str | None) -> str:
+    normalized = "".join(character for character in (phone or "") if character.isdigit())
+    if not normalized:
+        raise ApiError(422, ErrorCode.PAYMENT_EMAIL_REQUIRED, "Un email ou numero client est requis.")
+    return f"{normalized}@diddifree.com"
+
+
+def _passenger_debt_payload(debt: PassengerDebt | None) -> dict:
+    if debt is None:  # Defensive: the caller has just persisted a debt.
+        raise RuntimeError("Passenger debt unexpectedly missing")
+    return {
+        "id": str(debt.id),
+        "ride_id": str(debt.ride_id),
+        "amount": int(debt.amount),
+        "currency": debt.currency,
+        "status": debt.status.value,
+        "reason": debt.reason,
+        "created_at": _iso(debt.created_at),
+        "updated_at": _iso(debt.updated_at),
+        "settled_at": _iso(debt.settled_at),
+    }
+
+
 @dataclass
 class PaymentService:
     payment_repo: PaymentRepository
     ride_repo: RideRepository
     diddipay: DiddiPayClient | None = None
     return_contexts: PaymentReturnContextStore | None = None
+
+    async def list_passenger_debts(self, passenger_user_id: UUID, *, page: int, page_size: int) -> dict:
+        debts, total = await self.payment_repo.list_debts_for_passenger(
+            passenger_user_id, page=page, page_size=page_size
+        )
+        return {
+            "data": [_passenger_debt_payload(debt) for debt in debts],
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total_items": total,
+                "total_pages": max(1, (total + page_size - 1) // page_size),
+            },
+        }
+
+    async def prepare_passenger_debt_payment(
+        self,
+        debt_id: UUID,
+        *,
+        passenger_user_id: UUID,
+        customer_email: str | None,
+        customer_phone: str | None,
+        mobile_money_network: str,
+    ) -> dict:
+        debt = await self._owned_open_debt(debt_id, passenger_user_id)
+        payment = await self._prepare_diddipay(
+            debt.ride_id,
+            PaymentMethod.MOBILE_MONEY,
+            payer_user_id=passenger_user_id,
+            customer_email=customer_email or _fallback_customer_email(customer_phone),
+            customer_phone=customer_phone,
+            mobile_money_network=mobile_money_network,
+        )
+        await self.payment_repo.update_debt_status(debt.id, status=PassengerDebtStatus.MOBILE_MONEY_PENDING)
+        return {
+            "debt": _passenger_debt_payload(await self.payment_repo.find_debt_by_id(debt.id)),
+            "payment": payment,
+        }
+
+    async def request_passenger_debt_cash_settlement(self, debt_id: UUID, *, passenger_user_id: UUID) -> dict:
+        debt = await self._owned_open_debt(debt_id, passenger_user_id)
+        debt = await self.payment_repo.update_debt_status(debt.id, status=PassengerDebtStatus.CASH_PENDING_CONFIRMATION)
+        log_event("passenger_debt.cash_requested", debt_id=debt.id, ride_id=debt.ride_id)
+        return _passenger_debt_payload(debt)
+
+    async def confirm_passenger_debt_cash_settlement(self, debt_id: UUID, *, driver_id: UUID) -> dict:
+        debt = await self.payment_repo.find_debt_by_id(debt_id)
+        if debt is None:
+            raise ApiError(404, ErrorCode.PASSENGER_DEBT_NOT_FOUND, "Dette passager introuvable.")
+        if debt.status is not PassengerDebtStatus.CASH_PENDING_CONFIRMATION:
+            raise ApiError(
+                409,
+                ErrorCode.PASSENGER_DEBT_SETTLEMENT_INVALID,
+                "Cette dette n'attend pas une confirmation d'especes.",
+            )
+        ride = await self.ride_repo.find_by_id(debt.ride_id)
+        if ride is None or ride.driver_id != driver_id:
+            raise ApiError(403, ErrorCode.RIDE_NOT_OWNED_BY_USER, "Seul le chauffeur de cette course peut confirmer.")
+        debt = await self.payment_repo.update_debt_status(
+            debt.id,
+            status=PassengerDebtStatus.SETTLED,
+            settled_at=datetime.now(UTC),
+            settled_by=driver_id,
+        )
+        log_event("passenger_debt.cash_confirmed", debt_id=debt.id, ride_id=debt.ride_id, driver_id=driver_id)
+        return _passenger_debt_payload(debt)
+
+    async def _owned_open_debt(self, debt_id: UUID, passenger_user_id: UUID) -> PassengerDebt:
+        debt = await self.payment_repo.find_debt_by_id(debt_id)
+        if debt is None:
+            raise ApiError(404, ErrorCode.PASSENGER_DEBT_NOT_FOUND, "Dette passager introuvable.")
+        if debt.passenger_user_id != passenger_user_id:
+            raise ApiError(403, ErrorCode.RIDE_NOT_OWNED_BY_USER, "Cette dette ne vous appartient pas.")
+        if debt.status is PassengerDebtStatus.SETTLED:
+            raise ApiError(409, ErrorCode.PASSENGER_DEBT_SETTLEMENT_INVALID, "Cette dette est deja reglee.")
+        return debt
 
     async def confirm_cash(
         self,
@@ -643,7 +744,49 @@ class PaymentService:
         ride = await self.ride_repo.find_by_id(payment.ride_id)
         if ride is not None:
             await self._record_ride_settlement(ride, payment.status)
+            await self._update_passenger_debt_from_payment(ride, payment)
         return payment
+
+    async def _update_passenger_debt_from_payment(self, ride, payment: Transaction) -> None:
+        """Synchronise la dette métier avec le résultat final DiddiPay."""
+        if ride.status is not RideStatus.COMPLETED or payment.method is not PaymentMethod.MOBILE_MONEY:
+            return
+        find_debt = getattr(self.payment_repo, "find_debt_by_ride_id", None)
+        # Keeps legacy in-memory test doubles compatible while production
+        # repositories always implement the debt contract.
+        if find_debt is None:
+            return
+        existing = await find_debt(ride.id)
+        if payment.status is PaymentStatus.SUCCEEDED:
+            if existing is not None and existing.status is not PassengerDebtStatus.SETTLED:
+                await self.payment_repo.update_debt_status(
+                    existing.id,
+                    status=PassengerDebtStatus.SETTLED,
+                    settled_at=datetime.now(UTC),
+                    settled_by=ride.passenger_user_id,
+                )
+                log_event("passenger_debt.settled_mobile_money", debt_id=existing.id, ride_id=ride.id)
+            return
+        if payment.status not in {PaymentStatus.FAILED, PaymentStatus.CANCELLED}:
+            return
+        if existing is None:
+            debt = await self.payment_repo.save_debt(
+                PassengerDebt(
+                    id=PassengerDebt.new_id(),
+                    passenger_user_id=ride.passenger_user_id,
+                    ride_id=ride.id,
+                    amount=payment.amount,
+                    currency=payment.currency,
+                    reason=(
+                        "mobile_money_expired" if payment.status is PaymentStatus.CANCELLED else "mobile_money_failed"
+                    ),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                )
+            )
+            log_event("passenger_debt.opened", debt_id=debt.id, ride_id=ride.id, amount=debt.amount, reason=debt.reason)
+        elif existing.status is PassengerDebtStatus.MOBILE_MONEY_PENDING:
+            await self.payment_repo.update_debt_status(existing.id, status=PassengerDebtStatus.OPEN)
 
     async def _apply_topup_status(
         self,

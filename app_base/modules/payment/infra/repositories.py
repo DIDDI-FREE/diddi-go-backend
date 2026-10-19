@@ -25,6 +25,8 @@ from app_base.modules.payment.domain.entities import (
     DriverWallet,
     DriverWithdrawal,
     DriverWithdrawalQuote,
+    PassengerDebt,
+    PassengerDebtStatus,
     PaymentMethod,
     PaymentStatus,
     TopupStatus,
@@ -121,6 +123,82 @@ class SqlAlchemyPaymentRepository:
             row.provider_next_action = next_action
         await self._session.flush()
         return self._to_domain(row)
+
+    async def find_open_debt_for_passenger(self, passenger_user_id: UUID) -> PassengerDebt | None:
+        result = await self._session.execute(
+            select(orm.PassengerDebtModel)
+            .where(
+                orm.PassengerDebtModel.passenger_user_id == passenger_user_id,
+                orm.PassengerDebtModel.status != PassengerDebtStatus.SETTLED.value,
+            )
+            .order_by(orm.PassengerDebtModel.created_at.asc())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        return self._debt_to_domain(row) if row else None
+
+    async def find_debt_by_id(self, debt_id: UUID) -> PassengerDebt | None:
+        row = await self._session.get(orm.PassengerDebtModel, debt_id)
+        return self._debt_to_domain(row) if row else None
+
+    async def find_debt_by_ride_id(self, ride_id: UUID) -> PassengerDebt | None:
+        result = await self._session.execute(
+            select(orm.PassengerDebtModel).where(orm.PassengerDebtModel.ride_id == ride_id)
+        )
+        row = result.scalar_one_or_none()
+        return self._debt_to_domain(row) if row else None
+
+    async def list_debts_for_passenger(
+        self, passenger_user_id: UUID, *, page: int = 1, page_size: int = 20
+    ) -> tuple[list[PassengerDebt], int]:
+        criteria = orm.PassengerDebtModel.passenger_user_id == passenger_user_id
+        count = await self._session.execute(select(func.count()).select_from(orm.PassengerDebtModel).where(criteria))
+        rows = await self._session.execute(
+            select(orm.PassengerDebtModel)
+            .where(criteria)
+            .order_by(orm.PassengerDebtModel.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [self._debt_to_domain(row) for row in rows.scalars().all()], int(count.scalar_one())
+
+    async def save_debt(self, debt: PassengerDebt) -> PassengerDebt:
+        row = orm.PassengerDebtModel(
+            id=debt.id,
+            passenger_user_id=debt.passenger_user_id,
+            ride_id=debt.ride_id,
+            amount=debt.amount,
+            currency=debt.currency,
+            status=debt.status.value,
+            reason=debt.reason,
+            created_at=debt.created_at or datetime.now(UTC),
+            updated_at=debt.updated_at or datetime.now(UTC),
+            settled_at=debt.settled_at,
+            settled_by=debt.settled_by,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return self._debt_to_domain(row)
+
+    async def update_debt_status(
+        self,
+        debt_id: UUID,
+        *,
+        status: object,
+        settled_at: object | None = None,
+        settled_by: UUID | None = None,
+    ) -> PassengerDebt:
+        row = await self._session.get(orm.PassengerDebtModel, debt_id)
+        if row is None:
+            raise LookupError(f"No passenger debt with id={debt_id}")
+        target = status.value if isinstance(status, PassengerDebtStatus) else str(status)
+        row.status = target
+        row.updated_at = datetime.now(UTC)
+        if settled_at is not None:
+            row.settled_at = settled_at
+            row.settled_by = settled_by
+        await self._session.flush()
+        return self._debt_to_domain(row)
 
     async def replace_external_intent(
         self,
@@ -613,6 +691,22 @@ class SqlAlchemyPaymentRepository:
             provider_status=row.provider_status,
             provider_next_action=row.provider_next_action,
             paid_at=row.paid_at,
+        )
+
+    @staticmethod
+    def _debt_to_domain(row: orm.PassengerDebtModel) -> PassengerDebt:
+        return PassengerDebt(
+            id=row.id,
+            passenger_user_id=row.passenger_user_id,
+            ride_id=row.ride_id,
+            amount=Decimal(str(row.amount)),
+            currency=row.currency,
+            status=PassengerDebtStatus(row.status),
+            reason=row.reason,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+            settled_at=row.settled_at,
+            settled_by=row.settled_by,
         )
 
     @staticmethod

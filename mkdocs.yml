@@ -51,18 +51,22 @@ nav:
       - Chauffeur: guides/driver-ride-flow.md
       - KYC et KYV: guides/driver-kyc-kyv.md
       - Paiements et wallet: guides/payments-wallet.md
+      - Dette passager: guides/passenger-debts.md
       - SOS et sécurité: guides/sos-safety.md
   - Frontend:
+      - Acces aux contrats: frontend/DIDDIGO_FRONTEND_CONTRACT_ACCESS_BRIEF_2026-10-19.md
+      - KYC et KYV: frontend/DIDDIGO_FRONTEND_KYC_KYV_BRIEF_2026-10-19.md
       - Brief du 12 octobre: frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-12.md
       - Clarifications V2: frontend/DIDDIGO_FRONTEND_CLARIFICATIONS_2026-10-12_V2.md
       - Retraits chauffeur: frontend/DIDDIGO_DRIVER_WITHDRAWALS_BRIEF_2026-10-10.md
+      - Dette passager (20 octobre): frontend/DIDDIGO_FRONTEND_PASSENGER_DEBT_BRIEF_2026-10-20.md
   - Intégrations:
       - DiddiFiles: integrations/diddifiles.md
       - DiddiPay: integrations/diddipay.md
       - DiddiMap: integrations/diddimap.md
       - SMS: integrations/sms.md
   - Tests:
-      - Checklist stateful: testing/DIDDIGO_STATEFUL_TEST_CHECKLIST.md
+      - Checklist du 19 octobre: testing/DIDDIGO_TEST_CHECKLIST_2026-10-19.md
       - DiddiComms: integrations/diddicomms.md
   - Références:
       - Statuts: reference/statuses.md
@@ -73,6 +77,7 @@ nav:
   - Changelog:
       - 14 octobre 2026: changelog/2026-10-14.md
       - 12 octobre 2026: changelog/2026-10-12.md
+      - 20 octobre 2026: changelog/2026-10-20.md
 
 exclude_docs: |
   archive/

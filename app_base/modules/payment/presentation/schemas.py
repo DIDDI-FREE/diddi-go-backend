@@ -35,6 +35,28 @@ class PaymentPreparationRequest(BaseModel):
         return self
 
 
+class PassengerDebtResponse(BaseModel):
+    id: UUID
+    ride_id: UUID
+    amount: int
+    currency: str
+    status: Literal["open", "mobile_money_pending", "cash_pending_confirmation", "settled"]
+    reason: Literal["mobile_money_failed", "mobile_money_expired"]
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    settled_at: datetime | None = None
+
+
+class PassengerDebtListResponse(BaseModel):
+    data: list[PassengerDebtResponse]
+    pagination: dict[str, int]
+
+
+class PassengerDebtPaymentPreparationResponse(BaseModel):
+    debt: PassengerDebtResponse
+    payment: dict
+
+
 class DriverTopupRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

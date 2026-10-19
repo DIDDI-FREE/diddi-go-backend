@@ -27,11 +27,15 @@ from app_base.modules.payment.presentation.schemas import (
     DriverWithdrawalQuoteResponse,
     DriverWithdrawalRequest,
     DriverWithdrawalResponse,
+    PassengerDebtListResponse,
+    PassengerDebtPaymentPreparationResponse,
+    PassengerDebtResponse,
     PaymentPreparationRequest,
 )
 from app_base.modules.ride.domain.entities import DriverProfile
 
 router = APIRouter(prefix="/payments", tags=["payment"])
+passenger_debt_router = APIRouter(prefix="/passenger/debts", tags=["passenger-debts"])
 wallet_router = APIRouter(prefix="/drivers/me/wallet", tags=["driver-wallet"])
 admin_wallet_router = APIRouter(prefix="/admin/drivers", tags=["admin-driver-wallet"])
 admin_payment_router = APIRouter(prefix="/admin/payments", tags=["admin-payment"])
@@ -80,6 +84,54 @@ async def get_payment(
     current_user: UserModel = Depends(get_current_user),
 ) -> dict:
     return await service.get_payment(ride_id)
+
+
+@passenger_debt_router.get("", response_model=PassengerDebtListResponse)
+async def list_passenger_debts(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    service: PaymentService = Depends(payment_service),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    return await service.list_passenger_debts(current_user.id, page=page, page_size=page_size)
+
+
+@passenger_debt_router.post("/{debt_id}/mobile-money/prepare", response_model=PassengerDebtPaymentPreparationResponse)
+async def prepare_passenger_debt_mobile_money(
+    debt_id: UUID,
+    payload: PaymentPreparationRequest,
+    service: PaymentService = Depends(payment_service),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    if payload.method != "mobile_money" or payload.mobile_money_network is None:
+        raise ApiError(422, "VALIDATION_ERROR", "Un reseau Mobile Money est requis pour regler une dette.")
+    return await service.prepare_passenger_debt_payment(
+        debt_id,
+        passenger_user_id=current_user.id,
+        customer_email=payload.customer_email,
+        customer_phone=payload.customer_phone or current_user.phone,
+        mobile_money_network=payload.mobile_money_network,
+    )
+
+
+@passenger_debt_router.post("/{debt_id}/cash-request", response_model=PassengerDebtResponse)
+async def request_passenger_debt_cash_settlement(
+    debt_id: UUID,
+    service: PaymentService = Depends(payment_service),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    return await service.request_passenger_debt_cash_settlement(debt_id, passenger_user_id=current_user.id)
+
+
+@passenger_debt_router.post("/{debt_id}/confirm-cash", response_model=PassengerDebtResponse)
+async def confirm_passenger_debt_cash_settlement(
+    debt_id: UUID,
+    service: PaymentService = Depends(payment_service),
+    driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    if driver_profile is None:
+        raise ApiError(403, "DRIVER_PROFILE_REQUIRED", "Un profil chauffeur est requis pour confirmer.")
+    return await service.confirm_passenger_debt_cash_settlement(debt_id, driver_id=driver_profile.id)
 
 
 @wallet_router.get("")

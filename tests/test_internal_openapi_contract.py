@@ -21,3 +21,16 @@ def test_s2s_mutations_document_canonical_and_legacy_admin_actor_headers() -> No
         assert canonical["required"] is False
         assert legacy["required"] is False
         assert legacy["deprecated"] is True
+
+
+def test_vehicle_verification_status_is_an_explicit_public_contract() -> None:
+    schema = app.openapi()
+
+    status = schema["components"]["schemas"]["VehicleResponse"]["properties"]["verification_status"]
+
+    assert status["enum"] == [
+        "pending_verification",
+        "active",
+        "suspended",
+        "rejected",
+    ]

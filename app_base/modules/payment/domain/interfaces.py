@@ -13,6 +13,7 @@ from app_base.modules.payment.domain.entities import (
     DriverWallet,
     DriverWithdrawal,
     DriverWithdrawalQuote,
+    PassengerDebt,
     Transaction,
 )
 
@@ -25,6 +26,27 @@ class PaymentRepository(Protocol):
     async def find_by_ride_id(self, ride_id: UUID) -> Transaction | None: ...
 
     async def find_by_payment_intent_id(self, payment_intent_id: UUID) -> Transaction | None: ...
+
+    async def find_open_debt_for_passenger(self, passenger_user_id: UUID) -> PassengerDebt | None: ...
+
+    async def find_debt_by_id(self, debt_id: UUID) -> PassengerDebt | None: ...
+
+    async def find_debt_by_ride_id(self, ride_id: UUID) -> PassengerDebt | None: ...
+
+    async def list_debts_for_passenger(
+        self, passenger_user_id: UUID, *, page: int = 1, page_size: int = 20
+    ) -> tuple[list[PassengerDebt], int]: ...
+
+    async def save_debt(self, debt: PassengerDebt) -> PassengerDebt: ...
+
+    async def update_debt_status(
+        self,
+        debt_id: UUID,
+        *,
+        status: object,
+        settled_at: object | None = None,
+        settled_by: UUID | None = None,
+    ) -> PassengerDebt: ...
 
     async def update_collected(
         self,

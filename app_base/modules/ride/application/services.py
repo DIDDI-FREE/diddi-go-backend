@@ -17,6 +17,7 @@ from app_base.core.errors import ApiError
 from app_base.core.observability import log_event
 from app_base.core.settings import settings
 from app_base.modules.auth.domain.interfaces import UserRepository
+from app_base.modules.payment.domain.interfaces import PaymentRepository
 from app_base.modules.ride.application.emergency_notifications import EmergencyNotificationService
 from app_base.modules.ride.application.priority_service import PriorityLedger
 from app_base.modules.ride.domain.entities import (
@@ -86,6 +87,7 @@ class RideService:
     emergency_notifications: EmergencyNotificationService | None = None
     diddifiles: DiddiFilesClient | None = None
     priority_ledger: PriorityLedger | None = None
+    payment_repo: PaymentRepository | None = None
 
     async def _record_priority_outcome(self, ride: Ride) -> None:
         """Append the terminal-ride priority fact (SCRUM-63). No-op unless a
@@ -168,8 +170,12 @@ class RideService:
             created_at=now,
         )
         await self.quote_repo.save(quote)
-        return {**estimate, "quote_id": str(quote.id), "tariff_version": quote.tariff_version,
-                "expires_at": iso_utc(quote.expires_at)}
+        return {
+            **estimate,
+            "quote_id": str(quote.id),
+            "tariff_version": quote.tariff_version,
+            "expires_at": iso_utc(quote.expires_at),
+        }
 
     async def request_ride(
         self,
@@ -190,6 +196,15 @@ class RideService:
             raise ApiError(409, "QUOTE_ALREADY_USED", "Ce devis a deja ete utilise.")
         if quote.expires_at <= now:
             raise ApiError(409, "QUOTE_EXPIRED", "Ce devis a expire. Demandez un nouveau devis.")
+        if self.payment_repo is not None:
+            debt = await self.payment_repo.find_open_debt_for_passenger(passenger_user_id)
+            if debt is not None:
+                raise ApiError(
+                    409,
+                    "PASSENGER_DEBT_OUTSTANDING",
+                    "Reglez votre dette en cours avant de demander une nouvelle course.",
+                    {"debt_id": str(debt.id), "amount": int(debt.amount), "currency": debt.currency},
+                )
         if await self.ride_repo.has_active_ride(passenger_user_id):
             raise ApiError(
                 409,
@@ -295,7 +310,9 @@ class RideService:
                 "plate_number": vehicle.plate_number,
                 "category": vehicle.category.value,
                 "comfort_level": vehicle.comfort_level.value,
-            } if vehicle else None,
+            }
+            if vehicle
+            else None,
         }
 
     async def list_rides(
@@ -492,8 +509,10 @@ class RideService:
     async def _provisional_early_stop_amount(self, ride: Ride, *, now: datetime) -> Decimal:
         points = await self.ride_repo.list_route_points(ride.id)
         distance_km = sum(
-            (Decimal(str(_distance_meters(previous.location, current.location) / 1000))
-             for previous, current in zip(points, points[1:], strict=False)),
+            (
+                Decimal(str(_distance_meters(previous.location, current.location) / 1000))
+                for previous, current in zip(points, points[1:], strict=False)
+            ),
             Decimal("0"),
         )
         duration_seconds = max(0, int((now - ride.started_at).total_seconds())) if ride.started_at else 0
@@ -570,8 +589,9 @@ class RideService:
             ride.start_code_attempts += 1
             if ride.start_code_attempts >= settings.ride_start_code_max_attempts:
                 ride.start_code_blocked_at = datetime.now(UTC)
-                log_event("ride_start_code_blocked", level="warning", ride_id=ride.id,
-                          attempts=ride.start_code_attempts)
+                log_event(
+                    "ride_start_code_blocked", level="warning", ride_id=ride.id, attempts=ride.start_code_attempts
+                )
             await self.ride_repo.save(ride)
             # The API intentionally returns an error for an invalid code. Commit
             # the security counter first, otherwise get_session rolls it back
@@ -580,9 +600,12 @@ class RideService:
             await self.ride_repo.commit()
             code_name = "RIDE_START_CODE_BLOCKED" if ride.start_code_blocked_at else "INVALID_RIDE_START_CODE"
             status_code = 423 if ride.start_code_blocked_at else 422
-            raise ApiError(status_code, code_name, "Code de demarrage invalide.",
-                           {"attempts": ride.start_code_attempts,
-                            "maximum_attempts": settings.ride_start_code_max_attempts})
+            raise ApiError(
+                status_code,
+                code_name,
+                "Code de demarrage invalide.",
+                {"attempts": ride.start_code_attempts, "maximum_attempts": settings.ride_start_code_max_attempts},
+            )
         now = datetime.now(UTC)
         elapsed = max(0, int((now - (ride.pre_ride_wait_started_at or now)).total_seconds()))
         billable_seconds = max(0, elapsed - settings.pre_ride_wait_free_seconds)
@@ -595,8 +618,9 @@ class RideService:
         await self._ensure_map_trace_started(ride)
         await self.ride_repo.save(ride)
         await self.ride_repo.record_status_transition(ride.status_history[-1])
-        log_event("ride.started", ride_id=ride.id, pre_ride_wait_seconds=elapsed,
-                  pre_ride_wait_fee=ride.pre_ride_wait_fee)
+        log_event(
+            "ride.started", ride_id=ride.id, pre_ride_wait_seconds=elapsed, pre_ride_wait_fee=ride.pre_ride_wait_fee
+        )
         return _ride_detail_payload(ride, driver=None, viewer_role="driver")
 
     async def mark_passenger_no_show(
@@ -613,8 +637,12 @@ class RideService:
             raise ApiError(409, "NO_SHOW_INVALID_RIDE_STATUS", "L'attente pre-course n'est pas active.")
         elapsed = int((datetime.now(UTC) - ride.pre_ride_wait_started_at).total_seconds())
         if elapsed < settings.pre_ride_no_show_seconds:
-            raise ApiError(409, "NO_SHOW_TOO_EARLY", "Le delai client absent n'est pas atteint.",
-                           {"remaining_seconds": settings.pre_ride_no_show_seconds - elapsed})
+            raise ApiError(
+                409,
+                "NO_SHOW_TOO_EARLY",
+                "Le delai client absent n'est pas atteint.",
+                {"remaining_seconds": settings.pre_ride_no_show_seconds - elapsed},
+            )
         ride.pre_ride_wait_seconds = elapsed
         ride.pre_ride_wait_fee = Decimal("0")
         ride.cancellation_reason = "passenger_no_show"
@@ -625,8 +653,13 @@ class RideService:
         )
         await self.ride_repo.save(ride)
         await self.ride_repo.record_status_transition(ride.status_history[-1])
-        log_event("ride.passenger_no_show", level="warning", ride_id=ride.id,
-                  passenger_user_id=ride.passenger_user_id, waiting_seconds=elapsed)
+        log_event(
+            "ride.passenger_no_show",
+            level="warning",
+            ride_id=ride.id,
+            passenger_user_id=ride.passenger_user_id,
+            waiting_seconds=elapsed,
+        )
         return _ride_detail_payload(ride, driver=None, viewer_role="driver")
 
     async def start_waiting(
@@ -729,12 +762,20 @@ class RideService:
         note: str | None = None,
     ) -> dict:
         ride = await self._require_active_ride_for_driver(
-            ride_id, actor_user_id=actor_user_id, actor_role=actor_role, action="ajouter un arret",
+            ride_id,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            action="ajouter un arret",
         )
         sequence = await self.ride_repo.count_stops(ride.id)
         stop = RideStop(
-            id=uuid4(), ride_id=ride.id, sequence=sequence,
-            latitude=latitude, longitude=longitude, address=address, note=note,
+            id=uuid4(),
+            ride_id=ride.id,
+            sequence=sequence,
+            latitude=latitude,
+            longitude=longitude,
+            address=address,
+            note=note,
             created_at=datetime.now(UTC),
         )
         await self.ride_repo.add_stop(stop)
@@ -751,28 +792,38 @@ class RideService:
         amount: Decimal | None,
     ) -> dict:
         ride = await self._require_active_ride_for_driver(
-            ride_id, actor_user_id=actor_user_id, actor_role=actor_role, action="ajouter un supplement",
+            ride_id,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            action="ajouter un supplement",
         )
         supplement_type = supplement_type.strip().lower()
         amount = _supplement_amount(supplement_type, amount)
         supplement = RideSupplement(
-            id=uuid4(), ride_id=ride.id, amount=amount, reason=supplement_type,
-            source="catalog", status="pending", created_by_user_id=actor_user_id,
+            id=uuid4(),
+            ride_id=ride.id,
+            amount=amount,
+            reason=supplement_type,
+            source="catalog",
+            status="pending",
+            created_by_user_id=actor_user_id,
             created_at=datetime.now(UTC),
         )
         await self.ride_repo.add_supplement(supplement)
         log_event(
-            "ride.supplement.proposed", ride_id=ride.id, actor_user_id=actor_user_id,
-            amount=str(amount), supplement_type=supplement_type,
+            "ride.supplement.proposed",
+            ride_id=ride.id,
+            actor_user_id=actor_user_id,
+            amount=str(amount),
+            supplement_type=supplement_type,
         )
         return _supplement_payload(supplement)
 
-    async def list_supplements(
-        self, ride_id: UUID, *, actor_user_id: UUID, actor_role: str
-    ) -> dict:
+    async def list_supplements(self, ride_id: UUID, *, actor_user_id: UUID, actor_role: str) -> dict:
         ride = await self.load_ride(ride_id)
         is_participant = ride.passenger_user_id == actor_user_id or await self._is_assigned_driver(
-            ride, actor_user_id,
+            ride,
+            actor_user_id,
         )
         if actor_role != "admin" and not is_participant:
             raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Acces reserve aux participants de la course.")
@@ -1030,8 +1081,7 @@ class RideService:
                 include_contact=include_contact,
             )
         contact_notified = (latest.contact_notified if latest is not None else False) or any(
-            item.get("target") == "emergency_contact" and item.get("status") == "sent"
-            for item in notification_results
+            item.get("target") == "emergency_contact" and item.get("status") == "sent" for item in notification_results
         )
         event = RideEmergencyEvent(
             id=RideEmergencyEvent.new_id(),
@@ -1208,6 +1258,7 @@ def _ride_summary_payload(ride: Ride) -> dict:
         "completed_at": iso_utc(ride.completed_at),
         "pickup_address": ride.pickup_address,
         "dropoff_address": ride.dropoff_address,
+        "dropoff": _point_payload(ride.dropoff_location, ride.dropoff_address),
     }
 
 
@@ -1351,13 +1402,9 @@ def _supplement_payload(supplement: RideSupplement) -> dict:
         "type": supplement.reason,
         "source": supplement.source,
         "status": supplement.status,
-        "created_by_user_id": str(supplement.created_by_user_id)
-        if supplement.created_by_user_id
-        else None,
+        "created_by_user_id": str(supplement.created_by_user_id) if supplement.created_by_user_id else None,
         "created_at": iso_utc(supplement.created_at) if supplement.created_at else None,
-        "decided_by_user_id": str(supplement.decided_by_user_id)
-        if supplement.decided_by_user_id
-        else None,
+        "decided_by_user_id": str(supplement.decided_by_user_id) if supplement.decided_by_user_id else None,
         "decided_at": iso_utc(supplement.decided_at) if supplement.decided_at else None,
     }
 
@@ -1413,9 +1460,7 @@ def _waiting_payload(ride: Ride) -> dict:
             "started_at": iso_utc(ride.waiting_started_at),
             "duration_seconds": ride.waiting_duration_seconds,
             "fee": int(ride.waiting_fee),
-            "rate_per_minute": int(ride.waiting_rate_per_minute)
-            if ride.waiting_rate_per_minute is not None
-            else None,
+            "rate_per_minute": int(ride.waiting_rate_per_minute) if ride.waiting_rate_per_minute is not None else None,
         },
     }
 

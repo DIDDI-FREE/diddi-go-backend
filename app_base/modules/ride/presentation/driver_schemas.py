@@ -78,8 +78,8 @@ class DriverKycResubmitRequest(BaseModel):
 
 class VehicleCreateRequest(BaseModel):
     plate_number: str = Field(min_length=1, max_length=20)
-    make: str | None = Field(default=None, max_length=50)
-    model: str | None = Field(default=None, max_length=50)
+    make: str = Field(min_length=1, max_length=50)
+    model: str = Field(min_length=1, max_length=50)
     color: str | None = Field(default=None, max_length=30)
     category: str = Field(default="standard")
     comfort_level: str = Field(default="standard")
@@ -108,12 +108,15 @@ class VehicleCreateRequest(BaseModel):
 
 
 class VehicleUpdateRequest(BaseModel):
-    """Edit a vehicle's descriptive fields after KYC (SCRUM-524 #1). Documents
-    go through the kyv/resubmit flow, not here."""
+    """Edit a vehicle's descriptive fields.
+
+    Documents are corrected through the KYV resubmission flow and the vehicle's
+    verification status is preserved.
+    """
 
     plate_number: str = Field(min_length=1, max_length=20)
-    make: str | None = Field(default=None, max_length=50)
-    model: str | None = Field(default=None, max_length=50)
+    make: str = Field(min_length=1, max_length=50)
+    model: str = Field(min_length=1, max_length=50)
     color: str | None = Field(default=None, max_length=30)
     category: str = Field(default="standard")
 
@@ -161,9 +164,7 @@ class DocumentReviewDecision(BaseModel):
 
     @model_validator(mode="after")
     def validate_rejection_details(self) -> DocumentReviewDecision:
-        if self.decision == "rejected" and not all(
-            (self.reason_code, self.reason, self.expected_correction)
-        ):
+        if self.decision == "rejected" and not all((self.reason_code, self.reason, self.expected_correction)):
             raise ValueError(
                 "A rejected document requires reason_code, reason and expected_correction.",
             )
@@ -257,7 +258,12 @@ class VehicleResponse(BaseModel):
     vehicle_right_photo_url: str | None = None
     vehicle_interior_photo_url: str | None = None
     vehicle_plate_photo_url: str | None = None
-    verification_status: str
+    verification_status: Literal[
+        "pending_verification",
+        "active",
+        "suspended",
+        "rejected",
+    ]
     verified_at: datetime | None = None
     reviewed_at: datetime | None = None
     review_notes: str | None = None

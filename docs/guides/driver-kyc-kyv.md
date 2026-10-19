@@ -22,6 +22,18 @@ identifier au moins une piece et fournir `reason_code`, `reason` et
 renvoyees en attente. `POST /v1/drivers/vehicles/{vehicle_id}/kyv/resubmit`
 fait de meme pour les pieces du vehicule ; les autres decisions sont conservees.
 
+Le statut KYV du vehicule est independant du KYC chauffeur :
+
+- `pending_verification` : revue en cours ;
+- `active` : KYV valide ;
+- `rejected` : correction documentaire attendue ;
+- `suspended` : blocage operationnel distinct.
+
+La valeur `active`, et non `approved`, signifie qu'un vehicule est valide.
+`PUT /v1/drivers/me/vehicle` peut corriger plaque, marque, modele, couleur ou
+categorie sans modifier ce statut. Les documents passent exclusivement par la
+route KYV de resoumission.
+
 La regle d'age minimum de 21 ans est hors MVP et n'est pas appliquee.
 
 Le `vehicle_id` utilise par `/drivers/vehicles/{vehicle_id}/kyv/resubmit` est

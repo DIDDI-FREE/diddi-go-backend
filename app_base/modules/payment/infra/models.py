@@ -64,6 +64,35 @@ class TransactionModel(Base):
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class PassengerDebtModel(Base):
+    """DiddiGo's business record of a completed but unpaid ride.
+
+    Provider attempts and refunds remain in DiddiPay.  This table only keeps
+    the local eligibility decision that blocks another ride until settlement.
+    """
+
+    __tablename__ = "passenger_debts"
+    __table_args__ = (
+        UniqueConstraint("ride_id", name="uq_payment_passenger_debts_ride_id"),
+        Index("idx_payment_passenger_debts_open", "passenger_user_id", "status"),
+        {"schema": "payment"},
+    )
+
+    id: Mapped[UUID] = mapped_column(_PG_UUID, primary_key=True, server_default=text("uuid_generate_v4()"))
+    passenger_user_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False)
+    ride_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="XOF")
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="open")
+    reason: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()"), onupdate=text("now()")
+    )
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    settled_by: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+
+
 class PaymentWebhookEventModel(Base):
     __tablename__ = "webhook_events"
     __table_args__ = {"schema": "payment"}

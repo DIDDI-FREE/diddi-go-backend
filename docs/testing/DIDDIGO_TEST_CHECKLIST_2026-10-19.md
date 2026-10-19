@@ -1,16 +1,22 @@
-# DiddiGo - Checklist stateful des tests happy path
+# DiddiGo - Checklist de campagne de tests
 
-Version du registre : `1.0`
+Edition : `2026-10-19`
 
-Derniere mise a jour : `2026-10-16`
+Version du registre : `1.1`
+
+Derniere mise a jour : `2026-10-19`
 
 Branche de reference : `stage`
 
 Responsable de mise a jour : `non assigne`
 
-Ce fichier est le registre durable de validation de DiddiGo. Il ne doit pas
-etre regenere en effacant l'historique : chaque execution met a jour les cases,
-les preuves et le journal en bas du document.
+Ce fichier est la checklist de campagne figee du 19 octobre 2026. Il ne doit
+pas etre regenere en effacant l'historique : chaque execution met a jour les
+cases, les preuves et le journal en bas du document.
+
+Toute evolution substantielle du perimetre cree une nouvelle edition datee,
+par exemple `DIDDIGO_TEST_CHECKLIST_2026-10-26.md`. L'ancienne checklist reste
+consultable avec ses preuves et ses anomalies.
 
 ## Legende
 
@@ -35,6 +41,43 @@ les preuves et le journal en bas du document.
 4. Ne jamais enregistrer de JWT, secret, numero personnel ou URL signee dans ce
    fichier. Utiliser des identifiants techniques non sensibles.
 5. Les tests E2E utilisent des comptes et destinations reserves a la recette.
+6. Un echec P0 bloque la campagne : il ne peut pas etre masque par une preuve
+   positive d'un autre parcours.
+7. Les cas `STG` et `E2E` sont executes sur des donnees de recette identifiees,
+   jamais sur une course ou un wallet reel.
+
+## Campagne recommandee
+
+La campagne ne consiste pas a lancer tous les tests dans un ordre aleatoire.
+Elle se deroule en lots : le lot suivant ne commence que si le precedent est
+vert ou si ses blocages sont documentes et acceptes pour la recette.
+
+| Lot | Objectif | Scenarios | Gate |
+| --- | --- | --- | --- |
+| P0 | Sante et contrats | `STG-00` a `STG-05`, `STG-70` a `STG-74` | Aucun echec d'authentification, contrat ou dependance critique. |
+| P1 | Course cash de reference | `STG-10` a `STG-31` | Une course complete sans doublon financier ni perte de temps reel. |
+| P2 | Paiements et gains | `STG-40` a `STG-44`, `STG-56` a `STG-57` | Webhook, top-up et retrait idempotents. |
+| P3 | Securite et communication | `STG-50` a `STG-55` | Partage, Comms et SOS respectent leurs permissions. |
+| P4 | Backoffice et pilotage | `STG-58` a `STG-60`, `STG-80` a `STG-84` | Decisions auditables et totaux coherents. |
+| P5 | Experience humaine | `E2E-01` a `E2E-43` | Deux appareils minimum, preuves fonctionnelles et UX. |
+
+### Ordre pratique
+
+1. Executer les tests unitaires et integration du commit a livrer.
+2. Executer P0 sur staging et ouvrir une ligne de journal.
+3. Executer P1 avec un passager et un chauffeur de recette.
+4. Garder les memes identifiants de course pour P2, P3 et P4 lorsque cela est
+   pertinent ; ne jamais reemployer une course terminee pour un nouveau test.
+5. Executer P5 uniquement lorsque les APIs et le temps reel ont deja ete valides.
+
+### Preuves minimales par campagne
+
+- commit ou image DiddiGo deployee ;
+- identifiants non sensibles : `request_id`, `ride_id`, `driver_id`,
+  `payment_intent_id` ou `withdrawal_id` lorsque disponibles ;
+- export Bruno, rapport de tests ou capture d'ecran horodatee ;
+- resultat des logs correles par `request_id` ;
+- ticket et gravite pour chaque anomalie.
 
 ## Etat global
 
@@ -171,6 +214,19 @@ simules ou sandbox. Ne pas utiliser de fournisseur de production.
 - [ ] `STG-04` Verifier les variables SMS, FCM, DiddiMap, DiddiPay et DiddiFiles sans afficher les secrets.
 - [ ] `STG-05` Demarrer une collecte de logs avec `request_id`, `ride_id` et `driver_id`.
 
+### Contrats et securite P0
+
+- [ ] `STG-70` Verifier que `GET /openapi.json` expose les routes frontend
+  attendues et que Swagger charge sans erreur.
+- [ ] `STG-71` Verifier le contrat WebSocket : connexion avec JWT valide,
+  rejet handshake `403` sans JWT ou avec JWT invalide.
+- [ ] `STG-72` Verifier qu'un utilisateur ne lit ni ne modifie la course d'un
+  autre utilisateur.
+- [ ] `STG-73` Verifier les erreurs contractuelles critiques : devis expire,
+  offre expiree, course deja active, chauffeur non eligible et paiement invalide.
+- [ ] `STG-74` Verifier qu'aucun token, secret, telephone complet ou URL signee
+  ne sort dans les logs applicatifs, reponses API ou preuves de recette.
+
 ### Onboarding et disponibilite
 
 - [ ] `STG-10` Authentifier le passager via DiddiFreeID et lire ses capacites.
@@ -216,6 +272,22 @@ simules ou sandbox. Ne pas utiliser de fournisseur de production.
 - [ ] `STG-58` Creer un partenaire, approuver son KYC et affecter vehicule/chauffeur.
 - [ ] `STG-59` Lire les resumes Pilotage et verifier les totaux avec les courses creees.
 - [ ] `STG-60` Retrouver la campagne complete dans les logs et metriques.
+
+### Regression et resilence P4
+
+- [ ] `STG-80` Rejouer la confirmation cash et le webhook Mobile Money : aucun
+  second credit de wallet, gain ou mouvement de ledger ne doit apparaitre.
+- [ ] `STG-81` Couper puis restaurer le WebSocket pendant une course : la
+  relecture REST reconcilie l'etat sans dupliquer une action.
+- [ ] `STG-82` Refuser une piece KYC et une piece KYV depuis DiddiAdmin, puis
+  renvoyer seulement les pieces refusees et verifier le retour a
+  `pending_verification`.
+- [ ] `STG-83` Rejouer la meme decision Backoffice avec la meme cle
+  d'idempotence, puis avec une payload differente : la premiere est rejouee et
+  la seconde est refusee.
+- [ ] `STG-84` Verifier les totaux Pilotage : nombre de courses, paiement cash,
+  paiement numerique, commission et gain chauffeur correspondent exactement a
+  la campagne.
 
 ## D. Checklist E2E applications et humains
 
@@ -276,16 +348,40 @@ Une version est candidate a la production limitee seulement si :
 - [ ] Aucun secret ou PII n'apparait dans les preuves et logs partages.
 - [ ] Tous les blocages restants ont un ticket, un responsable et une decision de lancement.
 
-## F. Journal des executions
+## F. Scenarios de regression obligatoires
+
+Ces cas ne remplacent pas les happy paths. Ils protegent les risques les plus
+couteux avant une livraison.
+
+| ID | Risque | Resultat attendu |
+| --- | --- | --- |
+| REG-01 | Devis de plus de 15 minutes | `QUOTE_EXPIRED`, aucune course creee. |
+| REG-02 | Deux demandes de course du meme passager | Une seule course active ; rejet explicite de la seconde. |
+| REG-03 | Deux chauffeurs acceptent la meme offre | Un seul chauffeur assigne ; l'autre recoit un conflit explicite. |
+| REG-04 | Chauffeur hors zone, hors ligne ou solde insuffisant | Pas d'offre ; raison metier visible dans les logs. |
+| REG-05 | Position GPS invalide | Rejet `422`, jamais un timeout ou un `503`. |
+| REG-06 | DiddiMap indisponible | Erreur explicite ; aucun fallback silencieux de prix ou trace. |
+| REG-07 | Paiement ou webhook rejoue | Une seule ecriture financiere. |
+| REG-08 | Paiement Mobile Money expire | Nouvelle tentative possible, historique de l'ancienne conserve. |
+| REG-09 | Message Comms apres annulation/fin | Lecture historique autorisee selon contrat ; nouvel envoi refuse. |
+| REG-10 | SOS repete | Limitation appliquee sans supprimer l'alerte initiale. |
+| REG-11 | KYC/KYV refuse | Motif, piece concernee et correction attendue visibles au chauffeur. |
+| REG-12 | Token expire ou scope S2S insuffisant | `401` ou `403` contractuel ; aucune action partielle. |
+| REG-13 | Redemarrage entre evenement et projection | Rejeu idempotent, projection chauffeur reconciliee. |
+| REG-14 | Annulation pendant attente active | Action autorisee au bon acteur et attente cloturee proprement. |
+| REG-15 | Documents DiddiFiles non accessibles | Le dossier n'est pas approuve et l'erreur est exploitable par le Backoffice. |
+
+## G. Journal des executions
 
 Ajouter une ligne par campagne, meme si elle echoue.
 
 | Date/heure | Environnement | Commit/version | Perimetre | Resultat | Preuve/rapport | Execute par | Blocage/ticket |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-10-19 | local | arbre de travail `stage` | Suite unitaire (`pytest -m unit -q`) | PASS, 312 tests | sortie terminal locale | Codex | avertissement deprecation Starlette/TestClient, non bloquant |
 | 2026-10-15 | local | `4ab8fb6` | Suite pytest complete | PASS, 471 tests | sortie terminal locale | Codex | aucun |
 | - | staging | - | - | NON EXECUTE | - | - | - |
 
-## G. Anomalies ouvertes pendant la recette
+## H. Anomalies ouvertes pendant la recette
 
 Ne pas supprimer une ligne resolue ; mettre son statut a `RESOLU` et ajouter le
 commit ou ticket de correction.
@@ -294,10 +390,10 @@ commit ou ticket de correction.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | BUG-PLACEHOLDER | - | - | - | Remplacer cette ligne par la premiere anomalie | - | - | EXEMPLE |
 
-## H. Prochaine execution
+## I. Prochaine execution
 
 - Environnement : `staging`
-- Perimetre recommande : `STG-00` a `STG-31`, puis `STG-40` a `STG-60`.
+- Perimetre recommande : `P0`, `P1`, puis `P2` a `P4` selon les integrations disponibles.
 - Comptes de recette : `a renseigner sans inscrire les tokens`.
 - Fenetre : `a planifier`.
 - Responsable : `a assigner`.

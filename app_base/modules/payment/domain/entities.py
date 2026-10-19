@@ -47,6 +47,15 @@ class PaymentMethod(str, Enum):
     DIDDIPAY = "diddipay"
 
 
+class PassengerDebtStatus(str, Enum):
+    """Business state of an unpaid, completed passenger ride."""
+
+    OPEN = "open"
+    MOBILE_MONEY_PENDING = "mobile_money_pending"
+    CASH_PENDING_CONFIRMATION = "cash_pending_confirmation"
+    SETTLED = "settled"
+
+
 class WalletEntryDirection(str, Enum):
     CREDIT = "credit"
     DEBIT = "debit"
@@ -114,6 +123,25 @@ class Transaction:
     provider_status: str | None = None
     provider_next_action: dict[str, Any] | None = None
     paid_at: datetime | None = None
+
+    @staticmethod
+    def new_id() -> UUID:
+        return uuid4()
+
+
+@dataclass
+class PassengerDebt:
+    id: UUID
+    passenger_user_id: UUID
+    ride_id: UUID
+    amount: Decimal
+    status: PassengerDebtStatus = PassengerDebtStatus.OPEN
+    currency: str = "XOF"
+    reason: str = "mobile_money_failed"
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    settled_at: datetime | None = None
+    settled_by: UUID | None = None
 
     @staticmethod
     def new_id() -> UUID:

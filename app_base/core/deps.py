@@ -146,7 +146,9 @@ def get_diddifiles(request: Request) -> DiddiFilesClient:
 def get_driver_locations(request: Request) -> RedisDriverLocationService:
     """FastAPI dependency — Redis GEO driver location service from app.state."""
     service: RedisDriverLocationService | None = getattr(
-        request.app.state, "driver_locations", None,
+        request.app.state,
+        "driver_locations",
+        None,
     )
     if service is None:
         raise RuntimeError("Driver location service not initialized — lifespan may not have run.")
@@ -204,6 +206,7 @@ async def capability_projection_publisher(
 
 
 # --- repositories ----------------------------------------------------------
+
 
 async def user_repo(session: AsyncSession = Depends(session_dep)) -> SqlAlchemyUserRepository:
     return SqlAlchemyUserRepository(session)
@@ -289,6 +292,7 @@ async def emergency_contact_repo(
 
 # --- services --------------------------------------------------------------
 
+
 async def auth_service(
     user_repo_dep: SqlAlchemyUserRepository = Depends(user_repo),
     otp_repo_dep: SqlAlchemyOTPRepository = Depends(otp_repo),
@@ -310,6 +314,7 @@ async def ride_service(
     diddifiles: DiddiFilesClient = Depends(get_diddifiles),
     priority_ledger_repo_dep: SqlAlchemyPriorityLedgerRepository = Depends(priority_ledger_repo),
     config_store: SqlAlchemyDispatchConfigStore = Depends(dispatch_config_store),
+    payment_repo_dep: SqlAlchemyPaymentRepository = Depends(payment_repo),
 ) -> RideService:
     return RideService(
         ride_repo=ride_repo_dep,
@@ -324,6 +329,7 @@ async def ride_service(
         emergency_notifications=EmergencyNotificationService(sms_provider=sms),
         diddifiles=diddifiles,
         priority_ledger=PriorityLedger(priority_ledger_repo_dep, await config_store.load()),
+        payment_repo=payment_repo_dep,
     )
 
 
@@ -338,7 +344,8 @@ async def payment_service(
         ride_repo=ride_repo_dep,
         diddipay=diddipay,
         return_contexts=PaymentReturnContextStore(
-            redis, ttl_seconds=settings.payment_return_context_ttl_seconds,
+            redis,
+            ttl_seconds=settings.payment_return_context_ttl_seconds,
         ),
     )
 
@@ -354,7 +361,8 @@ async def driver_wallet_service(
         driver_repo=driver_repo_dep,
         diddipay=diddipay,
         return_contexts=PaymentReturnContextStore(
-            redis, ttl_seconds=settings.payment_return_context_ttl_seconds,
+            redis,
+            ttl_seconds=settings.payment_return_context_ttl_seconds,
         ),
     )
 

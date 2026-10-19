@@ -43,8 +43,9 @@ demander au chauffeur de reprendre les pieces deja approuvees.
 - Informations descriptives du vehicule : `PUT /v1/drivers/me/vehicle`.
 
 Une resoumission remet uniquement les pieces envoyees a `pending`. Le dossier
-global repasse a `pending_verification`, puis la projection `/pro/metiers` est
-mise a jour de maniere asynchrone.
+global repasse a `pending_verification`. Recharger `GET /v1/drivers/me` pour
+rafraichir l'ecran. `/v1/pro/metiers` n'est pas une route DiddiGo livree et ne
+doit pas etre appelee.
 
 La carte grise se renvoie avec `registration_document_file_id`. Le `vehicle_id`
 et les identifiants des six photos sont disponibles dans `GET /v1/drivers/me`.
@@ -65,6 +66,19 @@ de `docs/integrations/diddifiles.md`, notamment :
 - `diddigo_vehicle_insurance` ;
 - `diddigo_vehicle_technical_inspection` ;
 - `diddigo_vehicle_transport_authorization`.
+
+## Statut KYV vehicule
+
+`vehicle.verification_status` est toujours l'une de ces valeurs :
+
+- `pending_verification` : documents en attente de revue ;
+- `active` : vehicule KYV valide et utilisable, sous reserve des autres regles
+  d'eligibilite chauffeur ;
+- `rejected` : au moins une piece doit etre corrigee ;
+- `suspended` : blocage operationnel distinct du rejet documentaire.
+
+Ne pas attendre la valeur `approved` pour un vehicule : la valeur contractuelle
+de validation est `active`.
 
 ## Hors MVP
 

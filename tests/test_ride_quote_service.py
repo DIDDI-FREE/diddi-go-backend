@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -50,6 +51,14 @@ class FakeRideRepository:
 
     async def record_status_transition(self, transition):
         return None
+
+
+class FakeDebtRepository:
+    def __init__(self, debt):
+        self.debt = debt
+
+    async def find_open_debt_for_passenger(self, passenger_user_id):
+        return self.debt if self.debt.passenger_user_id == passenger_user_id else None
 
 
 def service_with_repositories():
@@ -178,3 +187,37 @@ async def test_quote_is_private_to_its_passenger():
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.code == "QUOTE_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_open_passenger_debt_blocks_new_ride_request():
+    service, quotes, _rides = service_with_repositories()
+    passenger_id = uuid4()
+    await service.create_quote(
+        passenger_user_id=passenger_id,
+        pickup=GeoPoint(lat=5.35, lng=-4.01),
+        pickup_address=None,
+        dropoff=GeoPoint(lat=5.32, lng=-4.02),
+        dropoff_address=None,
+        vehicle_category="standard",
+        comfort_level="standard",
+    )
+    quote = next(iter(quotes.quotes.values()))
+
+    class Debt:
+        id = uuid4()
+        amount = Decimal("3100")
+        currency = "XOF"
+        passenger_user_id = passenger_id
+
+    service.payment_repo = FakeDebtRepository(Debt())
+    with pytest.raises(ApiError) as exc_info:
+        await service.request_ride(
+            passenger_user_id=passenger_id,
+            quote_id=quote.id,
+            payment_method="cash",
+            scheduled_at=None,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.code == "PASSENGER_DEBT_OUTSTANDING"
