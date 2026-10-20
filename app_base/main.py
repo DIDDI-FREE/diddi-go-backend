@@ -43,6 +43,7 @@ from app_base.modules.ride.presentation.kyc_internal_router import router as kyc
 from app_base.modules.ride.presentation.router import places_router
 from app_base.modules.ride.presentation.router import router as ride_router
 from app_base.modules.ride.presentation.summary_router import router as ride_summary_router
+from app_base.modules.ride.presentation.support_context_router import router as support_context_router
 from app_base.modules.ride.presentation.websocket import router as ride_ws_router
 
 configure_observability(log_level=settings.log_level)
@@ -71,6 +72,7 @@ app.include_router(places_router, prefix="/v1")
 app.include_router(ride_router, prefix="/v1")
 app.include_router(ride_summary_router)
 app.include_router(comms_task_router)
+app.include_router(support_context_router)
 app.include_router(driver_internal_router)
 app.include_router(kyc_internal_router)
 app.include_router(dispatch_admin_router)

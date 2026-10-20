@@ -88,6 +88,7 @@ class Settings(BaseSettings):
     identity_profile_url: str | None = None
     identity_service_key: str | None = None
     diddicomms_service_client_id: str = "diddicomms-staging-diddigo"
+    diddisupport_service_client_id: str = "diddisupport-staging-diddigo"
     identity_service_client_id: str | None = None
     identity_service_client_secret: str | None = None
     identity_service_timeout_seconds: float = 5.0

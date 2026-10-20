@@ -64,6 +64,7 @@ nav:
       - DiddiFiles: integrations/diddifiles.md
       - DiddiPay: integrations/diddipay.md
       - DiddiMap: integrations/diddimap.md
+      - DiddiSupport: integrations/diddisupport.md
       - SMS: integrations/sms.md
   - Tests:
       - Checklist du 19 octobre: testing/DIDDIGO_TEST_CHECKLIST_2026-10-19.md
@@ -78,6 +79,7 @@ nav:
       - 14 octobre 2026: changelog/2026-10-14.md
       - 12 octobre 2026: changelog/2026-10-12.md
       - 20 octobre 2026: changelog/2026-10-20.md
+      - 20 octobre 2026 - DiddiSupport: changelog/2026-10-20-support-context.md
 
 exclude_docs: |
   archive/

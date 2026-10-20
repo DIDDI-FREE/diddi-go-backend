@@ -6,5 +6,9 @@
 - Admin humain : validation KYC/KYV et operations de support.
 - Services : JWT S2S avec audience, subject, client ID et scope propres.
 
+Pour DiddiSupport, la lecture du contexte redige d'une course exige le scope
+`diddigo:support-context:read`, l'audience `diddigo`, le sujet
+`service:diddisupport` et le client configure `diddisupport-staging-diddigo`.
+
 Un role ou une permission ne vient jamais d'un parametre fourni par le client.
 Il vient du JWT verifie ou des profils metier DiddiGo.
