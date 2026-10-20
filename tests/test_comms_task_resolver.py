@@ -55,11 +55,16 @@ async def test_resolver_returns_active_ride_participants_and_permissions() -> No
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_resolver_closes_completed_ride_after_grace_period() -> None:
+async def test_resolver_closes_completed_ride_after_configured_retention(monkeypatch) -> None:
     from app_base.modules.auth.infra.models import UserModel
     from app_base.modules.ride.infra.models import DriverProfileModel, RideModel
 
-    completed_at = datetime.now(UTC) - timedelta(hours=49)
+    retention_seconds = 3600
+    monkeypatch.setattr(
+        "app_base.modules.ride.application.comms_task_resolver.settings.ride_comms_completed_chat_retention_seconds",
+        retention_seconds,
+    )
+    completed_at = datetime.now(UTC) - timedelta(seconds=retention_seconds + 1)
     session = FakeSession(
         {
             (RideModel, RIDE_ID): _ride(status="completed", completed_at=completed_at),
@@ -73,7 +78,34 @@ async def test_resolver_closes_completed_ride_after_grace_period() -> None:
 
     assert projection.messaging_allowed is False
     assert projection.calling_allowed is False
-    assert projection.closes_at == completed_at + timedelta(hours=48)
+    assert projection.closes_at == completed_at + timedelta(seconds=retention_seconds)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_resolver_closes_completed_ride_immediately_when_retention_is_zero(monkeypatch) -> None:
+    from app_base.modules.auth.infra.models import UserModel
+    from app_base.modules.ride.infra.models import DriverProfileModel, RideModel
+
+    monkeypatch.setattr(
+        "app_base.modules.ride.application.comms_task_resolver.settings.ride_comms_completed_chat_retention_seconds",
+        0,
+    )
+    completed_at = datetime.now(UTC)
+    session = FakeSession(
+        {
+            (RideModel, RIDE_ID): _ride(status="completed", completed_at=completed_at),
+            (UserModel, PASSENGER_ID): SimpleNamespace(phone="+237600000001"),
+            (DriverProfileModel, DRIVER_PROFILE_ID): SimpleNamespace(user_id=DRIVER_USER_ID),
+            (UserModel, DRIVER_USER_ID): SimpleNamespace(phone="+237600000002"),
+        }
+    )
+
+    projection = await RideCommsTaskResolver(session).resolve(task_type="ride", task_id=RIDE_ID)  # type: ignore[arg-type]
+
+    assert projection.messaging_allowed is False
+    assert projection.calling_allowed is False
+    assert projection.closes_at == completed_at
 
 
 @pytest.mark.unit
@@ -141,6 +173,27 @@ async def test_resolver_closes_messages_immediately_after_cancellation(status: s
     assert projection.messaging_allowed is False
     assert projection.calling_allowed is False
     assert projection.closes_at == cancelled_at
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["requested", "no_driver_found"])
+async def test_resolver_closes_unassigned_ride_communications(status: str) -> None:
+    from app_base.modules.auth.infra.models import UserModel
+    from app_base.modules.ride.infra.models import RideModel
+
+    session = FakeSession(
+        {
+            (RideModel, RIDE_ID): _ride(status=status),
+            (UserModel, PASSENGER_ID): SimpleNamespace(phone="+237600000001"),
+        }
+    )
+
+    projection = await RideCommsTaskResolver(session).resolve(task_type="ride", task_id=RIDE_ID)  # type: ignore[arg-type]
+
+    assert projection.messaging_allowed is False
+    assert projection.calling_allowed is False
+    assert projection.closes_at is None
 
 
 @pytest.mark.unit

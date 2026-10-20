@@ -1,7 +1,7 @@
 # Contrat HTTP DiddiGo
 
 **Source :** `app_base.main:app.openapi()`
-**Généré le :** 2026-10-14
+**Généré le :** 2026-10-20
 **Version applicative :** 0.1.0
 
 La spécification complète, incluant les schémas de requête et de réponse, est dans [`openapi.json`](openapi.json). Ce fichier est généré depuis le code ; ne pas le modifier manuellement.
@@ -9,8 +9,8 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 
 ## Surface
 
-- **124 chemins**
-- **138 opérations HTTP**
+- **133 chemins**
+- **147 opérations HTTP**
 
 ## Règles comportementales frontend
 
@@ -203,6 +203,10 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 | Méthode | Chemin | Opération | Réponses déclarées | Sécurité OpenAPI |
 |---|---|---|---|---|
 | GET | `/internal/v1/drivers/kyc` | List Driver Kyc Queue | 200, 422 | oui |
+| GET | `/internal/v1/drivers/vehicles/kyv` | List Vehicle Kyv Queue | 200, 422 | oui |
+| GET | `/internal/v1/drivers/vehicles/{vehicle_id}/kyv` | Get Vehicle Kyv Detail | 200, 422 | oui |
+| POST | `/internal/v1/drivers/vehicles/{vehicle_id}/kyv/approve` | Approve Vehicle Kyv | 200, 422 | oui |
+| POST | `/internal/v1/drivers/vehicles/{vehicle_id}/kyv/reject` | Reject Vehicle Kyv | 200, 422 | oui |
 | GET | `/internal/v1/drivers/{driver_id}/kyc` | Get Driver Kyc Detail | 200, 422 | oui |
 | POST | `/internal/v1/drivers/{driver_id}/kyc/approve` | Approve Driver Kyc | 200, 422 | oui |
 | POST | `/internal/v1/drivers/{driver_id}/kyc/reject` | Reject Driver Kyc | 200, 422 | oui |
@@ -223,6 +227,12 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 | GET | `/internal/pilotage/finance-summary` | Get Pilotage Finance Summary | 200, 422 | oui |
 | GET | `/internal/pilotage/health-summary` | Get Pilotage Health Summary | 200, 422 | oui |
 | GET | `/internal/v1/ride-summary` | Get Ride Summary | 200, 422 | oui |
+
+## internal-support
+
+| Méthode | Chemin | Opération | Réponses déclarées | Sécurité OpenAPI |
+|---|---|---|---|---|
+| GET | `/internal/v1/support/ride/{ride_id}/context` | Get Ride Support Context | 200, 422 | oui |
 
 ## internal-webhooks
 
@@ -245,6 +255,15 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 | Méthode | Chemin | Opération | Réponses déclarées | Sécurité OpenAPI |
 |---|---|---|---|---|
 | GET | `/v1/partners/me` | Get My Partners | 200 | oui |
+
+## passenger-debts
+
+| Méthode | Chemin | Opération | Réponses déclarées | Sécurité OpenAPI |
+|---|---|---|---|---|
+| GET | `/v1/passenger/debts` | List Passenger Debts | 200, 422 | oui |
+| POST | `/v1/passenger/debts/{debt_id}/cash-request` | Request Passenger Debt Cash Settlement | 200, 422 | oui |
+| POST | `/v1/passenger/debts/{debt_id}/confirm-cash` | Confirm Passenger Debt Cash Settlement | 200, 422 | oui |
+| POST | `/v1/passenger/debts/{debt_id}/mobile-money/prepare` | Prepare Passenger Debt Mobile Money | 200, 422 | oui |
 
 ## payment
 
@@ -280,9 +299,9 @@ Le temps réel est décrit séparément dans le [`contrat WebSocket`](../realtim
 | POST | `/v1/rides/{ride_id}/arrive` | Mark Driver Arrived | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/cancel` | Cancel Ride | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/decline` | Decline Ride | 200, 422 | oui |
-| POST | `/v1/rides/{ride_id}/emergency` | Request Emergency | 200, 422 | oui |
-| POST | `/v1/rides/{ride_id}/early-stop/request` | Request Early Stop | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/early-stop/confirm` | Confirm Early Stop | 200, 422 | oui |
+| POST | `/v1/rides/{ride_id}/early-stop/request` | Request Early Stop | 200, 422 | oui |
+| POST | `/v1/rides/{ride_id}/emergency` | Request Emergency | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/location-samples` | Add Location Samples | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/no-show` | Mark Passenger No Show | 200, 422 | oui |
 | POST | `/v1/rides/{ride_id}/rating` | Rate Ride | 201, 422 | oui |

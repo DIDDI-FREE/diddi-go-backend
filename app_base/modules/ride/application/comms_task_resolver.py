@@ -7,11 +7,11 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app_base.core.errors import ApiError
+from app_base.core.settings import settings
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.ride.domain.entities import RideStatus
 from app_base.modules.ride.infra.models import DriverProfileModel, RideModel
 
-RIDE_COMMS_GRACE_PERIOD = timedelta(hours=48)
 ACTIVE_COMMS_STATUSES = {
     RideStatus.MATCHED.value,
     RideStatus.DRIVER_EN_ROUTE.value,
@@ -128,7 +128,9 @@ def _communication_closes_at(ride: RideModel) -> datetime | None:
     if ride.status in CANCELLED_COMMS_STATUSES and terminal_at is not None:
         return _aware_utc(terminal_at)
     if ride.status in TERMINAL_WITH_GRACE_STATUSES and terminal_at is not None:
-        return _aware_utc(terminal_at) + RIDE_COMMS_GRACE_PERIOD
+        return _aware_utc(terminal_at) + timedelta(
+            seconds=settings.ride_comms_completed_chat_retention_seconds,
+        )
     return None
 
 

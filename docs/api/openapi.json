@@ -600,9 +600,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Get My Scores V1 Me Scores Get"
+                  "$ref": "#/components/schemas/MyScoresResponse"
                 }
               }
             }
@@ -1212,9 +1210,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Get Ride Score V1 Rides  Ride Id  Score Get"
+                  "$ref": "#/components/schemas/RideScoreResponse"
                 }
               }
             }
@@ -2038,9 +2034,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Rate Ride V1 Rides  Ride Id  Rating Post"
+                  "$ref": "#/components/schemas/RideRatingResponse"
                 }
               }
             }
@@ -2631,6 +2625,86 @@
         }
       }
     },
+    "/internal/v1/support/ride/{ride_id}/context": {
+      "get": {
+        "tags": [
+          "internal-support"
+        ],
+        "summary": "Get Ride Support Context",
+        "operationId": "get_ride_support_context_internal_v1_support_ride__ride_id__context_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ride_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ride Id"
+            }
+          },
+          {
+            "name": "X-Client-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Id"
+            }
+          },
+          {
+            "name": "X-Support-Context-Scope",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Support-Context-Scope"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportRideContextResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/internal/v1/drivers/provision": {
       "post": {
         "tags": [
@@ -3051,6 +3125,161 @@
         }
       }
     },
+    "/internal/v1/drivers/vehicles/kyv": {
+      "get": {
+        "tags": [
+          "internal-driver-kyc"
+        ],
+        "summary": "List Vehicle Kyv Queue",
+        "operationId": "list_vehicle_kyv_queue_internal_v1_drivers_vehicles_kyv_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "pending_verification",
+              "title": "Status"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "X-Client-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Vehicle Kyv Queue Internal V1 Drivers Vehicles Kyv Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/drivers/vehicles/{vehicle_id}/kyv": {
+      "get": {
+        "tags": [
+          "internal-driver-kyc"
+        ],
+        "summary": "Get Vehicle Kyv Detail",
+        "operationId": "get_vehicle_kyv_detail_internal_v1_drivers_vehicles__vehicle_id__kyv_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "X-Client-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Vehicle Kyv Detail Internal V1 Drivers Vehicles  Vehicle Id  Kyv Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/internal/v1/drivers/{driver_id}/kyc/approve": {
       "post": {
         "tags": [
@@ -3157,7 +3386,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DriverKycReviewRequest"
+                "$ref": "#/components/schemas/DriverKycApproveRequest"
               }
             }
           }
@@ -3294,7 +3523,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DriverKycReviewRequest"
+                "$ref": "#/components/schemas/DriverKycRejectRequest"
               }
             }
           }
@@ -3308,6 +3537,280 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Reject Driver Kyc Internal V1 Drivers  Driver Id  Kyc Reject Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/drivers/vehicles/{vehicle_id}/kyv/approve": {
+      "post": {
+        "tags": [
+          "internal-driver-kyc"
+        ],
+        "summary": "Approve Vehicle Kyv",
+        "operationId": "approve_vehicle_kyv_internal_v1_drivers_vehicles__vehicle_id__kyv_approve_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "X-Request-Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 160,
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "X-Client-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Id"
+            }
+          },
+          {
+            "name": "X-Backoffice-Actor",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Identifiant DiddiFreeID canonique de l'operateur Backoffice authentifie.",
+              "title": "X-Backoffice-Actor"
+            },
+            "description": "Identifiant DiddiFreeID canonique de l'operateur Backoffice authentifie."
+          },
+          {
+            "name": "X-User-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Alias legacy de X-Backoffice-Actor, conserve pendant la migration Backoffice.",
+              "deprecated": true,
+              "title": "X-User-Id"
+            },
+            "description": "Alias legacy de X-Backoffice-Actor, conserve pendant la migration Backoffice.",
+            "deprecated": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverKycApproveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Approve Vehicle Kyv Internal V1 Drivers Vehicles  Vehicle Id  Kyv Approve Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/drivers/vehicles/{vehicle_id}/kyv/reject": {
+      "post": {
+        "tags": [
+          "internal-driver-kyc"
+        ],
+        "summary": "Reject Vehicle Kyv",
+        "operationId": "reject_vehicle_kyv_internal_v1_drivers_vehicles__vehicle_id__kyv_reject_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "X-Request-Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 160,
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "X-Client-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Id"
+            }
+          },
+          {
+            "name": "X-Backoffice-Actor",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Identifiant DiddiFreeID canonique de l'operateur Backoffice authentifie.",
+              "title": "X-Backoffice-Actor"
+            },
+            "description": "Identifiant DiddiFreeID canonique de l'operateur Backoffice authentifie."
+          },
+          {
+            "name": "X-User-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Alias legacy de X-Backoffice-Actor, conserve pendant la migration Backoffice.",
+              "deprecated": true,
+              "title": "X-User-Id"
+            },
+            "description": "Alias legacy de X-Backoffice-Actor, conserve pendant la migration Backoffice.",
+            "deprecated": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverKycRejectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Reject Vehicle Kyv Internal V1 Drivers Vehicles  Vehicle Id  Kyv Reject Post"
                 }
               }
             }
@@ -6392,9 +6895,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Get My Profile V1 Drivers Me Get"
+                  "$ref": "#/components/schemas/DriverProfileResponse"
                 }
               }
             }
@@ -6559,7 +7060,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DriverKycReviewRequest"
+                "$ref": "#/components/schemas/DriverKycApproveRequest"
               }
             }
           }
@@ -6619,7 +7120,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DriverKycReviewRequest"
+                "$ref": "#/components/schemas/DriverKycRejectRequest"
               }
             }
           }
@@ -6679,7 +7180,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DriverKycReviewRequest"
+                "$ref": "#/components/schemas/DriverKycApproveRequest"
               }
             }
           }
@@ -6739,7 +7240,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DriverKycReviewRequest"
+                "$ref": "#/components/schemas/DriverKycRejectRequest"
               }
             }
           }
@@ -7123,6 +7624,221 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Get Payment V1 Payments  Ride Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/passenger/debts": {
+      "get": {
+        "tags": [
+          "passenger-debts"
+        ],
+        "summary": "List Passenger Debts",
+        "operationId": "list_passenger_debts_v1_passenger_debts_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassengerDebtListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/passenger/debts/{debt_id}/mobile-money/prepare": {
+      "post": {
+        "tags": [
+          "passenger-debts"
+        ],
+        "summary": "Prepare Passenger Debt Mobile Money",
+        "operationId": "prepare_passenger_debt_mobile_money_v1_passenger_debts__debt_id__mobile_money_prepare_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "debt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Debt Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentPreparationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassengerDebtPaymentPreparationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/passenger/debts/{debt_id}/cash-request": {
+      "post": {
+        "tags": [
+          "passenger-debts"
+        ],
+        "summary": "Request Passenger Debt Cash Settlement",
+        "operationId": "request_passenger_debt_cash_settlement_v1_passenger_debts__debt_id__cash_request_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "debt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Debt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassengerDebtResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/passenger/debts/{debt_id}/confirm-cash": {
+      "post": {
+        "tags": [
+          "passenger-debts"
+        ],
+        "summary": "Confirm Passenger Debt Cash Settlement",
+        "operationId": "confirm_passenger_debt_cash_settlement_v1_passenger_debts__debt_id__confirm_cash_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "debt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Debt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassengerDebtResponse"
                 }
               }
             }
@@ -9665,6 +10381,451 @@
         "title": "DispatchConfigBody",
         "description": "Full dispatch tunables — GET returns it, PUT replaces it (UC-288)."
       },
+      "DocumentReviewDecision": {
+        "properties": {
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "license_front",
+              "license_back",
+              "national_id_front",
+              "national_id_back",
+              "selfie",
+              "registration",
+              "insurance",
+              "technical_inspection",
+              "transport_authorization",
+              "vehicle_front",
+              "vehicle_back",
+              "vehicle_left",
+              "vehicle_right",
+              "vehicle_interior",
+              "vehicle_plate"
+            ],
+            "title": "Document Type"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "title": "Decision"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "expected_correction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Correction"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_type",
+          "decision"
+        ],
+        "title": "DocumentReviewDecision"
+      },
+      "DocumentReviewResponse": {
+        "properties": {
+          "document_type": {
+            "type": "string",
+            "title": "Document Type"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "expected_correction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Correction"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_type",
+          "status"
+        ],
+        "title": "DocumentReviewResponse"
+      },
+      "DriverKycApproveRequest": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentReviewDecision"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Documents"
+          }
+        },
+        "type": "object",
+        "title": "DriverKycApproveRequest"
+      },
+      "DriverKycRejectRequest": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentReviewDecision"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Documents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "documents"
+        ],
+        "title": "DriverKycRejectRequest"
+      },
+      "DriverKycResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending_verification",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "legal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legal Name"
+          },
+          "birth_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Birth Date"
+          },
+          "residence_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Residence Address"
+          },
+          "license_document_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Document File Id"
+          },
+          "license_back_document_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Back Document File Id"
+          },
+          "national_id_document_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "National Id Document File Id"
+          },
+          "national_id_back_document_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "National Id Back Document File Id"
+          },
+          "selfie_document_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selfie Document File Id"
+          },
+          "license_document_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Document Url"
+          },
+          "license_back_document_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Back Document Url"
+          },
+          "national_id_document_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "National Id Document Url"
+          },
+          "national_id_back_document_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "National Id Back Document Url"
+          },
+          "selfie_document_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selfie Document Url"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "review_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Notes"
+          },
+          "document_reviews": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentReviewResponse"
+            },
+            "type": "array",
+            "title": "Document Reviews"
+          },
+          "license_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Expires At"
+          },
+          "national_id_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "National Id Expires At"
+          },
+          "documents_expiry_status": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "expiring_soon",
+              "expired"
+            ],
+            "title": "Documents Expiry Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "documents_expiry_status"
+        ],
+        "title": "DriverKycResponse"
+      },
       "DriverKycResubmitRequest": {
         "properties": {
           "license_number": {
@@ -9882,24 +11043,6 @@
         },
         "type": "object",
         "title": "DriverKycResubmitRequest"
-      },
-      "DriverKycReviewRequest": {
-        "properties": {
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 1000
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes"
-          }
-        },
-        "type": "object",
-        "title": "DriverKycReviewRequest"
       },
       "DriverProfileCreateRequest": {
         "properties": {
@@ -10128,6 +11271,81 @@
           "profile_photo_file_id"
         ],
         "title": "DriverProfilePhotoUpdateRequest"
+      },
+      "DriverProfileResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "license_number": {
+            "type": "string",
+            "title": "License Number"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "rating_avg": {
+            "type": "number",
+            "title": "Rating Avg"
+          },
+          "rating_count": {
+            "type": "integer",
+            "title": "Rating Count"
+          },
+          "rating_status": {
+            "type": "string",
+            "enum": [
+              "new",
+              "rated"
+            ],
+            "title": "Rating Status"
+          },
+          "profile_photo_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Photo File Id"
+          },
+          "kyc": {
+            "$ref": "#/components/schemas/DriverKycResponse"
+          },
+          "vehicle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VehicleResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "license_number",
+          "status",
+          "rating_avg",
+          "rating_count",
+          "rating_status",
+          "kyc"
+        ],
+        "title": "DriverProfileResponse"
       },
       "DriverProvisionRequest": {
         "properties": {
@@ -10852,6 +12070,40 @@
           "network"
         ],
         "title": "MobileMoneyBeneficiaryDestination"
+      },
+      "MyScoresResponse": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "service": {
+            "type": "string",
+            "const": "diddigo",
+            "title": "Service"
+          },
+          "passenger_score": {
+            "$ref": "#/components/schemas/PersonalScoreResponse"
+          },
+          "driver_score": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonalScoreResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "service",
+          "passenger_score"
+        ],
+        "title": "MyScoresResponse"
       },
       "OTPRequest": {
         "properties": {
@@ -11756,6 +13008,134 @@
         ],
         "title": "PartnerVehicleCreateRequest"
       },
+      "PassengerDebtListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PassengerDebtResponse"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "pagination": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Pagination"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "title": "PassengerDebtListResponse"
+      },
+      "PassengerDebtPaymentPreparationResponse": {
+        "properties": {
+          "debt": {
+            "$ref": "#/components/schemas/PassengerDebtResponse"
+          },
+          "payment": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "debt",
+          "payment"
+        ],
+        "title": "PassengerDebtPaymentPreparationResponse"
+      },
+      "PassengerDebtResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ride_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ride Id"
+          },
+          "amount": {
+            "type": "integer",
+            "title": "Amount"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "mobile_money_pending",
+              "cash_pending_confirmation",
+              "settled"
+            ],
+            "title": "Status"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "mobile_money_failed",
+              "mobile_money_expired"
+            ],
+            "title": "Reason"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "settled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settled At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ride_id",
+          "amount",
+          "currency",
+          "status",
+          "reason"
+        ],
+        "title": "PassengerDebtResponse"
+      },
       "PaymentPreparationRequest": {
         "properties": {
           "method": {
@@ -11813,6 +13193,137 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PaymentPreparationRequest"
+      },
+      "PersonalScoreMetricsResponse": {
+        "properties": {
+          "total_rides": {
+            "type": "integer",
+            "title": "Total Rides"
+          },
+          "eligible_rides": {
+            "type": "integer",
+            "title": "Eligible Rides"
+          },
+          "completed_rides": {
+            "type": "integer",
+            "title": "Completed Rides"
+          },
+          "cancelled_rides": {
+            "type": "integer",
+            "title": "Cancelled Rides"
+          },
+          "emergency_reports": {
+            "type": "integer",
+            "title": "Emergency Reports"
+          },
+          "rating_count": {
+            "type": "integer",
+            "title": "Rating Count"
+          },
+          "rating_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating Avg"
+          },
+          "completion_rate": {
+            "type": "number",
+            "title": "Completion Rate"
+          },
+          "cancellation_rate": {
+            "type": "number",
+            "title": "Cancellation Rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_rides",
+          "eligible_rides",
+          "completed_rides",
+          "cancelled_rides",
+          "emergency_reports",
+          "rating_count",
+          "completion_rate",
+          "cancellation_rate"
+        ],
+        "title": "PersonalScoreMetricsResponse"
+      },
+      "PersonalScoreResponse": {
+        "properties": {
+          "subject_type": {
+            "type": "string",
+            "enum": [
+              "passenger",
+              "driver"
+            ],
+            "title": "Subject Type"
+          },
+          "subject_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Subject Id"
+          },
+          "score_value": {
+            "type": "number",
+            "title": "Score Value"
+          },
+          "score_level": {
+            "type": "string",
+            "enum": [
+              "new",
+              "excellent",
+              "good",
+              "fair",
+              "risk"
+            ],
+            "title": "Score Level"
+          },
+          "score_status": {
+            "type": "string",
+            "enum": [
+              "insufficient_data",
+              "stable"
+            ],
+            "title": "Score Status"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reason Codes"
+          },
+          "last_calculated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Calculated At"
+          },
+          "sample_size": {
+            "type": "integer",
+            "title": "Sample Size"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/PersonalScoreMetricsResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "subject_type",
+          "subject_id",
+          "score_value",
+          "score_level",
+          "score_status",
+          "reason_codes",
+          "last_calculated_at",
+          "sample_size",
+          "metrics"
+        ],
+        "title": "PersonalScoreResponse"
       },
       "PilotageFinanceSummaryResponse": {
         "properties": {
@@ -12492,6 +14003,160 @@
         ],
         "title": "RideRatingRequest"
       },
+      "RideRatingResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ride_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ride Id"
+          },
+          "rating": {
+            "type": "integer",
+            "title": "Rating"
+          },
+          "rater_role": {
+            "type": "string",
+            "enum": [
+              "passenger",
+              "driver"
+            ],
+            "title": "Rater Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ride_id",
+          "rating",
+          "rater_role"
+        ],
+        "title": "RideRatingResponse"
+      },
+      "RideScoreMetricsResponse": {
+        "properties": {
+          "ride_status": {
+            "type": "string",
+            "title": "Ride Status"
+          },
+          "rating_count": {
+            "type": "integer",
+            "title": "Rating Count"
+          },
+          "rating_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating Avg"
+          },
+          "emergency_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emergency Status"
+          },
+          "cancellation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ride_status",
+          "rating_count"
+        ],
+        "title": "RideScoreMetricsResponse"
+      },
+      "RideScoreResponse": {
+        "properties": {
+          "ride_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ride Id"
+          },
+          "subject_type": {
+            "type": "string",
+            "const": "trip",
+            "title": "Subject Type"
+          },
+          "score_value": {
+            "type": "number",
+            "title": "Score Value"
+          },
+          "score_level": {
+            "type": "string",
+            "enum": [
+              "new",
+              "excellent",
+              "good",
+              "fair",
+              "risk"
+            ],
+            "title": "Score Level"
+          },
+          "score_status": {
+            "type": "string",
+            "enum": [
+              "provisional",
+              "stable"
+            ],
+            "title": "Score Status"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reason Codes"
+          },
+          "last_calculated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Calculated At"
+          },
+          "sample_size": {
+            "type": "integer",
+            "title": "Sample Size"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/RideScoreMetricsResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ride_id",
+          "subject_type",
+          "score_value",
+          "score_level",
+          "score_status",
+          "reason_codes",
+          "last_calculated_at",
+          "sample_size",
+          "metrics"
+        ],
+        "title": "RideScoreResponse"
+      },
       "RideStartRequest": {
         "properties": {
           "code": {
@@ -12627,6 +14292,237 @@
         ],
         "title": "RideSupplementDecisionRequest"
       },
+      "SupportParticipantResponse": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "passenger",
+              "driver"
+            ],
+            "title": "Role"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user_id",
+          "role"
+        ],
+        "title": "SupportParticipantResponse"
+      },
+      "SupportRideContextResponse": {
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "const": "diddi.context.v1",
+            "title": "Protocol"
+          },
+          "origin_service": {
+            "type": "string",
+            "const": "diddigo",
+            "title": "Origin Service"
+          },
+          "resource_type": {
+            "type": "string",
+            "const": "ride",
+            "title": "Resource Type"
+          },
+          "resource_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Resource Id"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SupportRideDataResponse"
+          },
+          "redacted_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Redacted Fields"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "title": "As Of"
+          },
+          "fetched_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fetched At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "protocol",
+          "origin_service",
+          "resource_type",
+          "resource_id",
+          "data",
+          "redacted_fields",
+          "as_of",
+          "fetched_at"
+        ],
+        "title": "SupportRideContextResponse"
+      },
+      "SupportRideDataResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "completion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Reason"
+          },
+          "cancellation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Reason"
+          },
+          "fare_amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fare Amount",
+            "description": "Montant final si disponible, sinon montant estimé."
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "payment_method": {
+            "type": "string",
+            "title": "Payment Method"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/SupportParticipantResponse"
+            },
+            "type": "array",
+            "title": "Participants"
+          },
+          "timeline": {
+            "$ref": "#/components/schemas/SupportRideTimelineResponse"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "currency",
+          "payment_method",
+          "participants",
+          "timeline"
+        ],
+        "title": "SupportRideDataResponse"
+      },
+      "SupportRideTimelineResponse": {
+        "properties": {
+          "requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested At"
+          },
+          "matched_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched At"
+          },
+          "arrived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrived At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SupportRideTimelineResponse"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -12676,27 +14572,15 @@
             "title": "Plate Number"
           },
           "make": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 50
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
             "title": "Make"
           },
           "model": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 50
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
             "title": "Model"
           },
           "color": {
@@ -12999,7 +14883,9 @@
         },
         "type": "object",
         "required": [
-          "plate_number"
+          "plate_number",
+          "make",
+          "model"
         ],
         "title": "VehicleCreateRequest"
       },
@@ -13284,19 +15170,26 @@
         "type": "object",
         "title": "VehicleKyvResubmitRequest"
       },
-      "VehicleUpdateRequest": {
+      "VehicleResponse": {
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "driver_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Driver Id"
+          },
           "plate_number": {
             "type": "string",
-            "maxLength": 20,
-            "minLength": 1,
             "title": "Plate Number"
           },
           "make": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 50
+                "type": "string"
               },
               {
                 "type": "null"
@@ -13307,13 +15200,390 @@
           "model": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 50
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
+            "title": "Model"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "comfort_level": {
+            "type": "string",
+            "title": "Comfort Level"
+          },
+          "registration_document_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registration Document File Id"
+          },
+          "insurance_document_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insurance Document File Id"
+          },
+          "technical_inspection_document_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Technical Inspection Document File Id"
+          },
+          "transport_authorization_document_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transport Authorization Document File Id"
+          },
+          "vehicle_photo_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Photo File Id"
+          },
+          "vehicle_front_photo_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Front Photo File Id"
+          },
+          "vehicle_back_photo_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Back Photo File Id"
+          },
+          "vehicle_left_photo_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Left Photo File Id"
+          },
+          "vehicle_right_photo_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Right Photo File Id"
+          },
+          "vehicle_interior_photo_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Interior Photo File Id"
+          },
+          "vehicle_plate_photo_file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Plate Photo File Id"
+          },
+          "registration_document_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registration Document Url"
+          },
+          "insurance_document_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insurance Document Url"
+          },
+          "technical_inspection_document_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Technical Inspection Document Url"
+          },
+          "transport_authorization_document_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transport Authorization Document Url"
+          },
+          "vehicle_photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Photo Url"
+          },
+          "vehicle_front_photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Front Photo Url"
+          },
+          "vehicle_back_photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Back Photo Url"
+          },
+          "vehicle_left_photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Left Photo Url"
+          },
+          "vehicle_right_photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Right Photo Url"
+          },
+          "vehicle_interior_photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Interior Photo Url"
+          },
+          "vehicle_plate_photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Plate Photo Url"
+          },
+          "verification_status": {
+            "type": "string",
+            "enum": [
+              "pending_verification",
+              "active",
+              "suspended",
+              "rejected"
+            ],
+            "title": "Verification Status"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "review_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Notes"
+          },
+          "document_reviews": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentReviewResponse"
+            },
+            "type": "array",
+            "title": "Document Reviews"
+          },
+          "owner_type": {
+            "type": "string",
+            "title": "Owner Type"
+          },
+          "partner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Id"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "driver_id",
+          "plate_number",
+          "category",
+          "comfort_level",
+          "verification_status",
+          "owner_type",
+          "active"
+        ],
+        "title": "VehicleResponse"
+      },
+      "VehicleUpdateRequest": {
+        "properties": {
+          "plate_number": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Plate Number"
+          },
+          "make": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Make"
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
             "title": "Model"
           },
           "color": {
@@ -13336,10 +15606,12 @@
         },
         "type": "object",
         "required": [
-          "plate_number"
+          "plate_number",
+          "make",
+          "model"
         ],
         "title": "VehicleUpdateRequest",
-        "description": "Edit a vehicle's descriptive fields after KYC (SCRUM-524 #1). Documents\ngo through the kyv/resubmit flow, not here."
+        "description": "Edit a vehicle's descriptive fields.\n\nDocuments are corrected through the KYV resubmission flow and the vehicle's\nverification status is preserved."
       }
     },
     "securitySchemes": {
