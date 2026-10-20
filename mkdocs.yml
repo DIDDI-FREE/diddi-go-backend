@@ -76,6 +76,7 @@ nav:
       - SMS: integrations/sms.md
   - Tests:
       - Checklist du 19 octobre: testing/DIDDIGO_TEST_CHECKLIST_2026-10-19.md
+      - DiddiSupport (20 octobre): testing/DIDDIGO_DIDDISUPPORT_TEST_CHECKLIST_2026-10-20.md
       - DiddiComms: integrations/diddicomms.md
   - Références:
       - Statuts: reference/statuses.md
