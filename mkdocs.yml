@@ -56,6 +56,7 @@ nav:
       - Scoring: guides/scoring.md
   - Frontend:
       - Acces aux contrats: frontend/DIDDIGO_FRONTEND_CONTRACT_ACCESS_BRIEF_2026-10-19.md
+      - Brief integre (20 octobre): frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-20.md
       - KYC et KYV: frontend/DIDDIGO_FRONTEND_KYC_KYV_BRIEF_2026-10-19.md
       - Brief du 12 octobre: frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-12.md
       - Clarifications V2: frontend/DIDDIGO_FRONTEND_CLARIFICATIONS_2026-10-12_V2.md
