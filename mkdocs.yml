@@ -46,6 +46,11 @@ nav:
       - MVP figé: product/DIDDIGO-MVP-FIGE.md
   - API:
       - Vue d'ensemble: api/index.md
+      - Contrat HTTP et WebSocket: api/API_CONTRACT.md
+      - Questions ouvertes: api/open-questions.md
+      - Compatibilité WebSocket: realtime/WEBSOCKET_CONTRACT.md
+  - Architecture:
+      - Exécution: architecture/RUNTIME_ARCHITECTURE.md
   - Parcours métier:
       - Passager: guides/passenger-ride-flow.md
       - Chauffeur: guides/driver-ride-flow.md
@@ -66,6 +71,7 @@ nav:
       - DiddiFiles: integrations/diddifiles.md
       - DiddiPay: integrations/diddipay.md
       - DiddiMap: integrations/diddimap.md
+      - DiddiAdmin: integrations/diddiadmin-kyc-review.md
       - DiddiSupport: integrations/diddisupport.md
       - SMS: integrations/sms.md
   - Tests:
@@ -79,6 +85,7 @@ nav:
       - Cas différés: reference/deferred-edge-cases.md
   - Changelog:
       - 14 octobre 2026: changelog/2026-10-14.md
+      - 15 octobre 2026: changelog/2026-10-15.md
       - 12 octobre 2026: changelog/2026-10-12.md
       - 20 octobre 2026: changelog/2026-10-20.md
       - 20 octobre 2026 - DiddiSupport: changelog/2026-10-20-support-context.md
@@ -86,12 +93,6 @@ nav:
 
 exclude_docs: |
   archive/
-  api/API_CONTRACT.md
-  api/asyncapi.yaml
-  api/open-questions.md
-  api/openapi.yaml
-  architecture/RUNTIME_ARCHITECTURE.md
-  changelog/2026-10-15.md
   frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-10 - Copie.md
   jira/
 

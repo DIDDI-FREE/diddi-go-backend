@@ -1,0 +1,651 @@
+asyncapi: 3.0.0
+info:
+  title: DiddiGo WebSocket
+  version: draft.2026-10-15
+  description: Contrat du serveur local, directions vues depuis DiddiGo. Exemples synthétiques.
+defaultContentType: application/json
+servers:
+  staging:
+    host: go-staging.diddifree.com
+    protocol: wss
+    description: Adresse connue ; parité du build local avec staging non garantie.
+channels:
+  session:
+    address: /v1/ws
+    messages:
+      RideSubscribe:
+        $ref: '#/components/messages/RideSubscribe'
+      DriverLocationPush:
+        $ref: '#/components/messages/DriverLocationPush'
+      RideStatusChanged:
+        $ref: '#/components/messages/RideStatusChanged'
+      RideDriverLocation:
+        $ref: '#/components/messages/RideDriverLocation'
+      RideNoDriverFound:
+        $ref: '#/components/messages/RideNoDriverFound'
+      RideNewRequest:
+        $ref: '#/components/messages/RideNewRequest'
+      RideWaitingChanged:
+        $ref: '#/components/messages/RideWaitingChanged'
+      RideSupplementChanged:
+        $ref: '#/components/messages/RideSupplementChanged'
+      Ack:
+        $ref: '#/components/messages/Ack'
+      Error:
+        $ref: '#/components/messages/Error'
+      Ignored:
+        $ref: '#/components/messages/Ignored'
+    servers:
+    - $ref: '#/servers/staging'
+    bindings:
+      ws:
+        method: GET
+        query:
+          type: object
+          properties:
+            token:
+              type: string
+          required:
+          - token
+        bindingVersion: 0.1.0
+    description: Access token query obligatoire ; refus avant accept peut devenir HTTP 403.
+operations:
+  RideSubscribe:
+    action: receive
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/RideSubscribe'
+    summary: Abonner cette connexion à une course.
+  DriverLocationPush:
+    action: receive
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/DriverLocationPush'
+    summary: Publier la position temps réel ; ne remplace pas les lots GPS durables HTTP.
+  RideStatusChanged:
+    action: send
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/RideStatusChanged'
+    summary: Notification d'état ; early_stop_requested est un signal non persisté, pas un RideStatus.
+  RideDriverLocation:
+    action: send
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/RideDriverLocation'
+    summary: Position chauffeur diffusée aux abonnés après contrôle d'accès.
+  RideNoDriverFound:
+    action: send
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/RideNoDriverFound'
+    summary: Fin de recherche sans chauffeur.
+  RideNewRequest:
+    action: send
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/RideNewRequest'
+    summary: Offre de course adressée à un chauffeur ; la durée de l'exemple n'est pas une constante contractuelle.
+  RideWaitingChanged:
+    action: send
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/RideWaitingChanged'
+    summary: État et montants d'attente en course.
+  RideSupplementChanged:
+    action: send
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/RideSupplementChanged'
+    summary: Proposition/décision de supplément ; ride_id se trouve dans supplement, pas à la racine.
+  Ack:
+    action: send
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/Ack'
+    summary: Accusé du message client ; ride_id présent pour ride.subscribe, absent pour driver.location_push.
+  Error:
+    action: send
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/Error'
+    summary: Erreur applicative du socket ; ce format n'est pas l'enveloppe d'erreur HTTP.
+  Ignored:
+    action: send
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/Ignored'
+    summary: Événement inconnu ignoré ; received_event reprend la valeur reçue, éventuellement null.
+components:
+  messages:
+    RideSubscribe:
+      name: RideSubscribe
+      title: ride.subscribe
+      contentType: application/json
+      description: Abonner cette connexion à une course.
+      payload:
+        $ref: '#/components/schemas/RideSubscribe'
+      examples:
+      - name: exemple
+        payload:
+          event: ride.subscribe
+          ride_id: 11111111-1111-4111-8111-111111111111
+      x-contract:
+        roles: Passager propriétaire, chauffeur affecté ou admin.
+        trigger: Après connexion ou reconnexion.
+        recovery: Réabonner puis GET /v1/rides/{ride_id} ; répéter ajoute au même ensemble de sockets.
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+    DriverLocationPush:
+      name: DriverLocationPush
+      title: driver.location_push
+      contentType: application/json
+      description: Publier la position temps réel ; ne remplace pas les lots GPS durables HTTP.
+      payload:
+        $ref: '#/components/schemas/DriverLocationPush'
+      examples:
+      - name: exemple
+        payload:
+          event: driver.location_push
+          location:
+            lat: 5.3601
+            lng: -4.009
+          heading: 134
+          speed_kmh: 0
+          ride_id: 11111111-1111-4111-8111-111111111111
+      x-contract:
+        roles: 'Rôle driver/admin ou profil chauffeur actif ; avec ride_id : affectation ou admin.'
+        trigger: Mise à jour GPS du client ; peut arrêter automatiquement une attente si le véhicule bouge.
+        recovery: Envoyer une position récente ; ne pas rejouer une file de positions anciennes ; GET ride pour
+          état métier.
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+    RideStatusChanged:
+      name: RideStatusChanged
+      title: ride.status_changed
+      contentType: application/json
+      description: Notification d'état ; early_stop_requested est un signal non persisté, pas un RideStatus.
+      payload:
+        $ref: '#/components/schemas/RideStatusChanged'
+      examples:
+      - name: exemple
+        payload:
+          event: ride.status_changed
+          ride_id: 11111111-1111-4111-8111-111111111111
+          status: arrived
+          at: '2026-10-15T10:00:00Z'
+      x-contract:
+        roles: Sockets abonnés à la course.
+        trigger: Changement émis par route/service, y compris demande d'arrêt anticipé.
+        recovery: GET /v1/rides/{ride_id} ; un événement ancien ne doit pas écraser un état REST plus récent.
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+    RideDriverLocation:
+      name: RideDriverLocation
+      title: ride.driver_location
+      contentType: application/json
+      description: Position chauffeur diffusée aux abonnés après contrôle d'accès.
+      payload:
+        $ref: '#/components/schemas/RideDriverLocation'
+      examples:
+      - name: exemple
+        payload:
+          event: ride.driver_location
+          ride_id: 11111111-1111-4111-8111-111111111111
+          location:
+            lat: 5.3601
+            lng: -4.009
+          heading: 134
+          at: '2026-10-15T10:00:00Z'
+      x-contract:
+        roles: Sockets abonnés à la course.
+        trigger: driver.location_push contenant un ride_id autorisé.
+        recovery: Attendre une position récente ; ne pas présenter la dernière position comme fraîche sans nouvelle
+          émission.
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+    RideNoDriverFound:
+      name: RideNoDriverFound
+      title: ride.no_driver_found
+      contentType: application/json
+      description: Fin de recherche sans chauffeur.
+      payload:
+        $ref: '#/components/schemas/RideNoDriverFound'
+      examples:
+      - name: exemple
+        payload:
+          event: ride.no_driver_found
+          ride_id: 11111111-1111-4111-8111-111111111111
+      x-contract:
+        roles: Sockets abonnés à la course.
+        trigger: Matching sans chauffeur.
+        recovery: GET /v1/rides/{ride_id} ; pas de timestamp ni d'identifiant d'événement.
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+    RideNewRequest:
+      name: RideNewRequest
+      title: ride.new_request
+      contentType: application/json
+      description: Offre de course adressée à un chauffeur ; la durée de l'exemple n'est pas une constante contractuelle.
+      payload:
+        $ref: '#/components/schemas/RideNewRequest'
+      examples:
+      - name: exemple
+        payload:
+          event: ride.new_request
+          ride_id: 11111111-1111-4111-8111-111111111111
+          pickup:
+            lat: 5.3601
+            lng: -4.009
+            address: Point de départ
+          dropoff_address: Destination
+          vehicle_category: standard
+          comfort_level: standard
+          payment_method: cash
+          expires_in_seconds: 20
+      x-contract:
+        roles: Toutes les connexions de l'utilisateur chauffeur ciblé, même sans ride.subscribe.
+        trigger: Vague d'offres de matching.
+        recovery: 'Aucun endpoint de replay d''offres confirmé : UNKNOWN. Une offre ne garantit pas une affectation.'
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+    RideWaitingChanged:
+      name: RideWaitingChanged
+      title: ride.waiting_changed
+      contentType: application/json
+      description: État et montants d'attente en course.
+      payload:
+        $ref: '#/components/schemas/RideWaitingChanged'
+      examples:
+      - name: exemple
+        payload:
+          event: ride.waiting_changed
+          ride_id: 11111111-1111-4111-8111-111111111111
+          status: waiting
+          waiting:
+            active: true
+            started_at: '2026-10-15T10:00:00Z'
+            duration_seconds: 0
+            fee: 0
+            rate_per_minute: 100
+          at: '2026-10-15T10:00:00Z'
+      x-contract:
+        roles: Sockets abonnés à la course.
+        trigger: Début/fin d'attente via HTTP ou arrêt automatique sur mouvement.
+        recovery: GET /v1/rides/{ride_id} ; montant serveur faisant foi.
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+    RideSupplementChanged:
+      name: RideSupplementChanged
+      title: ride.supplement_changed
+      contentType: application/json
+      description: Proposition/décision de supplément ; ride_id se trouve dans supplement, pas à la racine.
+      payload:
+        $ref: '#/components/schemas/RideSupplementChanged'
+      examples:
+      - name: exemple
+        payload:
+          event: ride.supplement_changed
+          supplement:
+            id: 22222222-2222-4222-8222-222222222222
+            ride_id: 11111111-1111-4111-8111-111111111111
+            amount: 500
+            reason: toll
+            type: toll
+            source: catalog
+            status: pending
+            created_by_user_id: 11111111-1111-4111-8111-111111111111
+            created_at: '2026-10-15T10:00:00Z'
+            decided_by_user_id: null
+            decided_at: null
+          at: '2026-10-15T10:00:00Z'
+      x-contract:
+        roles: Sockets abonnés à la course.
+        trigger: Création ou décision du supplément via HTTP.
+        recovery: GET /v1/rides/{ride_id}/supplements ; ne pas ajouter un montant deux fois à réception.
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+    Ack:
+      name: Ack
+      title: ack
+      contentType: application/json
+      description: Accusé du message client ; ride_id présent pour ride.subscribe, absent pour driver.location_push.
+      payload:
+        $ref: '#/components/schemas/Ack'
+      examples:
+      - name: exemple
+        payload:
+          event: ack
+          received_event: ride.subscribe
+          ride_id: 11111111-1111-4111-8111-111111111111
+      x-contract:
+        roles: Connexion émettrice.
+        trigger: Traitement réussi d'un message connu.
+        recovery: Pas de correlation_id ; ACK ne garantit ni persistance GPS HTTP ni livraison aux autres clients.
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+    Error:
+      name: Error
+      title: error
+      contentType: application/json
+      description: Erreur applicative du socket ; ce format n'est pas l'enveloppe d'erreur HTTP.
+      payload:
+        $ref: '#/components/schemas/Error'
+      examples:
+      - name: exemple
+        payload:
+          event: error
+          code: CACHE_UNAVAILABLE
+          retryable: true
+      x-contract:
+        roles: Connexion émettrice.
+        trigger: Validation/droit refusé ou exception Redis.
+        recovery: Corriger le message ; CACHE_UNAVAILABLE ferme ensuite le socket en 1013 et demande reconnexion.
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+    Ignored:
+      name: Ignored
+      title: ignored
+      contentType: application/json
+      description: Événement inconnu ignoré ; received_event reprend la valeur reçue, éventuellement null.
+      payload:
+        $ref: '#/components/schemas/Ignored'
+      examples:
+      - name: exemple
+        payload:
+          event: ignored
+          received_event: future.event
+      x-contract:
+        roles: Connexion émettrice.
+        trigger: Objet JSON avec événement inconnu ou absent.
+        recovery: Ne pas répéter indéfiniment un événement non supporté.
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+  schemas:
+    RideSubscribe:
+      type: object
+      properties:
+        event:
+          type: string
+          const: ride.subscribe
+        ride_id: &id001
+          type: string
+          format: uuid
+      required:
+      - event
+      - ride_id
+    DriverLocationPush:
+      type: object
+      properties:
+        event:
+          type: string
+          const: driver.location_push
+        location: &id002
+          type: object
+          properties:
+            lat:
+              type: number
+            lng:
+              type: number
+          required:
+          - lat
+          - lng
+        heading:
+          description: Valeur transmise sans validation ; forme stricte UNKNOWN.
+        speed_kmh:
+          type:
+          - number
+          - string
+          - 'null'
+        ride_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      required:
+      - event
+      - location
+    RideStatusChanged:
+      type: object
+      properties:
+        event:
+          type: string
+          const: ride.status_changed
+        ride_id: *id001
+        status: &id005
+          type: string
+        at: &id003
+          type: string
+          format: date-time
+      required:
+      - event
+      - ride_id
+      - status
+      - at
+    RideDriverLocation:
+      type: object
+      properties:
+        event:
+          type: string
+          const: ride.driver_location
+        ride_id: *id001
+        location: *id002
+        heading: {}
+        at: *id003
+      required:
+      - event
+      - ride_id
+      - location
+      - heading
+      - at
+    RideNoDriverFound:
+      type: object
+      properties:
+        event:
+          type: string
+          const: ride.no_driver_found
+        ride_id: *id001
+      required:
+      - event
+      - ride_id
+    RideNewRequest:
+      type: object
+      properties:
+        event:
+          type: string
+          const: ride.new_request
+        ride_id: *id001
+        pickup:
+          type: object
+          properties:
+            lat:
+              type:
+              - number
+              - 'null'
+            lng:
+              type:
+              - number
+              - 'null'
+            address: &id004
+              type:
+              - string
+              - 'null'
+          required:
+          - lat
+          - lng
+          - address
+        dropoff_address: *id004
+        vehicle_category: *id005
+        comfort_level: *id005
+        payment_method: *id005
+        expires_in_seconds: &id006
+          type: integer
+      required:
+      - event
+      - ride_id
+      - pickup
+      - dropoff_address
+      - vehicle_category
+      - comfort_level
+      - payment_method
+      - expires_in_seconds
+    RideWaitingChanged:
+      type: object
+      properties:
+        event:
+          type: string
+          const: ride.waiting_changed
+        ride_id: *id001
+        status: *id005
+        waiting:
+          type: object
+          properties:
+            active:
+              type: boolean
+            started_at: &id007
+              type:
+              - string
+              - 'null'
+              format: date-time
+            duration_seconds: *id006
+            fee: *id006
+            rate_per_minute:
+              type:
+              - integer
+              - 'null'
+          required:
+          - active
+          - started_at
+          - duration_seconds
+          - fee
+          - rate_per_minute
+        at: *id003
+      required:
+      - event
+      - ride_id
+      - status
+      - waiting
+      - at
+    RideSupplementChanged:
+      type: object
+      properties:
+        event:
+          type: string
+          const: ride.supplement_changed
+        supplement:
+          type: object
+          properties:
+            id: *id001
+            ride_id: *id001
+            amount: *id006
+            reason: *id005
+            type: *id005
+            source: *id005
+            status:
+              type: string
+              enum:
+              - pending
+              - accepted
+              - disputed
+            created_by_user_id:
+              type:
+              - string
+              - 'null'
+              format: uuid
+            created_at: *id007
+            decided_by_user_id:
+              type:
+              - string
+              - 'null'
+              format: uuid
+            decided_at: *id007
+          required:
+          - id
+          - ride_id
+          - amount
+          - reason
+          - type
+          - source
+          - status
+          - created_by_user_id
+          - created_at
+          - decided_by_user_id
+          - decided_at
+        at: *id003
+      required:
+      - event
+      - supplement
+      - at
+    Ack:
+      type: object
+      properties:
+        event:
+          type: string
+          const: ack
+        received_event: *id005
+        ride_id: *id001
+      required:
+      - event
+      - received_event
+    Error:
+      type: object
+      properties:
+        event:
+          type: string
+          const: error
+        code:
+          type: string
+          enum:
+          - MALFORMED_MESSAGE
+          - FORBIDDEN_ROLE
+          - INVALID_LOCATION
+          - INVALID_RIDE_ID
+          - RIDE_NOT_OWNED_BY_USER
+          - CACHE_UNAVAILABLE
+        retryable:
+          type: boolean
+      required:
+      - event
+      - code
+    Ignored:
+      type: object
+      properties:
+        event:
+          type: string
+          const: ignored
+        received_event: {}
+      required:
+      - event
+      - received_event
+x-source:
+- app_base/modules/ride/presentation/websocket.py
+- app_base/modules/ride/presentation/router.py
+- app_base/modules/ride/application/services.py
+x-delivery:
+  replay: false
+  retention: N/A — aucun journal de messages WebSocket.
+  cross-instance-bus: false
+  global-order: UNKNOWN
+  heartbeat: UNKNOWN

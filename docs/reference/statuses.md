@@ -1,14 +1,3 @@
-# Statuts de reference
+# Statuts de référence
 
-Parcours nominal :
-
-```text
-requested -> matching -> matched -> driver_en_route -> arrived
--> in_progress -> completed
-```
-
-Etats complementaires : `waiting`, `no_driver_found`,
-`cancelled_by_passenger`, `cancelled_by_driver`, `cancelled_by_admin`.
-
-`arrival.arrived_at` non nul implique normalement `status=arrived` ou un etat
-ulterieur. Une contradiction doit etre traitee comme un defaut de coherence.
+La référence unique des états et transitions se trouve dans le [contrat API](../api/API_CONTRACT.md#states). Les matrices encore inconnues sont suivies dans les [questions ouvertes](../api/open-questions.md).

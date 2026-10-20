@@ -6,14 +6,14 @@ regles metier.
 
 ## Navigation
 
-- API : [`api/openapi.json`](api/openapi.json) et [`api/error-catalog.md`](api/error-catalog.md)
+- Contrat HTTP et WebSocket : [`api/API_CONTRACT.md`](api/API_CONTRACT.md)
+- Spécifications : [`api/openapi.yaml`](api/openapi.yaml) et [`api/asyncapi.yaml`](api/asyncapi.yaml)
+- Décisions et lacunes : [`api/open-questions.md`](api/open-questions.md)
 - Parcours : [`guides/passenger-ride-flow.md`](guides/passenger-ride-flow.md),
   [`guides/driver-ride-flow.md`](guides/driver-ride-flow.md),
   [`guides/driver-kyc-kyv.md`](guides/driver-kyc-kyv.md),
   [`guides/payments-wallet.md`](guides/payments-wallet.md),
   [`guides/sos-safety.md`](guides/sos-safety.md)
-- Temps reel : [`realtime/websocket-contract.md`](realtime/websocket-contract.md) et
-  [`realtime/reconnection-strategy.md`](realtime/reconnection-strategy.md)
 - Integrations : [`integrations/diddifiles.md`](integrations/diddifiles.md),
   [`integrations/diddipay.md`](integrations/diddipay.md),
   [`integrations/diddimap.md`](integrations/diddimap.md),
@@ -28,7 +28,7 @@ comportement courant.
 
 ## Regles de maintenance
 
-- Une modification HTTP exige de regenerer `api/openapi.json`.
+- Une modification HTTP ou WebSocket exige d'exécuter `tools/generate_api_contract.py` depuis la racine : les deux YAML et les blocs générés sont actualisés, les décisions humaines conservées.
 - Une modification fonctionnelle exige de mettre a jour le guide concerne et
   `changelog/<date>.md` dans la meme pull request.
 - Un nouveau document n'est cree que s'il ne rentre dans aucune rubrique

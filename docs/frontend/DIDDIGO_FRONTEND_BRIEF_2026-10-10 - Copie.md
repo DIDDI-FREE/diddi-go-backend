@@ -9,8 +9,8 @@
 
 | Besoin | Référence |
 |---|---|
-| Routes REST, schémas, réponses | [OpenAPI](../api/openapi.json) et [contrat HTTP](../api/HTTP_API_CONTRACT.md) |
-| Temps réel | [contrat WebSocket](../realtime/WEBSOCKET_CONTRACT.md) |
+| Routes REST, schémas, réponses | [OpenAPI](../api/openapi.yaml) et [contrat HTTP](../api/API_CONTRACT.md#inventaire-http) |
+| Temps réel | [contrat WebSocket](../api/API_CONTRACT.md#websocket) et [AsyncAPI](../api/asyncapi.yaml) |
 | Décisions de parcours MVP | [MVP figé](../product/DIDDIGO-MVP-FIGE.md) |
 | Variables et environnements | [référence de configuration](../configuration/CONFIGURATION_REFERENCE.md) |
 
