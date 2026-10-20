@@ -151,6 +151,10 @@ class RideRepository(Protocol):
         """Aggregate ride/rating stats for a DiddiGo driver score."""
         ...
 
+    async def driver_rating_summary(self, driver_id: UUID) -> dict:
+        """Aggregate valid passenger ratings used by the public driver profile."""
+        ...
+
     async def passenger_scoring_stats(self, passenger_user_id: UUID) -> dict:
         """Aggregate ride/rating stats for a DiddiGo passenger score."""
         ...

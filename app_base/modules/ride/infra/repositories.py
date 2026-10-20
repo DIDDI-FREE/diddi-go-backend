@@ -14,8 +14,9 @@ from uuid import UUID
 
 from geoalchemy2.shape import from_shape, to_shape
 from shapely.geometry import Point
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app_base.modules.ride.domain.entities import (
@@ -231,7 +232,15 @@ class SqlAlchemyRideRepository:
             created_at=rating.created_at or datetime.now(UTC),
         )
         self._session.add(row)
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            await self._session.rollback()
+            if "ride_ratings_ride_rater_unique" in str(exc.orig):
+                from app_base.core.errors import ApiError
+
+                raise ApiError(409, "RATING_ALREADY_SUBMITTED", "La notation a deja ete envoyee pour ce role.") from exc
+            raise
         return rating
 
     async def has_rated(self, ride_id: UUID, rater_role: str) -> bool:
@@ -425,9 +434,14 @@ class SqlAlchemyRideRepository:
         ]
 
     async def driver_scoring_stats(self, driver_id: UUID) -> dict:
+        eligible = or_(
+            orm.RideModel.status == RideStatus.COMPLETED.value,
+            orm.RideModel.status == RideStatus.CANCELLED_BY_DRIVER.value,
+        )
         ride_stats = await self._session.execute(
             select(
                 func.count(orm.RideModel.id),
+                func.coalesce(func.sum(case((eligible, 1), else_=0)), 0),
                 func.coalesce(
                     func.sum(case((orm.RideModel.status == RideStatus.COMPLETED.value, 1), else_=0)),
                     0,
@@ -451,12 +465,14 @@ class SqlAlchemyRideRepository:
             .where(
                 orm.RideModel.driver_id == driver_id,
                 orm.RideRatingModel.rater_role == "passenger",
+                orm.RideModel.status == RideStatus.COMPLETED.value,
             ),
         )
-        total, completed, cancelled, emergencies = ride_stats.one()
+        total, eligible_rides, completed, cancelled, emergencies = ride_stats.one()
         rating_count, rating_avg = rating_stats.one()
         return {
             "total_rides": int(total or 0),
+            "eligible_rides": int(eligible_rides or 0),
             "completed_rides": int(completed or 0),
             "cancelled_rides": int(cancelled or 0),
             "emergency_reports": int(emergencies or 0),
@@ -464,10 +480,34 @@ class SqlAlchemyRideRepository:
             "rating_avg": Decimal(str(rating_avg)) if rating_avg is not None else None,
         }
 
+    async def driver_rating_summary(self, driver_id: UUID) -> dict:
+        result = await self._session.execute(
+            select(
+                func.count(orm.RideRatingModel.id),
+                func.avg(orm.RideRatingModel.rating),
+            )
+            .join(orm.RideModel, orm.RideRatingModel.ride_id == orm.RideModel.id)
+            .where(
+                orm.RideModel.driver_id == driver_id,
+                orm.RideModel.status == RideStatus.COMPLETED.value,
+                orm.RideRatingModel.rater_role == "passenger",
+            ),
+        )
+        rating_count, rating_avg = result.one()
+        return {
+            "rating_count": int(rating_count or 0),
+            "rating_avg": Decimal(str(rating_avg)) if rating_avg is not None else None,
+        }
+
     async def passenger_scoring_stats(self, passenger_user_id: UUID) -> dict:
+        eligible = or_(
+            orm.RideModel.status == RideStatus.COMPLETED.value,
+            orm.RideModel.status == RideStatus.CANCELLED_BY_PASSENGER.value,
+        )
         ride_stats = await self._session.execute(
             select(
                 func.count(orm.RideModel.id),
+                func.coalesce(func.sum(case((eligible, 1), else_=0)), 0),
                 func.coalesce(
                     func.sum(case((orm.RideModel.status == RideStatus.COMPLETED.value, 1), else_=0)),
                     0,
@@ -491,12 +531,14 @@ class SqlAlchemyRideRepository:
             .where(
                 orm.RideModel.passenger_user_id == passenger_user_id,
                 orm.RideRatingModel.rater_role == "driver",
+                orm.RideModel.status == RideStatus.COMPLETED.value,
             ),
         )
-        total, completed, cancelled, emergencies = ride_stats.one()
+        total, eligible_rides, completed, cancelled, emergencies = ride_stats.one()
         rating_count, rating_avg = rating_stats.one()
         return {
             "total_rides": int(total or 0),
+            "eligible_rides": int(eligible_rides or 0),
             "completed_rides": int(completed or 0),
             "cancelled_rides": int(cancelled or 0),
             "emergency_reports": int(emergencies or 0),

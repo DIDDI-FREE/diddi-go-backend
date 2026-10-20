@@ -65,8 +65,68 @@ class RideCancelRequest(BaseModel):
 
 
 class RideRatingRequest(BaseModel):
+    # Keep range validation in the application service so callers receive the
+    # documented business error envelope instead of a generic schema error.
     rating: int
     comment: str | None = None
+
+
+class PersonalScoreMetricsResponse(BaseModel):
+    total_rides: int
+    eligible_rides: int
+    completed_rides: int
+    cancelled_rides: int
+    emergency_reports: int
+    rating_count: int
+    rating_avg: float | None = None
+    completion_rate: float
+    cancellation_rate: float
+
+
+class PersonalScoreResponse(BaseModel):
+    subject_type: Literal["passenger", "driver"]
+    subject_id: UUID
+    score_value: float
+    score_level: Literal["new", "excellent", "good", "fair", "risk"]
+    score_status: Literal["insufficient_data", "stable"]
+    reason_codes: list[str]
+    last_calculated_at: datetime
+    sample_size: int
+    metrics: PersonalScoreMetricsResponse
+
+
+class MyScoresResponse(BaseModel):
+    user_id: UUID
+    service: Literal["diddigo"]
+    passenger_score: PersonalScoreResponse
+    driver_score: PersonalScoreResponse | None = None
+
+
+class RideScoreMetricsResponse(BaseModel):
+    ride_status: str
+    rating_count: int
+    rating_avg: float | None = None
+    emergency_status: str | None = None
+    cancellation_reason: str | None = None
+
+
+class RideScoreResponse(BaseModel):
+    ride_id: UUID
+    subject_type: Literal["trip"]
+    score_value: float
+    score_level: Literal["new", "excellent", "good", "fair", "risk"]
+    score_status: Literal["provisional", "stable"]
+    reason_codes: list[str]
+    last_calculated_at: datetime
+    sample_size: int
+    metrics: RideScoreMetricsResponse
+
+
+class RideRatingResponse(BaseModel):
+    id: UUID
+    ride_id: UUID
+    rating: int
+    rater_role: Literal["passenger", "driver"]
 
 
 class RideStopCreateRequest(BaseModel):

@@ -58,6 +58,8 @@ from app_base.modules.ride.presentation.schemas import (
     RideLocationSamplesRequest,
     RideLocationSamplesResponse,
     RideRatingRequest,
+    RideRatingResponse,
+    RideScoreResponse,
     RideStartRequest,
     RideStatusUpdateRequest,
     RideStopCreateRequest,
@@ -272,7 +274,7 @@ async def get_shared_ride(token: str, service: RideService = Depends(ride_servic
     return await service.get_shared_ride(token)
 
 
-@router.get("/{ride_id}/score")
+@router.get("/{ride_id}/score", response_model=RideScoreResponse)
 async def get_ride_score(
     ride_id: UUID,
     service: ScoringService = Depends(scoring_service),
@@ -566,7 +568,7 @@ async def cancel_ride(
     return result
 
 
-@router.post("/{ride_id}/rating", status_code=201)
+@router.post("/{ride_id}/rating", response_model=RideRatingResponse, status_code=201)
 async def rate_ride(
     ride_id: UUID,
     payload: RideRatingRequest,

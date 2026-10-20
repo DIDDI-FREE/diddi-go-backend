@@ -55,29 +55,32 @@ class ScoringService:
 
 def _score_payload(subject_type: str, stats: dict, *, subject_id: UUID) -> dict:
     total = int(stats.get("total_rides") or 0)
+    eligible = int(stats.get("eligible_rides") or 0)
     completed = int(stats.get("completed_rides") or 0)
     cancelled = int(stats.get("cancelled_rides") or 0)
     emergencies = int(stats.get("emergency_reports") or 0)
     rating_count = int(stats.get("rating_count") or 0)
     rating_avg = stats.get("rating_avg")
     rating_value = Decimal(str(rating_avg)) if rating_avg is not None else Decimal("5.00")
-    sample_size = total + rating_count
+    # A sample is a number of distinct eligible rides, never rides plus the
+    # ratings attached to those same rides. The neutral baseline is retained
+    # for backwards compatibility but remains explicitly insufficient data.
+    sample_size = eligible
 
-    completion_rate = Decimal(completed) / Decimal(total) if total else Decimal("0")
-    cancellation_rate = Decimal(cancelled) / Decimal(total) if total else Decimal("0")
+    completion_rate = Decimal(completed) / Decimal(eligible) if eligible else Decimal("0")
+    cancellation_rate = Decimal(cancelled) / Decimal(eligible) if eligible else Decimal("0")
     score = (
         rating_value * Decimal("0.70")
         + completion_rate * Decimal("5.00") * Decimal("0.20")
         + (Decimal("1.00") - cancellation_rate) * Decimal("5.00") * Decimal("0.10")
-        - Decimal(min(emergencies, 3)) * Decimal("0.15")
     )
     score = max(Decimal("1.00"), min(Decimal("5.00"), score)).quantize(Decimal("0.01"))
 
     reason_codes = _reason_codes(
         total=total,
+        eligible=eligible,
         completed=completed,
         cancelled=cancelled,
-        emergencies=emergencies,
         rating_avg=rating_value if rating_count else None,
         sample_size=sample_size,
     )
@@ -93,11 +96,14 @@ def _score_payload(subject_type: str, stats: dict, *, subject_id: UUID) -> dict:
         "sample_size": sample_size,
         "metrics": {
             "total_rides": total,
+            "eligible_rides": eligible,
             "completed_rides": completed,
             "cancelled_rides": cancelled,
             "emergency_reports": emergencies,
             "rating_count": rating_count,
             "rating_avg": float(rating_value) if rating_count else None,
+            "completion_rate": float(completion_rate),
+            "cancellation_rate": float(cancellation_rate),
         },
     }
 
@@ -109,8 +115,6 @@ def _trip_score_payload(ride: Ride, rating_summary: dict) -> dict:
     score = _base_trip_score(ride)
     if rating_value is not None:
         score = (score * Decimal("0.60") + rating_value * Decimal("0.40")).quantize(Decimal("0.01"))
-    if ride.emergency_status:
-        score -= Decimal("0.75")
     score = max(Decimal("1.00"), min(Decimal("5.00"), score)).quantize(Decimal("0.01"))
     reason_codes = _trip_reason_codes(ride, rating_count=rating_count, rating_avg=rating_value)
 
@@ -158,9 +162,9 @@ def _score_level(score: Decimal, *, sample_size: int) -> str:
 def _reason_codes(
     *,
     total: int,
+    eligible: int,
     completed: int,
     cancelled: int,
-    emergencies: int,
     rating_avg: Decimal | None,
     sample_size: int,
 ) -> list[str]:
@@ -174,9 +178,9 @@ def _reason_codes(
             reasons.append("good_ratings")
         elif rating_avg < Decimal("3.50"):
             reasons.append("low_ratings")
-    if total:
-        cancellation_rate = Decimal(cancelled) / Decimal(total)
-        completion_rate = Decimal(completed) / Decimal(total)
+    if eligible:
+        cancellation_rate = Decimal(cancelled) / Decimal(eligible)
+        completion_rate = Decimal(completed) / Decimal(eligible)
         if cancellation_rate > Decimal("0.20"):
             reasons.append("high_cancellation")
         elif cancellation_rate <= Decimal("0.05"):
@@ -185,8 +189,6 @@ def _reason_codes(
             reasons.append("reliable_completion")
         elif completion_rate < Decimal("0.50"):
             reasons.append("low_completion")
-    if emergencies:
-        reasons.append("emergency_reports")
     return reasons
 
 
@@ -198,8 +200,6 @@ def _trip_reason_codes(ride: Ride, *, rating_count: int, rating_avg: Decimal | N
         reasons.append("good_ratings")
     elif rating_avg is not None and rating_avg < Decimal("3.50"):
         reasons.append("low_ratings")
-    if ride.emergency_status:
-        reasons.append("emergency_reported")
     if ride.cancellation_reason:
         reasons.append(f"cancel_reason_{ride.cancellation_reason}")
     return reasons

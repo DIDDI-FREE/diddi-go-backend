@@ -924,6 +924,8 @@ class RideService:
         rater_role = await self._rating_role_for_actor(ride, actor_user_id, actor_role)
         if rater_role is None:
             raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Cette course ne vous appartient pas.")
+        if ride.status is not RideStatus.COMPLETED:
+            raise ApiError(409, "RIDE_NOT_COMPLETED", "La notation est disponible apres la fin de la course.")
         if await self.ride_repo.has_rated(ride_id, rater_role):
             raise ApiError(409, "RATING_ALREADY_SUBMITTED", "La notation a deja ete envoyee pour ce role.")
         if not 1 <= rating <= 5:
@@ -936,6 +938,13 @@ class RideService:
             comment=comment,
         )
         await self.ride_repo.save_rating(rating_entity)
+        if rater_role == "passenger" and ride.driver_id is not None and self.driver_repo is not None:
+            profile = await self.driver_repo.find_by_id(ride.driver_id)
+            if profile is not None:
+                summary = await self.ride_repo.driver_rating_summary(ride.driver_id)
+                profile.rating_count = int(summary["rating_count"])
+                profile.rating_avg = summary["rating_avg"]
+                await self.driver_repo.save(profile)
         return {"id": str(rating_entity.id), "ride_id": str(ride_id), "rating": rating, "rater_role": rater_role}
 
     async def add_location_samples(

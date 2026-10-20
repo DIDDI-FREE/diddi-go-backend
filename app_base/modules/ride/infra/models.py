@@ -90,8 +90,8 @@ class DriverProfileModel(Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending_verification",
     )  # pending_verification | active | suspended | offline
-    rating_avg: Mapped[Decimal] = mapped_column(
-        Numeric(3, 2), nullable=False, default=Decimal("5.00"),
+    rating_avg: Mapped[Decimal | None] = mapped_column(
+        Numeric(3, 2), nullable=True, default=None,
     )
     rating_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(

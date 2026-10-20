@@ -354,6 +354,43 @@ async def test_rating_out_of_range_is_rejected(client, passenger, driver) -> Non
     assert r.json()["error"]["code"] == "RATING_OUT_OF_RANGE"
 
 
+async def test_rating_requires_a_completed_ride(client, passenger, driver) -> None:
+    ride_id = await matched_ride(client, passenger, driver)
+
+    response = await client.post(f"/v1/rides/{ride_id}/rating", json={"rating": 5}, headers=passenger)
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "RIDE_NOT_COMPLETED"
+
+
+async def test_passenger_rating_updates_public_driver_rating(client, passenger, driver) -> None:
+    ride_id, _ = await complete_ride(client, passenger, driver)
+
+    response = await client.post(f"/v1/rides/{ride_id}/rating", json={"rating": 4}, headers=passenger)
+    assert response.status_code == 201
+
+    detail = await client.get(f"/v1/rides/{ride_id}", headers=passenger)
+    assert detail.status_code == 200
+    assert detail.json()["driver"]["rating_avg"] == 4.0
+
+
+async def test_scoring_routes_publish_typed_openapi_responses(client) -> None:
+    specification = (await client.get("/openapi.json")).json()
+
+    assert (
+        specification["paths"]["/v1/me/scores"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+        == "#/components/schemas/MyScoresResponse"
+    )
+    assert (
+        specification["paths"]["/v1/rides/{ride_id}/score"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+        == "#/components/schemas/RideScoreResponse"
+    )
+    assert (
+        specification["paths"]["/v1/rides/{ride_id}/rating"]["post"]["responses"]["201"]["content"]["application/json"]["schema"]["$ref"]
+        == "#/components/schemas/RideRatingResponse"
+    )
+
+
 # --- safety + tracking -----------------------------------------------------
 
 async def test_driver_location_samples_power_public_share_link(client, passenger, driver) -> None:

@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from app_base.core.errors import ApiError
-from app_base.modules.ride.application.scoring_service import ScoringService
+from app_base.modules.ride.application.scoring_service import ScoringService, _score_payload, _trip_score_payload
 from app_base.modules.ride.domain.entities import DriverProfile, DriverStatus, Ride, RideStatus
 
 pytestmark = pytest.mark.unit
@@ -30,6 +30,7 @@ class FakeRideRepo:
             return {}
         return {
             "total_rides": 8,
+            "eligible_rides": 8,
             "completed_rides": 7,
             "cancelled_rides": 1,
             "emergency_reports": 0,
@@ -42,6 +43,7 @@ class FakeRideRepo:
             return {}
         return {
             "total_rides": 12,
+            "eligible_rides": 12,
             "completed_rides": 11,
             "cancelled_rides": 1,
             "emergency_reports": 0,
@@ -124,3 +126,59 @@ async def test_completed_trip_score_uses_ratings_and_status() -> None:
     assert result["metrics"]["ride_status"] == "completed"
     assert result["metrics"]["rating_avg"] == 4.5
     assert "status_completed" in result["reason_codes"]
+
+
+def test_emergency_is_descriptive_but_never_changes_person_or_trip_score() -> None:
+    baseline = {
+        "total_rides": 4,
+        "eligible_rides": 4,
+        "completed_rides": 4,
+        "cancelled_rides": 0,
+        "rating_count": 2,
+        "rating_avg": "4.50",
+    }
+    with_emergency = {**baseline, "emergency_reports": 3}
+
+    assert _score_payload("passenger", baseline, subject_id=PASSENGER_ID)["score_value"] == _score_payload(
+        "passenger", with_emergency, subject_id=PASSENGER_ID,
+    )["score_value"]
+    assert "emergency_reports" not in _score_payload(
+        "passenger", with_emergency, subject_id=PASSENGER_ID,
+    )["reason_codes"]
+
+    ride = completed_ride()
+    emergency_ride = completed_ride()
+    emergency_ride.emergency_status = "notified"
+    summary = {"rating_count": 1, "rating_avg": "4.00"}
+    assert _trip_score_payload(ride, summary)["score_value"] == _trip_score_payload(
+        emergency_ride, summary,
+    )["score_value"]
+    assert "emergency_reported" not in _trip_score_payload(emergency_ride, summary)["reason_codes"]
+
+
+def test_new_user_keeps_neutral_score_but_is_explicitly_insufficient_data() -> None:
+    result = _score_payload("passenger", {}, subject_id=PASSENGER_ID)
+
+    assert result["score_value"] == 4.0
+    assert result["score_status"] == "insufficient_data"
+    assert result["score_level"] == "new"
+    assert result["sample_size"] == 0
+    assert result["metrics"]["rating_avg"] is None
+
+
+def test_sample_size_counts_only_eligible_rides_not_ratings() -> None:
+    result = _score_payload(
+        "passenger",
+        {
+            "total_rides": 9,
+            "eligible_rides": 2,
+            "completed_rides": 2,
+            "cancelled_rides": 0,
+            "rating_count": 9,
+            "rating_avg": "5.00",
+        },
+        subject_id=PASSENGER_ID,
+    )
+
+    assert result["sample_size"] == 2
+    assert result["score_status"] == "insufficient_data"

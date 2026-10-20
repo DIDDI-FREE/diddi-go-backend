@@ -66,7 +66,17 @@ class FakeScoringService:
                 "reason_codes": ["insufficient_data"],
                 "last_calculated_at": "2026-09-12T00:00:00Z",
                 "sample_size": 1,
-                "metrics": {},
+                "metrics": {
+                    "total_rides": 1,
+                    "eligible_rides": 1,
+                    "completed_rides": 1,
+                    "cancelled_rides": 0,
+                    "emergency_reports": 0,
+                    "rating_count": 0,
+                    "rating_avg": None,
+                    "completion_rate": 1.0,
+                    "cancellation_rate": 0.0,
+                },
             },
             "driver_score": None,
         }

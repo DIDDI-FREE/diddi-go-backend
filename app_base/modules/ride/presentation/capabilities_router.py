@@ -8,7 +8,7 @@ from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.application.emergency_contact_service import EmergencyContactService
 from app_base.modules.ride.application.scoring_service import ScoringService
-from app_base.modules.ride.presentation.schemas import EmergencyContactUpsertRequest
+from app_base.modules.ride.presentation.schemas import EmergencyContactUpsertRequest, MyScoresResponse
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -25,7 +25,7 @@ async def get_my_capabilities(
     )
 
 
-@router.get("/scores")
+@router.get("/scores", response_model=MyScoresResponse)
 async def get_my_scores(
     service: ScoringService = Depends(scoring_service),
     current_user: UserModel = Depends(get_current_active_user),

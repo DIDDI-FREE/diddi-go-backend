@@ -195,7 +195,9 @@ async def test_accepting_assigns_driver_and_vehicle_to_the_ride(
     detail = (await client.get(f"/v1/rides/{ride_id}", headers=passenger)).json()
     assert detail["status"] == "matched"
     assert detail["driver"] is not None
-    assert detail["driver"]["rating_avg"] == 5.0
+    # A driver without completed passenger ratings is not presented as already
+    # evaluated. The neutral score remains internal to the scoring endpoint.
+    assert detail["driver"]["rating_avg"] is None
     assert detail["driver"]["vehicle"]["plate_number"]
     assert detail["driver"]["phone"], "passenger needs the driver's number to meet them"
 

@@ -53,6 +53,7 @@ nav:
       - Paiements et wallet: guides/payments-wallet.md
       - Dette passager: guides/passenger-debts.md
       - SOS et sécurité: guides/sos-safety.md
+      - Scoring: guides/scoring.md
   - Frontend:
       - Acces aux contrats: frontend/DIDDIGO_FRONTEND_CONTRACT_ACCESS_BRIEF_2026-10-19.md
       - KYC et KYV: frontend/DIDDIGO_FRONTEND_KYC_KYV_BRIEF_2026-10-19.md
@@ -80,6 +81,7 @@ nav:
       - 12 octobre 2026: changelog/2026-10-12.md
       - 20 octobre 2026: changelog/2026-10-20.md
       - 20 octobre 2026 - DiddiSupport: changelog/2026-10-20-support-context.md
+      - 20 octobre 2026 - Scoring: changelog/2026-10-20-scoring-fairness.md
 
 exclude_docs: |
   archive/
