@@ -10,8 +10,9 @@
 - Les notes historiques rattachees a une course non terminee restent en base
   mais ne comptent plus dans les moyennes.
 - La contrainte PostgreSQL protege aussi les doublons de note concurrents.
-- Un nouveau chauffeur affiche `rating_avg: null`, au lieu d'une fausse note
-  `5.00`.
+- Un nouveau chauffeur affiche la base publique `rating_avg: 5.00` avec
+  `rating_count: 0` et `rating_status: new`, sans la presenter comme une
+  moyenne recue.
 - Les reponses scoring et notation sont maintenant typees dans OpenAPI.
 
 ## Compatibilite

@@ -814,8 +814,9 @@ def _profile_payload(profile: DriverProfile) -> dict:
         "user_id": str(profile.user_id),
         "license_number": profile.license_number,
         "status": profile.status.value,
-        "rating_avg": float(profile.rating_avg) if profile.rating_avg is not None else None,
+        "rating_avg": float(profile.rating_avg),
         "rating_count": profile.rating_count,
+        "rating_status": "new" if profile.rating_count == 0 else "rated",
         "profile_photo_file_id": str(profile.profile_photo_file_id) if profile.profile_photo_file_id else None,
         "kyc": {
             "status": profile.kyc_status.value,

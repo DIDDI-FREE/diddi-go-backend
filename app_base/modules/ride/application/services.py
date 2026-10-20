@@ -300,7 +300,9 @@ class RideService:
         return {
             "id": str(profile.id),
             "full_name": full_name,
-            "rating_avg": float(profile.rating_avg) if profile.rating_avg is not None else None,
+            "rating_avg": float(profile.rating_avg),
+            "rating_count": profile.rating_count,
+            "rating_status": "new" if profile.rating_count == 0 else "rated",
             "phone": phone,
             "photo_url": photo_url,
             "vehicle": {

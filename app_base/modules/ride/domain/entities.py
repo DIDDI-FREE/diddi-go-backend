@@ -305,9 +305,10 @@ class DriverProfile:
     kyc_status: KycStatus = KycStatus.PENDING_VERIFICATION
     kyc_document_reviews: dict[str, dict] = field(default_factory=dict)
     kyc_review_history: list[dict] = field(default_factory=list)
-    # None means no completed ride has been rated yet. A synthetic 5.00 would
-    # falsely present a new driver as already evaluated.
-    rating_avg: Decimal | None = None
+    # Public marketplaces conventionally start a new driver's displayed rating
+    # at 5.00. `rating_count` and `rating_status` keep that baseline distinct
+    # from an earned average.
+    rating_avg: Decimal = Decimal("5.00")
     rating_count: int = 0
     license_verified_at: datetime | None = None
     legal_name: str | None = None

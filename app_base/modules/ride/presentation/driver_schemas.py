@@ -278,8 +278,9 @@ class DriverProfileResponse(BaseModel):
     user_id: UUID
     license_number: str
     status: str
-    rating_avg: float | None = None
+    rating_avg: float
     rating_count: int
+    rating_status: Literal["new", "rated"]
     profile_photo_file_id: UUID | None = None
     kyc: DriverKycResponse
     vehicle: VehicleResponse | None = None

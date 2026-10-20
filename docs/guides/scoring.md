@@ -117,9 +117,13 @@ et ne produisent aucun `reason_code` negatif.
 
 ## Profil public chauffeur
 
-`driver.rating_avg` est la moyenne des notes passager valides de courses
-terminees. Il vaut `null` tant que le chauffeur n'a pas recu de note valide ;
-un nouveau chauffeur n'est donc plus presente comme note `5.00` par defaut.
+`driver.rating_avg` vaut `5.00` pour un nouveau chauffeur, comme base publique
+de demarrage. L'API expose en meme temps `rating_count: 0` et
+`rating_status: "new"` : le frontend doit afficher « Nouveau chauffeur » et
+ne pas presenter cette valeur comme une moyenne deja recue.
+
+Des la premiere note passager valide sur une course terminee,
+`rating_status` devient `rated` et `rating_avg` devient la moyenne recue.
 
 ## Limites
 
