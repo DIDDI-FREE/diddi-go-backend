@@ -1,7 +1,7 @@
 # DiddiGo - Brief frontend integre
 
-Date : 2026-10-20  
-Version : 2026-10-20.v1  
+Date : 2026-10-20
+Version : 2026-10-20.v1
 Public : applications passager, chauffeur et DiddiFree Pro
 
 ## Regle de lecture
