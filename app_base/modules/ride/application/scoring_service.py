@@ -44,6 +44,14 @@ class ScoringService:
         rating_summary = await self.ride_repo.ride_rating_summary(ride_id)
         return _trip_score_payload(ride, rating_summary)
 
+    async def get_ride_score_for_internal(self, ride_id: UUID) -> dict:
+        """Return a ride quality score to a separately authorized S2S consumer."""
+        ride = await self.ride_repo.find_by_id(ride_id)
+        if ride is None:
+            raise ApiError(404, ErrorCode.RIDE_NOT_FOUND, "Aucune course trouvee avec cet identifiant.")
+        rating_summary = await self.ride_repo.ride_rating_summary(ride_id)
+        return _trip_score_payload(ride, rating_summary)
+
     async def _can_view_ride_score(self, ride: Ride, *, actor_user_id: UUID, actor_role: str) -> bool:
         if actor_role == "admin":
             return True

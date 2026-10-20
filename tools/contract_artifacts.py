@@ -432,6 +432,22 @@ def http_contract(raw: dict, sources: dict | None = None) -> tuple[dict, list[st
                 contract["request"] = "UNKNOWN — corps non typé ; HMAC corps brut, header event ID = payload.id."
                 contract["retry"] = "Déduplication par event ID : 200 sans corps ; traitement normal : 204 sans corps."
                 responses["200"] = {"description": "Événement déjà traité ; réponse sans corps."}
+            if path in {"/internal/v1/scores/users/{user_id}", "/internal/v1/scores/rides/{ride_id}"}:
+                contract["purpose"] = "Projeter les scores DiddiGo normalisés selon diddi.score.v1."
+                contract["roles"] = (
+                    "DiddiFree Pro S2S uniquement : aud=diddigo, sub=service:diddifreepro, "
+                    "X-Client-ID configuré et scope diddigo:scores:read."
+                )
+                contract["state-before-after"] = "Lecture seule : aucun état métier, score ou matching n'est modifié."
+                contract["request"] = "UUID de sujet dans le chemin ; Bearer S2S, X-Client-ID et X-Request-ID."
+                contract["response"] = "Schémas ci-dessus conformes à diddi.score.v1."
+                contract["errors"] = (
+                    "401 token absent/invalide ; 403 client, scope ou subject ; "
+                    "404 RIDE_NOT_FOUND pour une course inconnue."
+                )
+                contract["retry"] = "Lecture sans mutation ; rejouer avec le même request_id est sûr."
+                contract["side-effects"] = "Aucun ; PriorityScore et matching ne sont ni lus ni modifiés."
+                contract["dependency-failure"] = "503 SERVICE_JWKS_UNAVAILABLE ou DATABASE_UNAVAILABLE."
             if "422" in responses:
                 responses["422"] = deepcopy(error_response)
             operation["x-contract"] = contract

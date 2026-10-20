@@ -95,6 +95,8 @@ Les champs détaillés sont dans x-contract de openapi.yaml. Une correction du c
 | `GET /internal/pilotage/finance-summary` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `GET /internal/pilotage/breakdown` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `GET /internal/pilotage/health-summary` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
+| `GET /internal/v1/scores/users/{user_id}` | Aucun UNKNOWN détecté |
+| `GET /internal/v1/scores/rides/{ride_id}` | Aucun UNKNOWN détecté |
 | `GET /internal/v1/comms/tasks/{task_type}/{task_id}` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `GET /internal/v1/support/ride/{ride_id}/context` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `POST /internal/v1/drivers/provision` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |

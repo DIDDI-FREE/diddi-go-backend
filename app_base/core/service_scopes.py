@@ -19,6 +19,7 @@ OPERATIONS_READ = "diddigo:operations:read"
 RIDE_SUMMARY_READ = "diddigo:ride-summary:read"
 COMMS_TASK_READ = "diddigo:comms-task:read"
 SUPPORT_CONTEXT_READ = "diddigo:support-context:read"
+SCORES_READ = "diddigo:scores:read"
 DISPATCH_READ = "diddigo:dispatch:read"
 DISPATCH_WRITE = "diddigo:dispatch:write"
 
@@ -39,6 +40,7 @@ KNOWN_SCOPES = frozenset(
         RIDE_SUMMARY_READ,
         COMMS_TASK_READ,
         SUPPORT_CONTEXT_READ,
+        SCORES_READ,
         DISPATCH_READ,
         DISPATCH_WRITE,
     }

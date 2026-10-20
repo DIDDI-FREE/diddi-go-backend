@@ -132,3 +132,10 @@ Des la premiere note passager valide sur une course terminee,
 - Les exemptions d'annulation motivees par securite devront etre traitees par
   une future decision Support structuree.
 - Le moteur de matching conserve son propre mecanisme de priorite chauffeur.
+
+## Projection transverse
+
+Les applications DiddiGo utilisent les routes publiques ci-dessus. DiddiFree
+Pro utilise l'adaptateur S2S `diddi.score.v1`, documente dans
+[l'integration DiddiFree Pro](../integrations/diddifree-score.md). Cet
+adaptateur ne change ni les formules, ni les seuils, ni les routes publiques.

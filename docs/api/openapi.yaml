@@ -2678,6 +2678,132 @@ paths:
         retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
         dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /internal/v1/scores/users/{user_id}:
+    get:
+      tags:
+      - internal-scores
+      summary: Get User Scores Contract
+      operationId: get_user_scores_contract_internal_v1_scores_users__user_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: User Id
+      - name: X-Client-ID
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Client-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiddiScoreCollectionResponse'
+        '422':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+              examples:
+                validation:
+                  summary: Exemple synthétique de validation locale
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La requête est invalide.
+                      details:
+                        violations:
+                        - loc:
+                          - query
+                          - q
+                          msg: Field required
+                          type: missing
+      x-contract:
+        source: app.openapi() ; opération get_user_scores_contract_internal_v1_scores_users__user_id__get
+        purpose: Projeter les scores DiddiGo normalisés selon diddi.score.v1.
+        roles: 'DiddiFree Pro S2S uniquement : aud=diddigo, sub=service:diddifreepro, X-Client-ID configuré et scope
+          diddigo:scores:read.'
+        state-before-after: 'Lecture seule : aucun état métier, score ou matching n''est modifié.'
+        request: UUID de sujet dans le chemin ; Bearer S2S, X-Client-ID et X-Request-ID.
+        response: Schémas ci-dessus conformes à diddi.score.v1.
+        errors: 401 token absent/invalide ; 403 client, scope ou subject ; 404 RIDE_NOT_FOUND pour une course inconnue.
+        retry: Lecture sans mutation ; rejouer avec le même request_id est sûr.
+        side-effects: Aucun ; PriorityScore et matching ne sont ni lus ni modifiés.
+        dependency-failure: 503 SERVICE_JWKS_UNAVAILABLE ou DATABASE_UNAVAILABLE.
+  /internal/v1/scores/rides/{ride_id}:
+    get:
+      tags:
+      - internal-scores
+      summary: Get Ride Score Contract
+      operationId: get_ride_score_contract_internal_v1_scores_rides__ride_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: ride_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Ride Id
+      - name: X-Client-ID
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Client-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiddiScoreResponse'
+        '422':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+              examples:
+                validation:
+                  summary: Exemple synthétique de validation locale
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La requête est invalide.
+                      details:
+                        violations:
+                        - loc:
+                          - query
+                          - q
+                          msg: Field required
+                          type: missing
+      x-contract:
+        source: app.openapi() ; opération get_ride_score_contract_internal_v1_scores_rides__ride_id__get
+        purpose: Projeter les scores DiddiGo normalisés selon diddi.score.v1.
+        roles: 'DiddiFree Pro S2S uniquement : aud=diddigo, sub=service:diddifreepro, X-Client-ID configuré et scope
+          diddigo:scores:read.'
+        state-before-after: 'Lecture seule : aucun état métier, score ou matching n''est modifié.'
+        request: UUID de sujet dans le chemin ; Bearer S2S, X-Client-ID et X-Request-ID.
+        response: Schémas ci-dessus conformes à diddi.score.v1.
+        errors: 401 token absent/invalide ; 403 client, scope ou subject ; 404 RIDE_NOT_FOUND pour une course inconnue.
+        retry: Lecture sans mutation ; rejouer avec le même request_id est sûr.
+        side-effects: Aucun ; PriorityScore et matching ne sont ni lus ni modifiés.
+        dependency-failure: 503 SERVICE_JWKS_UNAVAILABLE ou DATABASE_UNAVAILABLE.
   /internal/v1/comms/tasks/{task_type}/{task_id}:
     get:
       tags:
@@ -9758,7 +9884,7 @@ paths:
                 type: object
                 title: Response Health Health Get
       x-contract:
-        source: app_base/main.py:94
+        source: app_base/main.py:96
         purpose: Health
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
@@ -9779,7 +9905,7 @@ paths:
             application/json:
               schema: {}
       x-contract:
-        source: app_base/main.py:99
+        source: app_base/main.py:101
         purpose: Readiness
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
@@ -9914,6 +10040,131 @@ components:
       required:
       - push_token
       title: DeviceUnregisterRequest
+    DiddiScoreCollectionResponse:
+      properties:
+        scores:
+          items:
+            $ref: '#/components/schemas/DiddiScoreResponse'
+          type: array
+          title: Scores
+      additionalProperties: false
+      type: object
+      required:
+      - scores
+      title: DiddiScoreCollectionResponse
+    DiddiScoreResponse:
+      properties:
+        contract_version:
+          type: string
+          const: diddi.score.v1
+          title: Contract Version
+        service:
+          type: string
+          const: diddigo
+          title: Service
+        kind:
+          type: string
+          enum:
+          - reliability
+          - risk
+          - quality
+          title: Kind
+        subject_type:
+          type: string
+          title: Subject Type
+        subject_id:
+          type: string
+          title: Subject Id
+        user_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: User Id
+        score:
+          $ref: '#/components/schemas/DiddiScoreValueResponse'
+      additionalProperties: false
+      type: object
+      required:
+      - contract_version
+      - service
+      - kind
+      - subject_type
+      - subject_id
+      - user_id
+      - score
+      title: DiddiScoreResponse
+    DiddiScoreValueResponse:
+      properties:
+        value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Value
+        scale:
+          type: string
+          enum:
+          - five
+          - hundred
+          title: Scale
+        normalized_value:
+          anyOf:
+          - type: number
+            maximum: 100.0
+            minimum: 0.0
+          - type: 'null'
+          title: Normalized Value
+        local_level:
+          type: string
+          title: Local Level
+        normalized_level:
+          type: string
+          enum:
+          - excellent
+          - good
+          - watch
+          - risk
+          - unknown
+          title: Normalized Level
+        data_status:
+          type: string
+          enum:
+          - stable
+          - provisional
+          - insufficient_data
+          - stale
+          - disabled
+          - blocked
+          title: Data Status
+        sample_size:
+          type: integer
+          minimum: 0.0
+          title: Sample Size
+        reason_codes:
+          items:
+            type: string
+          type: array
+          title: Reason Codes
+        calculation_version:
+          type: string
+          title: Calculation Version
+        calculated_at:
+          type: string
+          format: date-time
+          title: Calculated At
+      additionalProperties: false
+      type: object
+      required:
+      - value
+      - scale
+      - local_level
+      - normalized_level
+      - data_status
+      - sample_size
+      - reason_codes
+      - calculation_version
+      - calculated_at
+      title: DiddiScoreValueResponse
     DispatchConfigBody:
       properties:
         search_radius_km:

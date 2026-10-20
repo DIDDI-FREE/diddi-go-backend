@@ -51,3 +51,20 @@ def test_generation_preserves_manual_content_and_four_file_layout(tmp_path, monk
     assert yaml.safe_load(first["asyncapi.yaml"])["asyncapi"] == "3.0.0"
     artifacts.write_artifacts(raw)
     assert first == {path.name: path.read_bytes() for path in directory.iterdir()}
+
+
+def test_score_contract_routes_have_no_generated_unknowns() -> None:
+    raw = {
+        "openapi": "3.1.0",
+        "info": {"title": "Test", "version": "1"},
+        "paths": {
+            "/internal/v1/scores/users/{user_id}": {
+                "get": {"operationId": "get_user_scores", "responses": {"200": {"description": "OK"}}}
+            }
+        },
+    }
+
+    spec, gaps = artifacts.http_contract(raw)
+
+    assert "UNKNOWN" not in str(spec["paths"]["/internal/v1/scores/users/{user_id}"]["get"]["x-contract"])
+    assert gaps == ["| `GET /internal/v1/scores/users/{user_id}` | Aucun UNKNOWN détecté |"]

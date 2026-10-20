@@ -113,6 +113,14 @@ Si l'e-mail DiddiFreeID manque, le parcours paiement peut utiliser `<telephone>@
 
 Les JWT des dépendances S2S contrôlent notamment `iss`, `sub`, `aud`, `client_id`, `scope`, `status=active` et la cohérence de `X-Client-ID`. Les appels internes ne sont pas destinés aux applications publiques ; les secrets client ne leur sont jamais transmis. Le webhook HMAC reste l'exception décrite dans la matrice HTTP.
 
+### Scores intermodules
+
+`GET /internal/v1/scores/users/{user_id}` et
+`GET /internal/v1/scores/rides/{ride_id}` sont reserves a DiddiFree Pro. Ils
+retournent `diddi.score.v1`, exigent le scope `diddigo:scores:read` et ne
+remplacent pas les routes publiques de score. Le contrat detaille est dans
+[l'integration DiddiFree Pro](../integrations/diddifree-score.md).
+
 Le Backoffice dispose de KYC/KYV, partenaires, véhicules, wallet/retraits, paiements et logs, via routes administratives ou S2S explicitement prévues. Les décisions administratives sont auditées ; les fichiers privés sont consultés par URL signée DiddiFiles. Le préfixe /v1/admin ne décrit pas à lui seul toutes les permissions.
 
 <a id="conventions"></a>
@@ -381,7 +389,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 ## Inventaire HTTP
 
 <!-- generated:http-inventory:start -->
-133 chemins ; 147 opérations HTTP.
+135 chemins ; 149 opérations HTTP.
 
 | Méthode | Chemin | Opération | Réponses documentées |
 |---|---|---|---|
@@ -426,6 +434,8 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 | POST | `/internal/v1/drivers/{driver_id}/kyc/reject` | Reject Driver Kyc | 200, 422 |
 | PATCH | `/internal/v1/drivers/{driver_id}/profile-photo` | Update Driver Profile Photo | 200, 422 |
 | GET | `/internal/v1/ride-summary` | Get Ride Summary | 200, 422 |
+| GET | `/internal/v1/scores/rides/{ride_id}` | Get Ride Score Contract | 200, 422 |
+| GET | `/internal/v1/scores/users/{user_id}` | Get User Scores Contract | 200, 422 |
 | GET | `/internal/v1/support/ride/{ride_id}/context` | Get Ride Support Context | 200, 422 |
 | POST | `/internal/webhooks/diddipay` | Diddipay Webhook | 200, 204, 422 |
 | GET | `/payments/return` | Payment Browser Return | 200, 422 |

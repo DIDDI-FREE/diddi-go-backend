@@ -128,6 +128,24 @@ async def test_completed_trip_score_uses_ratings_and_status() -> None:
     assert "status_completed" in result["reason_codes"]
 
 
+@pytest.mark.asyncio
+async def test_internal_trip_score_reads_the_same_score_without_user_impersonation() -> None:
+    result = await scoring_service(completed_ride()).get_ride_score_for_internal(RIDE_ID)
+
+    assert result["ride_id"] == str(RIDE_ID)
+    assert result["subject_type"] == "trip"
+    assert result["score_status"] == "stable"
+
+
+@pytest.mark.asyncio
+async def test_internal_trip_score_returns_not_found_for_unknown_ride() -> None:
+    with pytest.raises(ApiError) as exc_info:
+        await scoring_service().get_ride_score_for_internal(RIDE_ID)
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.code == "RIDE_NOT_FOUND"
+
+
 def test_emergency_is_descriptive_but_never_changes_person_or_trip_score() -> None:
     baseline = {
         "total_rides": 4,

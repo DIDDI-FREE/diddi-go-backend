@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     identity_service_key: str | None = None
     diddicomms_service_client_id: str = "diddicomms-staging-diddigo"
     diddisupport_service_client_id: str = "diddisupport-staging-diddigo"
+    # DiddiFree Pro reads normalized DiddiGo reputation scores through a
+    # dedicated service token. It never receives matching-priority signals.
+    diddifreepro_service_client_id: str = "diddifreepro-staging-diddigo"
     # Shared DiddiComms policy: completed rides keep new messages open for
     # this configurable period, while call handoff closes immediately.
     ride_comms_completed_chat_retention_seconds: int = Field(default=172800, ge=0, le=31536000)

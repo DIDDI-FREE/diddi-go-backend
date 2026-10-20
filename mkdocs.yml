@@ -73,6 +73,7 @@ nav:
       - DiddiMap: integrations/diddimap.md
       - DiddiAdmin: integrations/diddiadmin-kyc-review.md
       - DiddiSupport: integrations/diddisupport.md
+      - DiddiFree Pro - Scores: integrations/diddifree-score.md
       - SMS: integrations/sms.md
   - Tests:
       - Checklist du 19 octobre: testing/DIDDIGO_TEST_CHECKLIST_2026-10-19.md
