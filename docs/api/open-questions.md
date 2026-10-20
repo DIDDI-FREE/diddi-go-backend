@@ -1,6 +1,6 @@
 # Questions ouvertes du contrat HTTP et WebSocket
 
-Version : draft.2026-10-15. Décisions et questions maintenues à la main ; seul le bloc des lacunes par opération est généré.
+Version : draft.2026-10-20. Décisions et questions maintenues à la main ; seul le bloc des lacunes par opération est généré.
 
 ## Questions transversales
 

@@ -1,6 +1,6 @@
 # Contrat API DiddiGo — HTTP et WebSocket
 
-Version documentaire : `draft.2026-10-15`. Périmètre : implémentation locale, applications passager/chauffeur, Backoffice et services internes.
+Version documentaire : `draft.2026-10-20`. Périmètre : implémentation locale, applications passager/chauffeur, Backoffice et services internes.
 
 Ce contrat est exploitable comme référence d'intégration, mais reste un **brouillon incomplet** : les réponses HTTP non typées et les décisions non vérifiées sont recensées dans [open-questions.md](open-questions.md). Il ne certifie pas la version déployée : le contrôle staging du 14 octobre 2026 à 18:38 UTC exposait encore 136 opérations, contre 138 dans le dépôt.
 
@@ -119,7 +119,7 @@ Le Backoffice dispose de KYC/KYV, partenaires, véhicules, wallet/retraits, paie
 
 ## Conventions
 
-Portée : code local au 15 octobre 2026 ; version déployée à contrôler séparément.
+Portée : code local au 20 octobre 2026 ; version déployée à contrôler séparément.
 
 | Sujet | Convention observée |
 |---|---|
@@ -135,7 +135,7 @@ Portée : code local au 15 octobre 2026 ; version déployée à contrôler sépa
 | Auth socket | Jeton accès dans la query `token` ; validation à la connexion ; revalidation en cours de socket non garantie |
 | En-tête de corrélation | `X-Request-ID` et `error.request_id` quand présents ; ce n'est pas une clé d'idempotence |
 | Enum inconnue | Ne pas déduire une nouvelle permission ou transition ; relire l'état et tolérer les notifications futures |
-| Version | `draft.2026-10-15` pour ce dossier ; `0.1.0` applicatif n'identifie pas un build staging |
+| Version | `draft.2026-10-20` pour ce dossier ; `0.1.0` applicatif n'identifie pas un build staging |
 
 ### Erreurs HTTP
 
@@ -196,7 +196,7 @@ dans cette section et dans le changelog du jour.
 
 ## WebSocket
 
-Version : `draft.2026-10-15`. Schémas et exemples : [AsyncAPI 3.0](asyncapi.yaml). Parcours HTTP : [contrat unifié](API_CONTRACT.md).
+Version : `draft.2026-10-20`. Schémas et exemples : [AsyncAPI 3.0](asyncapi.yaml). Parcours HTTP : [contrat unifié](API_CONTRACT.md).
 
 Sources : `ride/presentation/websocket.py`, producteurs dans `router.py` et sérialiseurs dans `application/services.py`. Les opérations AsyncAPI sont vues depuis DiddiGo : receive = client vers serveur, send = serveur vers client.
 

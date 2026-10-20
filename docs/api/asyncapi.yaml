@@ -1,7 +1,7 @@
 asyncapi: 3.0.0
 info:
   title: DiddiGo WebSocket
-  version: draft.2026-10-15
+  version: draft.2026-10-20
   description: Contrat du serveur local, directions vues depuis DiddiGo. Exemples synthétiques.
 defaultContentType: application/json
 servers:

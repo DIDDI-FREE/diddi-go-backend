@@ -13135,4 +13135,4 @@ components:
         password:
           scopes: {}
           tokenUrl: /v1/auth/otp/verify
-x-contract-version: draft.2026-10-15
+x-contract-version: draft.2026-10-20

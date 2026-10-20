@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "draft.2026-10-15"
+VERSION = "draft.2026-10-20"
 METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
 UUID_EXAMPLE = "11111111-1111-4111-8111-111111111111"
 AT_EXAMPLE = "2026-10-15T10:00:00Z"
