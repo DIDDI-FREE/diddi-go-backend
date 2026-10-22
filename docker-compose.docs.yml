@@ -4,8 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile.docs
     environment:
-      # The local overlay enables the site. The Portainer overlay defaults to
-      # false so production returns 404 unless it is explicitly enabled.
+      # Local development enables the site. The DiddiGo Portainer stack
+      # overrides this with a secure-by-default false value.
       DOCS_PUBLIC_ENABLED: ${DOCS_PUBLIC_ENABLED:-true}
     expose:
       - "80"

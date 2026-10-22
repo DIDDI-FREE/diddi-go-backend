@@ -117,6 +117,19 @@ services:
       - "${BACKEND_PORT:-18000}:8000"
     command: sh /app/docker/start.sh
 
+  # The documentation portal is deliberately part of the DiddiGo stack so it
+  # is rebuilt and deployed from the same Git revision as the API contract.
+  docs:
+    build:
+      context: .
+      dockerfile: Dockerfile.docs
+    environment:
+      # Staging enables this explicitly. Production returns 404 by default.
+      DOCS_PUBLIC_ENABLED: ${DOCS_PUBLIC_ENABLED:-false}
+    ports:
+      - "${DOCS_PORT:-18081}:80"
+    restart: unless-stopped
+
   db:
     build:
       context: .

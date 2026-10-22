@@ -18,7 +18,7 @@
 | Chauffeur/course | `DRIVER_*`, `WAITING_*`, `MATCHING_*` | éligibilité wallet, attente et dispatch. |
 | Push/urgence | `PUSH_*`, `FCM_*`, `EMERGENCY_*` | push, contact support et alertes. |
 | Pilotage | `RIDE_SUMMARY_*`, `PILOTAGE_*` | endpoints et cache des rapports internes. |
-| Portail documentaire | `DOCS_*`, `PORTAINER_PROXY_NETWORK` | publication MkDocs hors du conteneur API. |
+| Portail documentaire | `DOCS_*` | publication MkDocs dans la stack DiddiGo. |
 
 ## Déploiement
 

@@ -8,7 +8,7 @@ l'application ou donnee metier n'est exposee par ce conteneur.
 
 | Environnement | Adresse | Etat attendu |
 | --- | --- | --- |
-| Local | `http://localhost:18080` | accessible |
+| Local | `http://localhost:18081` | accessible |
 | Staging | `https://docs-go-staging.diddifree.com/` | accessible |
 | Production | domaine documentaire eventuel | `404` tant que la publication n'est pas approuvee |
 
@@ -20,49 +20,44 @@ Depuis la racine du depot :
 docker compose -f docker-compose.docs.yml -f docker-compose.docs.local.yml up --build
 ```
 
-Le port local est configurable avec `DOCS_PORT` et vaut `18080` par defaut.
+Le port local est configurable avec `DOCS_PORT` et vaut `18081` par defaut.
 Arreter avec :
 
 ```powershell
 docker compose -f docker-compose.docs.yml -f docker-compose.docs.local.yml down
 ```
 
-## Stack Portainer staging
+## Stack DiddiGo Portainer staging
 
-Creer une stack distincte, par exemple `diddi-go-docs-staging`, avec les deux
-fichiers Compose dans cet ordre :
+Le service `docs` fait partie de `docker-compose.portainer.yml`, au meme titre
+que `app`, `db` et `redis`. Il est donc deploye depuis la meme branche Git et
+la meme stack DiddiGo que le backend.
 
-```text
-docker-compose.docs.yml
-docker-compose.docs.portainer.yml
-```
-
-Renseigner ces variables dans Portainer :
+Renseigner cette variable dans la stack DiddiGo staging :
 
 ```ini
 DOCS_PUBLIC_ENABLED=true
-PORTAINER_PROXY_NETWORK=<nom-du-reseau-externe-de-nginx-proxy-manager>
+DOCS_PORT=18081
 ```
 
-`PORTAINER_PROXY_NETWORK` est le nom exact du reseau Docker deja partage par
-Nginx Proxy Manager. Aucun port hote n'est publie par cette stack : le proxy
-doit joindre le service `diddigo-docs` sur le port interne `80` via ce reseau.
+`DOCS_PORT` est un port hote dedie. Choisir une autre valeur libre si `18081`
+est deja utilise. Le service API conserve son propre `BACKEND_PORT`.
 
 Dans Nginx Proxy Manager, creer le proxy host staging :
 
 ```text
 Host: docs-go-staging.diddifree.com
-Forward host: diddigo-docs
-Forward port: 80
+Forward host: meme hote que go-staging.diddifree.com
+Forward port: 18081
 Websockets: non requis
 SSL: certificat habituel du proxy
 ```
 
 ## Protection production
 
-L'overlay Portainer utilise `DOCS_PUBLIC_ENABLED=false` par defaut. Dans cet
-etat, toutes les routes documentaires retournent `404`; seul `/healthz` reste
-interne au reseau Docker pour le healthcheck.
+La stack DiddiGo Portainer utilise `DOCS_PUBLIC_ENABLED=false` par defaut. Dans
+cet etat, toutes les routes documentaires retournent `404`; seul `/healthz`
+reste disponible pour le healthcheck du conteneur.
 
 Ne mettre `DOCS_PUBLIC_ENABLED=true` en production qu'apres une decision de
 publication explicite. Si aucun proxy host production n'est cree, le domaine
@@ -74,9 +69,11 @@ reste egalement introuvable depuis Internet.
 # Validation du site statique
 C:\Users\Vanauld\Envs\diddigo\Scripts\python.exe -m mkdocs build --strict
 
-# Validation de la stack staging (renseigner le reseau reel)
-$env:PORTAINER_PROXY_NETWORK = "<reseau-nginx-proxy-manager>"
-docker compose -f docker-compose.docs.yml -f docker-compose.docs.portainer.yml config --quiet
+# Validation de la stack staging
+$env:POSTGRES_PASSWORD = "test-only"
+$env:JWT_SECRET = "test-only-32-character-secret-value"
+$env:RIDE_START_CODE_SECRET = "test-only-start-code-secret"
+docker compose -f docker-compose.portainer.yml config --quiet
 ```
 
 Apres deploiement staging :
