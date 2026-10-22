@@ -99,7 +99,28 @@ class SqlAlchemyPaymentRepository:
         row.collected_by = collected_by
         row.amount = amount
         row.collected_at = collected_at
+        row.method = PaymentMethod.CASH.value
         row.status = PaymentStatus.COLLECTED.value
+        await self._session.flush()
+        return self._to_domain(row)
+
+    async def prepare_cash_payment(self, transaction_id: UUID) -> Transaction:
+        """Replace a terminal provider attempt with a local cash collection.
+
+        DiddiPay remains the source of history for the discarded provider
+        attempt. DiddiGo keeps one current payment state per ride.
+        """
+        row = await self._session.get(orm.TransactionModel, transaction_id)
+        if row is None:
+            raise LookupError(f"No transaction with id={transaction_id}")
+        row.method = PaymentMethod.CASH.value
+        row.status = PaymentStatus.PENDING.value
+        row.payment_intent_id = None
+        row.business_reference = None
+        row.idempotency_key = None
+        row.provider_status = "local"
+        row.provider_next_action = None
+        row.paid_at = None
         await self._session.flush()
         return self._to_domain(row)
 

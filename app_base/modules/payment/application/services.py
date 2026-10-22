@@ -775,49 +775,7 @@ class PaymentService:
         ride = await self.ride_repo.find_by_id(payment.ride_id)
         if ride is not None:
             await self._record_ride_settlement(ride, payment.status)
-            await self._update_passenger_debt_from_payment(ride, payment)
         return payment
-
-    async def _update_passenger_debt_from_payment(self, ride, payment: Transaction) -> None:
-        """Synchronise la dette métier avec le résultat final DiddiPay."""
-        if ride.status is not RideStatus.COMPLETED or payment.method is not PaymentMethod.MOBILE_MONEY:
-            return
-        find_debt = getattr(self.payment_repo, "find_debt_by_ride_id", None)
-        # Keeps legacy in-memory test doubles compatible while production
-        # repositories always implement the debt contract.
-        if find_debt is None:
-            return
-        existing = await find_debt(ride.id)
-        if payment.status is PaymentStatus.SUCCEEDED:
-            if existing is not None and existing.status is not PassengerDebtStatus.SETTLED:
-                await self.payment_repo.update_debt_status(
-                    existing.id,
-                    status=PassengerDebtStatus.SETTLED,
-                    settled_at=datetime.now(UTC),
-                    settled_by=ride.passenger_user_id,
-                )
-                log_event("passenger_debt.settled_mobile_money", debt_id=existing.id, ride_id=ride.id)
-            return
-        if payment.status not in {PaymentStatus.FAILED, PaymentStatus.CANCELLED}:
-            return
-        if existing is None:
-            debt = await self.payment_repo.save_debt(
-                PassengerDebt(
-                    id=PassengerDebt.new_id(),
-                    passenger_user_id=ride.passenger_user_id,
-                    ride_id=ride.id,
-                    amount=payment.amount,
-                    currency=payment.currency,
-                    reason=(
-                        "mobile_money_expired" if payment.status is PaymentStatus.CANCELLED else "mobile_money_failed"
-                    ),
-                    created_at=datetime.now(UTC),
-                    updated_at=datetime.now(UTC),
-                )
-            )
-            log_event("passenger_debt.opened", debt_id=debt.id, ride_id=ride.id, amount=debt.amount, reason=debt.reason)
-        elif existing.status is PassengerDebtStatus.MOBILE_MONEY_PENDING:
-            await self.payment_repo.update_debt_status(existing.id, status=PassengerDebtStatus.OPEN)
 
     async def _apply_topup_status(
         self,
@@ -855,6 +813,14 @@ class PaymentService:
                 created_at=datetime.now(UTC),
             )
             await self.payment_repo.save(payment)
+        elif payment.method is not PaymentMethod.CASH:
+            if payment.status not in {PaymentStatus.FAILED, PaymentStatus.CANCELLED}:
+                raise ApiError(
+                    409,
+                    ErrorCode.PAYMENT_OPERATION_CONFLICT,
+                    "Le paiement Mobile Money en cours doit etre finalise ou echouer avant le choix especes.",
+                )
+            payment = await self.payment_repo.prepare_cash_payment(payment.id)
         return {
             "ride_id": str(payment.ride_id),
             "status": payment.status.value,

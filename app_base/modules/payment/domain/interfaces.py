@@ -56,6 +56,8 @@ class PaymentRepository(Protocol):
         collected_at: object,
     ) -> Transaction: ...
 
+    async def prepare_cash_payment(self, transaction_id: UUID) -> Transaction: ...
+
     async def mark_external_status(
         self,
         transaction_id: UUID,

@@ -196,15 +196,6 @@ class RideService:
             raise ApiError(409, "QUOTE_ALREADY_USED", "Ce devis a deja ete utilise.")
         if quote.expires_at <= now:
             raise ApiError(409, "QUOTE_EXPIRED", "Ce devis a expire. Demandez un nouveau devis.")
-        if self.payment_repo is not None:
-            debt = await self.payment_repo.find_open_debt_for_passenger(passenger_user_id)
-            if debt is not None:
-                raise ApiError(
-                    409,
-                    "PASSENGER_DEBT_OUTSTANDING",
-                    "Reglez votre dette en cours avant de demander une nouvelle course.",
-                    {"debt_id": str(debt.id), "amount": int(debt.amount), "currency": debt.currency},
-                )
         if await self.ride_repo.has_active_ride(passenger_user_id):
             raise ApiError(
                 409,

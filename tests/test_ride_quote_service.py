@@ -190,7 +190,7 @@ async def test_quote_is_private_to_its_passenger():
 
 
 @pytest.mark.asyncio
-async def test_open_passenger_debt_blocks_new_ride_request():
+async def test_legacy_open_passenger_debt_does_not_block_new_ride_request():
     service, quotes, _rides = service_with_repositories()
     passenger_id = uuid4()
     await service.create_quote(
@@ -211,13 +211,11 @@ async def test_open_passenger_debt_blocks_new_ride_request():
         passenger_user_id = passenger_id
 
     service.payment_repo = FakeDebtRepository(Debt())
-    with pytest.raises(ApiError) as exc_info:
-        await service.request_ride(
-            passenger_user_id=passenger_id,
-            quote_id=quote.id,
-            payment_method="cash",
-            scheduled_at=None,
-        )
+    ride = await service.request_ride(
+        passenger_user_id=passenger_id,
+        quote_id=quote.id,
+        payment_method="cash",
+        scheduled_at=None,
+    )
 
-    assert exc_info.value.status_code == 409
-    assert exc_info.value.code == "PASSENGER_DEBT_OUTSTANDING"
+    assert ride.passenger_user_id == passenger_id

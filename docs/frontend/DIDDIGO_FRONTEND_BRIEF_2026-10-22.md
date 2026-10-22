@@ -12,18 +12,21 @@ Lire `arrival.free_seconds`, `arrival.price_per_minute_xof` et
 `arrival.no_show_after_seconds` dans `GET /v1/rides/{ride_id}`. Ne jamais
 coder les 180 secondes, 100 XOF ou 600 secondes en dur dans l'application.
 
-## Dette et paiement Mobile Money
+## Paiement Mobile Money apres course
 
-Lire une dette par `GET /v1/passenger/debts/{debt_id}`. Pour regler :
+Un echec, une annulation ou une expiration Mobile Money ne cree pas de dette
+et ne bloque pas une nouvelle course. Afficher l'echec, puis revenir au choix
+de paiement de la meme course terminee :
 
 1. le client choisit Mobile Money ou especes ;
 2. pour Mobile Money, il choisit `orange`, `wave` ou `mtn` ;
 3. envoyer un `Idempotency-Key` stable pour un meme clic et ses retries ;
 4. utiliser `payment.next_action.url` lorsqu'elle est fournie ;
-5. apres retour fournisseur, relire la dette.
+5. apres retour fournisseur, relire `GET /v1/payments/{ride_id}`.
 
-Une dette reglee ne peut plus etre modifiee. Le cash demande attend la
-confirmation du chauffeur affecte a la course.
+Le choix especes attend ensuite la confirmation du chauffeur affecte. Les
+routes `/v1/passenger/debts/*` sont historiques et ne doivent pas etre integrees
+dans ce parcours MVP.
 
 ## Supplements et escales
 

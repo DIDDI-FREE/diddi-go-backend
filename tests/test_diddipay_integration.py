@@ -90,10 +90,23 @@ class FakePaymentRepo:
         return None
 
     async def update_collected(self, transaction_id, collected_by, amount, collected_at):
+        self.payment.method = PaymentDomainMethod.CASH
         self.payment.status = PaymentStatus.COLLECTED
         self.payment.collected_by = collected_by
         self.payment.amount = amount
         self.payment.collected_at = collected_at
+        return self.payment
+
+    async def prepare_cash_payment(self, transaction_id):
+        assert self.payment.id == transaction_id
+        self.payment.method = PaymentDomainMethod.CASH
+        self.payment.status = PaymentStatus.PENDING
+        self.payment.payment_intent_id = None
+        self.payment.business_reference = None
+        self.payment.idempotency_key = None
+        self.payment.provider_status = "local"
+        self.payment.provider_next_action = None
+        self.payment.paid_at = None
         return self.payment
 
     async def mark_external_status(self, transaction_id, status, provider_status, paid_at, next_action=KEEP):
@@ -429,7 +442,43 @@ async def test_prepare_wave_replaces_failed_intent_and_then_reuses_retry(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_failed_mobile_money_for_completed_ride_opens_passenger_debt() -> None:
+async def test_failed_mobile_money_can_switch_to_cash_for_same_completed_ride() -> None:
+    ride = make_completed_ride()
+    repo = FakePaymentRepo()
+    repo.payment = Transaction(
+        id=uuid4(),
+        ride_id=ride.id,
+        amount=ride.final_fare,
+        method=PaymentDomainMethod.MOBILE_MONEY,
+        status=PaymentStatus.FAILED,
+        payment_intent_id=uuid4(),
+        provider_status="failed",
+    )
+    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride))
+
+    result = await service.prepare_payment(
+        ride.id,
+        "cash",
+        payer_user_id=ride.passenger_user_id,
+    )
+
+    assert result["method"] == "cash"
+    assert result["status"] == "pending"
+    assert repo.payment.method is PaymentDomainMethod.CASH
+    assert repo.payment.payment_intent_id is None
+
+    confirmed = await service.confirm_cash(
+        ride.id,
+        Decimal("3100"),
+        collected_by=ride.driver_id,
+    )
+
+    assert confirmed["status"] == "collected"
+    assert repo.payment.method is PaymentDomainMethod.CASH
+
+
+@pytest.mark.asyncio
+async def test_failed_mobile_money_for_completed_ride_does_not_open_passenger_debt() -> None:
     ride = make_completed_ride()
     repo = FakePaymentRepo()
     payment = Transaction(
@@ -450,15 +499,11 @@ async def test_failed_mobile_money_for_completed_ride_opens_passenger_debt() -> 
     )
 
     debt = await repo.find_debt_by_ride_id(ride.id)
-    assert debt is not None
-    assert debt.passenger_user_id == ride.passenger_user_id
-    assert debt.amount == Decimal("3100")
-    assert debt.status is PassengerDebtStatus.OPEN
-    assert debt.reason == "mobile_money_failed"
+    assert debt is None
 
 
 @pytest.mark.asyncio
-async def test_successful_retry_settles_existing_passenger_debt() -> None:
+async def test_successful_ride_payment_does_not_mutate_legacy_passenger_debt() -> None:
     ride = make_completed_ride()
     repo = FakePaymentRepo()
     debt = PassengerDebt(
@@ -486,7 +531,7 @@ async def test_successful_retry_settles_existing_passenger_debt() -> None:
         paid_at=datetime.now(UTC),
     )
 
-    assert (await repo.find_debt_by_id(debt.id)).status is PassengerDebtStatus.SETTLED
+    assert (await repo.find_debt_by_id(debt.id)).status is PassengerDebtStatus.MOBILE_MONEY_PENDING
 
 
 def test_payment_requests_reject_client_owned_callback_urls() -> None:
