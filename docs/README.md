@@ -22,6 +22,7 @@ regles metier.
   [`reference/configuration.md`](reference/configuration.md),
   [`reference/permissions.md`](reference/permissions.md)
 - Changements : [`changelog/2026-10-12.md`](changelog/2026-10-12.md)
+- Publication MkDocs : [`configuration/DOCUMENTATION_PORTAL.md`](configuration/DOCUMENTATION_PORTAL.md)
 
 Les documents dans `archive/` sont historiques et ne definissent plus le
 comportement courant.

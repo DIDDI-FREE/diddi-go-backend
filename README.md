@@ -4,6 +4,7 @@ Backend FastAPI modulaire pour le service de course DiddiGo. La version applicat
 
 ## Documentation active
 
+- Portail staging : [docs-go-staging.diddifree.com](https://docs-go-staging.diddifree.com/)
 - [Contrat HTTP et WebSocket](docs/api/API_CONTRACT.md)
 - [OpenAPI](docs/api/openapi.yaml), [AsyncAPI](docs/api/asyncapi.yaml) et [questions ouvertes](docs/api/open-questions.md)
 - [MVP figé](docs/product/DIDDIGO-MVP-FIGE.md)
@@ -12,6 +13,9 @@ Backend FastAPI modulaire pour le service de course DiddiGo. La version applicat
 - [Référence de configuration](docs/configuration/CONFIGURATION_REFERENCE.md)
 
 Les notes, briefs et contrats précédents sont conservés dans [`docs/archive/2026-10-10-pre-code-derived-regeneration`](docs/archive/2026-10-10-pre-code-derived-regeneration).
+
+Le portail est un service Docker distinct : le guide de publication locale et
+Portainer est dans [`docs/configuration/DOCUMENTATION_PORTAL.md`](docs/configuration/DOCUMENTATION_PORTAL.md).
 
 ## Contrat API
 

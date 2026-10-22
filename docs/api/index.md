@@ -12,6 +12,11 @@ La documentation API repose sur deux niveaux complémentaires :
 | Swagger UI | [go-staging.diddifree.com/docs](https://go-staging.diddifree.com/docs) |
 | OpenAPI JSON | [go-staging.diddifree.com/openapi.json](https://go-staging.diddifree.com/openapi.json) |
 | Health | [go-staging.diddifree.com/health](https://go-staging.diddifree.com/health) |
+| Portail MkDocs | [docs-go-staging.diddifree.com](https://docs-go-staging.diddifree.com/) |
+
+Le portail est publie par une stack Docker distincte. Sa disponibilite est
+verifiee apres chaque deploiement Portainer ; sa configuration est documentee
+dans le [guide de publication](../configuration/DOCUMENTATION_PORTAL.md).
 
 ## Surfaces
 

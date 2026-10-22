@@ -13,9 +13,17 @@ RUN mkdocs build --strict
 FROM nginx:1.27-alpine
 
 COPY --from=builder /docs/site /usr/share/nginx/html
+COPY docker/docs/nginx-enabled.conf /opt/diddigo-docs/nginx-enabled.conf
+COPY docker/docs/nginx-disabled.conf /opt/diddigo-docs/nginx-disabled.conf
+COPY docker/docs/start-docs.sh /usr/local/bin/diddigo-docs-start
+
+RUN chmod +x /usr/local/bin/diddigo-docs-start
 
 EXPOSE 80
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1
+ENV DOCS_PUBLIC_ENABLED=false
 
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1
+
+ENTRYPOINT ["/usr/local/bin/diddigo-docs-start"]

@@ -24,9 +24,9 @@ env/
 .env
 .env.local
 
-# Tests and docs are not needed in the runtime image
+# Tests are not needed in the runtime image. Documentation stays in the build
+# context because Dockerfile.docs builds the MkDocs portal from it.
 tests/
-*.md
 
 # Editor / OS noise
 .idea/

@@ -42,3 +42,10 @@ Pro/DiddiFreeID.
 
 Utiliser le catalogue d'erreurs de DiddiGo et le contrat WebSocket. Le socket
 accelere l'interface ; REST reste la source de verite.
+
+## Acces aux contrats publies
+
+Une fois la stack documentaire staging deployee, lire les guides et les
+changelogs sur `https://docs-go-staging.diddifree.com/`. Swagger et
+`https://go-staging.diddifree.com/openapi.json` restent la reference des
+routes et schemas effectivement deployes.

@@ -52,6 +52,7 @@ nav:
       - Compatibilité WebSocket: realtime/WEBSOCKET_CONTRACT.md
   - Architecture:
       - Exécution: architecture/RUNTIME_ARCHITECTURE.md
+      - Portail documentaire: configuration/DOCUMENTATION_PORTAL.md
   - Parcours métier:
       - Passager: guides/passenger-ride-flow.md
       - Chauffeur: guides/driver-ride-flow.md
@@ -91,6 +92,7 @@ nav:
       - 14 octobre 2026: changelog/2026-10-14.md
       - 15 octobre 2026: changelog/2026-10-15.md
       - 12 octobre 2026: changelog/2026-10-12.md
+      - 19 octobre 2026: changelog/2026-10-19.md
       - 20 octobre 2026: changelog/2026-10-20.md
       - 20 octobre 2026 - DiddiSupport: changelog/2026-10-20-support-context.md
       - 20 octobre 2026 - Scoring: changelog/2026-10-20-scoring-fairness.md
