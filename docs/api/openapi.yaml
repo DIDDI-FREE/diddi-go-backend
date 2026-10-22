@@ -711,6 +711,40 @@ paths:
         retry: UNKNOWN — ne pas supposer une idempotence métier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
         dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /v1/pro/metiers:
+    get:
+      tags:
+      - pro
+      summary: Get My Diddigo Metiers
+      description: 'DiddiGo-local professional projection.
+
+
+        This endpoint intentionally does not aggregate DiddiSend or any other
+
+        service. DiddiFreeID/DiddiFree Pro remains the future global owner.'
+      operationId: get_my_diddigo_metiers_v1_pro_metiers_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get My Diddigo Metiers V1 Pro Metiers Get
+      security:
+      - OAuth2PasswordBearer: []
+      x-contract:
+        source: app.openapi() ; opération get_my_diddigo_metiers_v1_pro_metiers_get
+        purpose: Get My Diddigo Metiers
+        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
+        state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
+        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
+        response: UNKNOWN — champs de succès non spécifiés.
+        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
+        retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
+        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
+        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
   /v1/places/search:
     get:
       tags:
@@ -1245,6 +1279,35 @@ paths:
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
         request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
         response: Schémas ci-dessus.
+        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
+        retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
+        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
+        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /v1/rides/active/current:
+    get:
+      tags:
+      - ride
+      summary: Get Active Ride
+      description: Restore the passenger's or driver's current non-terminal ride.
+      operationId: get_active_ride_v1_rides_active_current_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Active Ride V1 Rides Active Current Get
+      security:
+      - OAuth2PasswordBearer: []
+      x-contract:
+        source: app.openapi() ; opération get_active_ride_v1_rides_active_current_get
+        purpose: Get Active Ride
+        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
+        state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
+        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
+        response: UNKNOWN — champs de succès non spécifiés.
         errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
         retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
@@ -1955,9 +2018,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response List Ride Supplements V1 Rides  Ride Id  Supplements Get
+                $ref: '#/components/schemas/RideSupplementListResponse'
         '422':
           description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
           content:
@@ -1984,7 +2045,7 @@ paths:
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
         request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
-        response: UNKNOWN — champs de succès non spécifiés.
+        response: Schémas ci-dessus.
         errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
         retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
@@ -7355,6 +7416,60 @@ paths:
         retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
         dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /v1/passenger/debts/{debt_id}:
+    get:
+      tags:
+      - passenger-debts
+      summary: Get Passenger Debt
+      operationId: get_passenger_debt_v1_passenger_debts__debt_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: debt_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Debt Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PassengerDebtResponse'
+        '422':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+              examples:
+                validation:
+                  summary: Exemple synthétique de validation locale
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La requête est invalide.
+                      details:
+                        violations:
+                        - loc:
+                          - query
+                          - q
+                          msg: Field required
+                          type: missing
+      x-contract:
+        source: app.openapi() ; opération get_passenger_debt_v1_passenger_debts__debt_id__get
+        purpose: Get Passenger Debt
+        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
+        state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
+        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
+        response: Schémas ci-dessus.
+        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
+        retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
+        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
+        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
   /v1/passenger/debts/{debt_id}/mobile-money/prepare:
     post:
       tags:
@@ -7371,6 +7486,16 @@ paths:
           type: string
           format: uuid
           title: Debt Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 8
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -7431,6 +7556,16 @@ paths:
           type: string
           format: uuid
           title: Debt Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 8
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
       responses:
         '200':
           description: Successful Response
@@ -9884,7 +10019,7 @@ paths:
                 type: object
                 title: Response Health Health Get
       x-contract:
-        source: app_base/main.py:96
+        source: app_base/main.py:98
         purpose: Health
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
@@ -9905,7 +10040,7 @@ paths:
             application/json:
               schema: {}
       x-contract:
-        source: app_base/main.py:101
+        source: app_base/main.py:103
         purpose: Readiness
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
@@ -11751,14 +11886,91 @@ components:
         debt:
           $ref: '#/components/schemas/PassengerDebtResponse'
         payment:
-          additionalProperties: true
-          type: object
-          title: Payment
+          $ref: '#/components/schemas/PassengerDebtPaymentResponse'
       type: object
       required:
       - debt
       - payment
       title: PassengerDebtPaymentPreparationResponse
+    PassengerDebtPaymentResponse:
+      properties:
+        ride_id:
+          type: string
+          format: uuid
+          title: Ride Id
+        status:
+          type: string
+          enum:
+          - pending
+          - requires_action
+          - processing
+          - succeeded
+          - failed
+          - cancelled
+          title: Status
+        method:
+          type: string
+          const: mobile_money
+          title: Method
+        amount:
+          type: integer
+          title: Amount
+        currency:
+          type: string
+          title: Currency
+        provider:
+          type: string
+          const: diddipay
+          title: Provider
+        provider_status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider Status
+        payment_intent_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Payment Intent Id
+        business_reference:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Business Reference
+        next_action:
+          anyOf:
+          - $ref: '#/components/schemas/PaymentNextActionResponse'
+          - type: 'null'
+        mobile_money_network:
+          type: string
+          enum:
+          - orange
+          - wave
+          - mtn
+          title: Mobile Money Network
+        expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expires At
+      type: object
+      required:
+      - ride_id
+      - status
+      - method
+      - amount
+      - currency
+      - provider
+      - provider_status
+      - payment_intent_id
+      - business_reference
+      - next_action
+      - mobile_money_network
+      - expires_at
+      title: PassengerDebtPaymentResponse
+      description: Projection typée de la tentative DiddiPay créée pour une dette.
     PassengerDebtResponse:
       properties:
         id:
@@ -11816,6 +12028,21 @@ components:
       - status
       - reason
       title: PassengerDebtResponse
+    PaymentNextActionResponse:
+      properties:
+        type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Type
+        url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Url
+      type: object
+      title: PaymentNextActionResponse
+      description: Action fournisseur que le client doit réaliser, si nécessaire.
     PaymentPreparationRequest:
       properties:
         method:
@@ -12612,6 +12839,91 @@ components:
       required:
       - decision
       title: RideSupplementDecisionRequest
+    RideSupplementListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/RideSupplementResponse'
+          type: array
+          title: Items
+        supplements_total:
+          type: integer
+          title: Supplements Total
+      type: object
+      required:
+      - items
+      - supplements_total
+      title: RideSupplementListResponse
+    RideSupplementResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        ride_id:
+          type: string
+          format: uuid
+          title: Ride Id
+        amount:
+          type: integer
+          title: Amount
+        reason:
+          type: string
+          title: Reason
+        type:
+          type: string
+          enum:
+          - toll
+          - parking
+          - baggage_standard
+          - baggage_large
+          - other
+          title: Type
+        source:
+          type: string
+          const: catalog
+          title: Source
+        status:
+          type: string
+          enum:
+          - pending
+          - accepted
+          - disputed
+          title: Status
+        created_by_user_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Created By User Id
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        decided_by_user_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Decided By User Id
+        decided_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Decided At
+      type: object
+      required:
+      - id
+      - ride_id
+      - amount
+      - reason
+      - type
+      - source
+      - status
+      title: RideSupplementResponse
     SupportParticipantResponse:
       properties:
         user_id:
@@ -13386,4 +13698,4 @@ components:
         password:
           scopes: {}
           tokenUrl: /v1/auth/otp/verify
-x-contract-version: draft.2026-10-20
+x-contract-version: draft.2026-10-22

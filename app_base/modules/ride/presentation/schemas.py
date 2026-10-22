@@ -188,6 +188,37 @@ class PreRideArrivalResponse(BaseModel):
     price_per_minute_xof: int
 
 
+class RideArrivalResponse(BaseModel):
+    """Arrival and pre-departure waiting settings, safe to restore after reconnect."""
+
+    arrived_at: datetime | None = None
+    waiting_started_at: datetime | None = None
+    waiting_seconds: int
+    waiting_fee: int | None = None
+    free_seconds: int
+    price_per_minute_xof: int
+    no_show_after_seconds: int
+
+
+class RideSupplementResponse(BaseModel):
+    id: UUID
+    ride_id: UUID
+    amount: int
+    reason: str
+    type: Literal["toll", "parking", "baggage_standard", "baggage_large", "other"]
+    source: Literal["catalog"]
+    status: Literal["pending", "accepted", "disputed"]
+    created_by_user_id: UUID | None = None
+    created_at: datetime | None = None
+    decided_by_user_id: UUID | None = None
+    decided_at: datetime | None = None
+
+
+class RideSupplementListResponse(BaseModel):
+    items: list[RideSupplementResponse]
+    supplements_total: int
+
+
 class RideEmergencyRequest(BaseModel):
     note: str | None = Field(default=None, max_length=500)
 

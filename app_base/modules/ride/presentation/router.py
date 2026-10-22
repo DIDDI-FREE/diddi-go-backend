@@ -65,6 +65,7 @@ from app_base.modules.ride.presentation.schemas import (
     RideStopCreateRequest,
     RideSupplementCreateRequest,
     RideSupplementDecisionRequest,
+    RideSupplementListResponse,
 )
 from app_base.modules.ride.presentation.websocket import manager
 from app_base.shared_kernel.contracts.routing import MapProvider
@@ -285,6 +286,15 @@ async def get_ride_score(
         actor_user_id=current_user.id,
         actor_role=current_user.role,
     )
+
+
+@router.get("/active/current")
+async def get_active_ride(
+    service: RideService = Depends(ride_service),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    """Restore the passenger's or driver's current non-terminal ride."""
+    return await service.get_active_ride(actor_user_id=current_user.id, actor_role=current_user.role)
 
 
 @router.get("/{ride_id}")
@@ -513,7 +523,7 @@ async def add_ride_supplement(
     return result
 
 
-@router.get("/{ride_id}/supplements")
+@router.get("/{ride_id}/supplements", response_model=RideSupplementListResponse)
 async def list_ride_supplements(
     ride_id: UUID,
     service: RideService = Depends(ride_service),

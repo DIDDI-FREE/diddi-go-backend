@@ -318,6 +318,12 @@ async def _handle_message(
 
     event = message.get("event")
 
+    if event == "ping":
+        # This is a transport-health signal only. It neither persists state
+        # nor proves that missed business events can be replayed.
+        await websocket.send_json({"event": "pong", "at": _now_iso()})
+        return
+
     if event == "driver.location_push":
         if role not in {"admin", "driver"} and not await _has_active_driver_profile(user_id):
             await websocket.send_json({"event": "error", "code": "FORBIDDEN_ROLE"})

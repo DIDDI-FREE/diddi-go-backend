@@ -52,9 +52,33 @@ class PassengerDebtListResponse(BaseModel):
     pagination: dict[str, int]
 
 
+class PaymentNextActionResponse(BaseModel):
+    """Action fournisseur que le client doit réaliser, si nécessaire."""
+
+    type: str | None = None
+    url: str | None = None
+
+
+class PassengerDebtPaymentResponse(BaseModel):
+    """Projection typée de la tentative DiddiPay créée pour une dette."""
+
+    ride_id: UUID
+    status: Literal["pending", "requires_action", "processing", "succeeded", "failed", "cancelled"]
+    method: Literal["mobile_money"]
+    amount: int
+    currency: str
+    provider: Literal["diddipay"]
+    provider_status: str | None = Field(...)
+    payment_intent_id: UUID | None = Field(...)
+    business_reference: str | None = Field(...)
+    next_action: PaymentNextActionResponse | None = Field(...)
+    mobile_money_network: Literal["orange", "wave", "mtn"]
+    expires_at: datetime | None = Field(...)
+
+
 class PassengerDebtPaymentPreparationResponse(BaseModel):
     debt: PassengerDebtResponse
-    payment: dict
+    payment: PassengerDebtPaymentResponse
 
 
 class DriverTopupRequest(BaseModel):

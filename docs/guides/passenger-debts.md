@@ -36,6 +36,7 @@ du token, jamais du corps de requete.
 | Action | Route |
 | --- | --- |
 | Lister ses dettes | `GET /v1/passenger/debts?page=1&page_size=20` |
+| Lire une dette | `GET /v1/passenger/debts/{debt_id}` |
 | Reprendre Mobile Money | `POST /v1/passenger/debts/{debt_id}/mobile-money/prepare` |
 | Demander un reglement cash | `POST /v1/passenger/debts/{debt_id}/cash-request` |
 
@@ -51,6 +52,15 @@ Le corps de reprise Mobile Money suit `PaymentPreparationRequest` :
 `mobile_money_network` vaut `orange`, `wave` ou `mtn`. L'email DiddiPay vient
 du profil lorsque disponible ; sinon DiddiGo derive temporairement
 `<telephone>@diddifree.com` pour ce paiement.
+
+Les deux mutations de regularisation acceptent un `Idempotency-Key` UUID ou
+une chaine aleatoire stable pendant un retry. Meme cle et meme choix : le
+resultat memorise est retourne. Meme cle et choix different : `409
+IDEMPOTENCY_CONFLICT`. Une dette `settled` ne peut plus etre modifiee.
+
+La reprise Mobile Money retourne une tentative typee : `status`,
+`payment_intent_id`, `next_action`, `mobile_money_network` et `expires_at`.
+`expires_at` vaut `null` lorsque DiddiPay ne fournit pas cette information.
 
 ## Confirmation cash chauffeur
 

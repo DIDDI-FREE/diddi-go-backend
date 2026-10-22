@@ -64,6 +64,7 @@ Les champs détaillés sont dans x-contract de openapi.yaml. Une correction du c
 | `GET /v1/me/emergency-contact` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `PUT /v1/me/emergency-contact` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `DELETE /v1/me/emergency-contact` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
+| `GET /v1/pro/metiers` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `GET /v1/places/search` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `POST /v1/rides/pricing/estimate` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/rides` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
@@ -72,6 +73,7 @@ Les champs détaillés sont dans x-contract de openapi.yaml. Une correction du c
 | `POST /v1/rides/{ride_id}/decline` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `GET /v1/rides/shared/{token}` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `GET /v1/rides/{ride_id}/score` | roles, state-before-after, request, errors, side-effects, dependency-failure |
+| `GET /v1/rides/active/current` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `GET /v1/rides/{ride_id}` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `PATCH /v1/rides/{ride_id}/status` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/rides/{ride_id}/waiting/start` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
@@ -83,7 +85,7 @@ Les champs détaillés sont dans x-contract de openapi.yaml. Une correction du c
 | `POST /v1/rides/{ride_id}/waiting/stop` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/rides/{ride_id}/stops` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/rides/{ride_id}/supplements` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
-| `GET /v1/rides/{ride_id}/supplements` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
+| `GET /v1/rides/{ride_id}/supplements` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `POST /v1/rides/{ride_id}/supplements/{supplement_id}/decision` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `POST /v1/rides/{ride_id}/cancel` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/rides/{ride_id}/rating` | roles, state-before-after, request, errors, retry, side-effects, dependency-failure |
@@ -154,6 +156,7 @@ Les champs détaillés sont dans x-contract de openapi.yaml. Une correction du c
 | `POST /v1/payments/{ride_id}/confirm-cash` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `GET /v1/payments/{ride_id}` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `GET /v1/passenger/debts` | roles, state-before-after, request, errors, side-effects, dependency-failure |
+| `GET /v1/passenger/debts/{debt_id}` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `POST /v1/passenger/debts/{debt_id}/mobile-money/prepare` | roles, state-before-after, request, errors, retry, side-effects, dependency-failure |
 | `POST /v1/passenger/debts/{debt_id}/cash-request` | roles, state-before-after, request, errors, retry, side-effects, dependency-failure |
 | `POST /v1/passenger/debts/{debt_id}/confirm-cash` | roles, state-before-after, request, errors, retry, side-effects, dependency-failure |

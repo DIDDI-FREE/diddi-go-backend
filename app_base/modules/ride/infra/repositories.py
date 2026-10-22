@@ -757,6 +757,19 @@ class SqlAlchemyRideQuoteRepository:
         row = result.scalar_one_or_none()
         return self._to_domain(row) if row is not None else None
 
+    async def find_active_by_passenger_user_id(self, user_id: UUID) -> Ride | None:
+        result = await self._session.execute(
+            select(orm.RideModel)
+            .where(
+                orm.RideModel.passenger_user_id == user_id,
+                orm.RideModel.status.in_([status.value for status in _ACTIVE_STATES]),
+            )
+            .order_by(orm.RideModel.requested_at.desc())
+            .limit(1),
+        )
+        row = result.scalar_one_or_none()
+        return self._to_domain(row) if row is not None else None
+
     async def consume(self, quote: RideQuote, *, ride_id: UUID, consumed_at: datetime) -> None:
         row = await self._session.get(orm.RideQuoteModel, quote.id)
         if row is None:

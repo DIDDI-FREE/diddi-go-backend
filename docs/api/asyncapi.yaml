@@ -1,7 +1,7 @@
 asyncapi: 3.0.0
 info:
   title: DiddiGo WebSocket
-  version: draft.2026-10-20
+  version: draft.2026-10-22
   description: Contrat du serveur local, directions vues depuis DiddiGo. Exemples synthétiques.
 defaultContentType: application/json
 servers:
@@ -15,6 +15,8 @@ channels:
     messages:
       RideSubscribe:
         $ref: '#/components/messages/RideSubscribe'
+      Ping:
+        $ref: '#/components/messages/Ping'
       DriverLocationPush:
         $ref: '#/components/messages/DriverLocationPush'
       RideStatusChanged:
@@ -31,6 +33,8 @@ channels:
         $ref: '#/components/messages/RideSupplementChanged'
       Ack:
         $ref: '#/components/messages/Ack'
+      Pong:
+        $ref: '#/components/messages/Pong'
       Error:
         $ref: '#/components/messages/Error'
       Ignored:
@@ -57,6 +61,13 @@ operations:
     messages:
     - $ref: '#/channels/session/messages/RideSubscribe'
     summary: Abonner cette connexion à une course.
+  Ping:
+    action: receive
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/Ping'
+    summary: Heartbeat applicatif de la connexion WebSocket.
   DriverLocationPush:
     action: receive
     channel:
@@ -113,6 +124,13 @@ operations:
     messages:
     - $ref: '#/channels/session/messages/Ack'
     summary: Accusé du message client ; ride_id présent pour ride.subscribe, absent pour driver.location_push.
+  Pong:
+    action: send
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/Pong'
+    summary: Reponse au heartbeat ping. Ce message ne confirme aucun evenement metier manque.
   Error:
     action: send
     channel:
@@ -145,6 +163,24 @@ components:
         roles: Passager propriétaire, chauffeur affecté ou admin.
         trigger: Après connexion ou reconnexion.
         recovery: Réabonner puis GET /v1/rides/{ride_id} ; répéter ajoute au même ensemble de sockets.
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+    Ping:
+      name: Ping
+      title: ping
+      contentType: application/json
+      description: Heartbeat applicatif de la connexion WebSocket.
+      payload:
+        $ref: '#/components/schemas/Ping'
+      examples:
+      - name: exemple
+        payload:
+          event: ping
+      x-contract:
+        roles: Toute connexion authentifiee.
+        trigger: Periodiquement, pour detecter une coupure silencieuse.
+        recovery: Attendre pong ; si absent, reconnecter, se reabonner et relire REST.
         delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
         ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
         errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
@@ -344,6 +380,25 @@ components:
         delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
         ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
         errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+    Pong:
+      name: Pong
+      title: pong
+      contentType: application/json
+      description: Reponse au heartbeat ping. Ce message ne confirme aucun evenement metier manque.
+      payload:
+        $ref: '#/components/schemas/Pong'
+      examples:
+      - name: exemple
+        payload:
+          event: pong
+          at: '2026-10-15T10:00:00Z'
+      x-contract:
+        roles: Connexion emettrice.
+        trigger: Reception d'un ping valide.
+        recovery: En cas d'absence, reconnecter puis relire REST ; aucun replay n'est fourni.
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
     Error:
       name: Error
       title: error
@@ -396,6 +451,14 @@ components:
       required:
       - event
       - ride_id
+    Ping:
+      type: object
+      properties:
+        event:
+          type: string
+          const: ping
+      required:
+      - event
     DriverLocationPush:
       type: object
       properties:
@@ -609,6 +672,16 @@ components:
       required:
       - event
       - received_event
+    Pong:
+      type: object
+      properties:
+        event:
+          type: string
+          const: pong
+        at: *id003
+      required:
+      - event
+      - at
     Error:
       type: object
       properties:

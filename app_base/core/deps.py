@@ -187,6 +187,14 @@ async def partner_command_store(redis: Redis = Depends(get_redis)) -> S2SCommand
     )
 
 
+async def passenger_debt_command_store(redis: Redis = Depends(get_redis)) -> S2SCommandStore:
+    return S2SCommandStore(
+        redis,
+        namespace="passenger-debt",
+        ttl_seconds=settings.passenger_debt_idempotency_ttl_seconds,
+    )
+
+
 _unconfigured_identity_capabilities = IdentityCapabilityClient(
     base_url=None,
     client_id=None,

@@ -77,7 +77,9 @@ def test_connection_with_a_refresh_token_is_refused(ws_client) -> None:
 def test_valid_access_token_connects(ws_client) -> None:
     with ws_client.websocket_connect(f"/v1/ws?token={passenger_token()}") as ws:
         ws.send_json({"event": "ping"})
-        assert ws.receive_json() == {"event": "ignored", "received_event": "ping"}
+        reply = ws.receive_json()
+        assert reply["event"] == "pong"
+        assert reply["at"].endswith("Z")
 
 
 # --- driver.location_push --------------------------------------------------
@@ -227,7 +229,7 @@ def test_unsubscribed_sockets_do_not_receive_other_rides(ws_client, monkeypatch)
 
             # Prove the passenger's queue is empty by round-tripping a ping.
             passenger.send_json({"event": "ping"})
-            assert passenger.receive_json() == {"event": "ignored", "received_event": "ping"}
+            assert passenger.receive_json()["event"] == "pong"
 
 
 def test_unassigned_driver_cannot_publish_ride_location(ws_client, monkeypatch) -> None:
@@ -250,4 +252,4 @@ def test_unknown_events_are_ignored_not_fatal(ws_client) -> None:
         assert ws.receive_json() == {"event": "ignored", "received_event": "some.future.event"}
 
         ws.send_json({"event": "ping"})
-        assert ws.receive_json()["event"] == "ignored"
+        assert ws.receive_json()["event"] == "pong"

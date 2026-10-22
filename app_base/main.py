@@ -33,6 +33,7 @@ from app_base.modules.payment.presentation.router import (
 from app_base.modules.payment.presentation.router import internal_router as payment_internal_router
 from app_base.modules.payment.presentation.router import return_router as payment_return_router
 from app_base.modules.payment.presentation.router import router as payment_router
+from app_base.modules.ride.presentation.capabilities_router import pro_router
 from app_base.modules.ride.presentation.capabilities_router import router as capabilities_router
 from app_base.modules.ride.presentation.comms_task_router import router as comms_task_router
 from app_base.modules.ride.presentation.dispatch_admin_router import router as dispatch_admin_router
@@ -69,6 +70,7 @@ app.include_router(auth_router, prefix="/v1")
 app.include_router(notification_router, prefix="/v1")
 app.include_router(observability_router, prefix="/v1")
 app.include_router(capabilities_router, prefix="/v1")
+app.include_router(pro_router, prefix="/v1")
 app.include_router(places_router, prefix="/v1")
 app.include_router(ride_router, prefix="/v1")
 app.include_router(ride_summary_router)

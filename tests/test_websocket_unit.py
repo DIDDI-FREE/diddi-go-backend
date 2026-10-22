@@ -10,6 +10,14 @@ from app_base.modules.ride.presentation import websocket as ws_module
 pytestmark = pytest.mark.unit
 
 
+class FakeWebSocket:
+    def __init__(self) -> None:
+        self.messages: list[dict] = []
+
+    async def send_json(self, payload: dict) -> None:
+        self.messages.append(payload)
+
+
 def test_plain_http_get_to_ws_returns_upgrade_required():
     response = TestClient(app).get("/v1/ws")
 
@@ -40,3 +48,19 @@ def test_websocket_identity_token_decoder_maps_user_to_passenger(monkeypatch):
 
     assert decoded_user_id == user_id
     assert role == "passenger"
+
+
+@pytest.mark.asyncio
+async def test_ping_receives_a_pong_without_touching_business_state() -> None:
+    websocket = FakeWebSocket()
+
+    await ws_module._handle_message(
+        websocket,
+        {"event": "ping"},
+        user_id=uuid4(),
+        role="passenger",
+        locations=None,
+    )
+
+    assert websocket.messages[0]["event"] == "pong"
+    assert websocket.messages[0]["at"].endswith("Z")

@@ -14,8 +14,15 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app_base.core.auth_deps import get_current_user, require_business_driver, require_role
-from app_base.core.deps import driver_wallet_service, payment_return_context_store, payment_service, session_dep
+from app_base.core.deps import (
+    driver_wallet_service,
+    passenger_debt_command_store,
+    payment_return_context_store,
+    payment_service,
+    session_dep,
+)
 from app_base.core.errors import ApiError
+from app_base.core.s2s_command_store import S2SCommandStore
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.payment.application.return_contexts import PaymentReturnContextStore
 from app_base.modules.payment.application.services import PaymentService
@@ -96,31 +103,82 @@ async def list_passenger_debts(
     return await service.list_passenger_debts(current_user.id, page=page, page_size=page_size)
 
 
+@passenger_debt_router.get("/{debt_id}", response_model=PassengerDebtResponse)
+async def get_passenger_debt(
+    debt_id: UUID,
+    service: PaymentService = Depends(payment_service),
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    return await service.get_passenger_debt(debt_id, passenger_user_id=current_user.id)
+
+
 @passenger_debt_router.post("/{debt_id}/mobile-money/prepare", response_model=PassengerDebtPaymentPreparationResponse)
 async def prepare_passenger_debt_mobile_money(
     debt_id: UUID,
     payload: PaymentPreparationRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", min_length=8, max_length=160),
     service: PaymentService = Depends(payment_service),
     current_user: UserModel = Depends(get_current_user),
+    commands: S2SCommandStore = Depends(passenger_debt_command_store),
 ) -> dict:
     if payload.method != "mobile_money" or payload.mobile_money_network is None:
         raise ApiError(422, "VALIDATION_ERROR", "Un reseau Mobile Money est requis pour regler une dette.")
-    return await service.prepare_passenger_debt_payment(
-        debt_id,
-        passenger_user_id=current_user.id,
-        customer_email=payload.customer_email,
-        customer_phone=payload.customer_phone or current_user.phone,
-        mobile_money_network=payload.mobile_money_network,
-    )
+    reservation = None
+    if idempotency_key:
+        reservation = await commands.reserve(
+            client_id=f"user:{current_user.id}",
+            idempotency_key=idempotency_key,
+            payload={
+                "action": "mobile_money_prepare",
+                "debt_id": str(debt_id),
+                "network": payload.mobile_money_network,
+            },
+        )
+        if reservation.cached_response is not None:
+            return reservation.cached_response
+    try:
+        result = await service.prepare_passenger_debt_payment(
+            debt_id,
+            passenger_user_id=current_user.id,
+            customer_email=payload.customer_email,
+            customer_phone=payload.customer_phone or current_user.phone,
+            mobile_money_network=payload.mobile_money_network,
+        )
+    except Exception:
+        if reservation is not None:
+            await commands.release(reservation)
+        raise
+    if reservation is not None:
+        await commands.complete(reservation, result)
+    return result
 
 
 @passenger_debt_router.post("/{debt_id}/cash-request", response_model=PassengerDebtResponse)
 async def request_passenger_debt_cash_settlement(
     debt_id: UUID,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", min_length=8, max_length=160),
     service: PaymentService = Depends(payment_service),
     current_user: UserModel = Depends(get_current_user),
+    commands: S2SCommandStore = Depends(passenger_debt_command_store),
 ) -> dict:
-    return await service.request_passenger_debt_cash_settlement(debt_id, passenger_user_id=current_user.id)
+    reservation = None
+    if idempotency_key:
+        reservation = await commands.reserve(
+            client_id=f"user:{current_user.id}",
+            idempotency_key=idempotency_key,
+            payload={"action": "cash_request", "debt_id": str(debt_id)},
+        )
+        if reservation.cached_response is not None:
+            return reservation.cached_response
+    try:
+        result = await service.request_passenger_debt_cash_settlement(debt_id, passenger_user_id=current_user.id)
+    except Exception:
+        if reservation is not None:
+            await commands.release(reservation)
+        raise
+    if reservation is not None:
+        await commands.complete(reservation, result)
+    return result
 
 
 @passenger_debt_router.post("/{debt_id}/confirm-cash", response_model=PassengerDebtResponse)

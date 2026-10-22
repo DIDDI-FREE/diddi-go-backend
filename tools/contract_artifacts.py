@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "draft.2026-10-20"
+VERSION = "draft.2026-10-22"
 METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
 UUID_EXAMPLE = "11111111-1111-4111-8111-111111111111"
 AT_EXAMPLE = "2026-10-15T10:00:00Z"
@@ -118,6 +118,17 @@ def websocket_spec() -> dict:
         "Passager propriétaire, chauffeur affecté ou admin.",
         "Après connexion ou reconnexion.",
         "Réabonner puis GET /v1/rides/{ride_id} ; répéter ajoute au même ensemble de sockets.",
+    )
+    add(
+        "Ping",
+        "ping",
+        "receive",
+        {},
+        {},
+        "Heartbeat applicatif de la connexion WebSocket.",
+        "Toute connexion authentifiee.",
+        "Periodiquement, pour detecter une coupure silencieuse.",
+        "Attendre pong ; si absent, reconnecter, se reabonner et relire REST.",
     )
     add(
         "DriverLocationPush",
@@ -255,6 +266,17 @@ def websocket_spec() -> dict:
         "Traitement réussi d'un message connu.",
         "Pas de correlation_id ; ACK ne garantit ni persistance GPS HTTP ni livraison aux autres clients.",
         required=["received_event"],
+    )
+    add(
+        "Pong",
+        "pong",
+        "send",
+        {"at": timestamp},
+        {"at": AT_EXAMPLE},
+        "Reponse au heartbeat ping. Ce message ne confirme aucun evenement metier manque.",
+        "Connexion emettrice.",
+        "Reception d'un ping valide.",
+        "En cas d'absence, reconnecter puis relire REST ; aucun replay n'est fourni.",
     )
     add(
         "Error",

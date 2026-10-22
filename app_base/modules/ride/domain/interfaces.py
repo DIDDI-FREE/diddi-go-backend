@@ -87,6 +87,8 @@ class RideRepository(Protocol):
 
     async def find_active_by_driver_user_id(self, user_id: UUID) -> Ride | None: ...
 
+    async def find_active_by_passenger_user_id(self, user_id: UUID) -> Ride | None: ...
+
     async def list_by(
         self,
         *,

@@ -16,6 +16,18 @@ a `arrived`. Le compteur appartient uniquement a cette arrivee :
 - les secondes gratuites inutilisees ne sont jamais reportees.
 
 Le passager suit `ride.status_changed`, mais relit la course apres reconnexion.
+La lecture `GET /v1/rides/{ride_id}` expose aussi dans `arrival` les valeurs
+contractuelles `free_seconds`, `price_per_minute_xof` et
+`no_show_after_seconds` : ne jamais les remplacer par des constantes Flutter.
+
+## Reprise apres interruption
+
+Au retour de l'application ou apres une coupure WebSocket :
+
+1. appeler `GET /v1/rides/active/current` ;
+2. si la route retourne 200, afficher cette course et se reabonner au socket ;
+3. si elle retourne `404 ACTIVE_RIDE_NOT_FOUND`, revenir a l'ecran d'accueil ;
+4. ne jamais deduire une course active depuis le cache seul.
 
 ## Supplements
 
@@ -45,3 +57,12 @@ idempotent ; tenter de remplacer une decision terminale retourne
 
 L'attente a `100 XOF/minute` est calculee par le backend et n'est pas une
 ligne libre ajoutee par le chauffeur.
+
+## Escales
+
+Une escale est un waypoint qui modifie l'itineraire complet, et non une pause
+facturee automatiquement. Le chauffeur peut actuellement ajouter le point via
+`POST /v1/rides/{ride_id}/stops`. La tarification d'une escale doit donc venir
+d'un nouveau devis ou d'un ajustement explicite valide par le passager ; elle
+ne doit pas etre calculee comme une attente. Les horodatages operationnels par
+escale ne sont pas encore exposes et ne doivent pas etre affiches comme acquis.

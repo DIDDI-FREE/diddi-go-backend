@@ -11,6 +11,7 @@ from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.presentation.schemas import EmergencyContactUpsertRequest, MyScoresResponse
 
 router = APIRouter(prefix="/me", tags=["me"])
+pro_router = APIRouter(prefix="/pro", tags=["pro"])
 
 
 @router.get("/capabilities")
@@ -23,6 +24,29 @@ async def get_my_capabilities(
         identity_role=current_user.role,
         identity_status=current_user.status,
     )
+
+
+@pro_router.get("/metiers")
+async def get_my_diddigo_metiers(
+    service: DriverService = Depends(driver_service),
+    current_user: UserModel = Depends(get_current_active_user),
+) -> dict:
+    """DiddiGo-local professional projection.
+
+    This endpoint intentionally does not aggregate DiddiSend or any other
+    service. DiddiFreeID/DiddiFree Pro remains the future global owner.
+    """
+    capabilities = await service.get_capabilities(
+        current_user.id,
+        identity_role=current_user.role,
+        identity_status=current_user.status,
+    )
+    return {
+        "scope": "diddigo_local",
+        "user_id": str(current_user.id),
+        "metiers": capabilities["professional_profiles"],
+        "consumer": capabilities["consumer"],
+    }
 
 
 @router.get("/scores", response_model=MyScoresResponse)

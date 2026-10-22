@@ -32,6 +32,26 @@ class FakeRideRepo:
     async def find_by_id(self, ride_id: UUID) -> Ride | None:
         return self.ride if ride_id == self.ride.id else None
 
+    async def find_active_by_passenger_user_id(self, user_id: UUID) -> Ride | None:
+        return self.ride if user_id == self.ride.passenger_user_id and self.ride.status in {
+            RideStatus.REQUESTED,
+            RideStatus.MATCHED,
+            RideStatus.DRIVER_EN_ROUTE,
+            RideStatus.ARRIVED,
+            RideStatus.IN_PROGRESS,
+            RideStatus.WAITING,
+        } else None
+
+    async def find_active_by_driver_user_id(self, user_id: UUID) -> Ride | None:
+        return self.ride if user_id == DRIVER_USER_ID and self.ride.status in {
+            RideStatus.REQUESTED,
+            RideStatus.MATCHED,
+            RideStatus.DRIVER_EN_ROUTE,
+            RideStatus.ARRIVED,
+            RideStatus.IN_PROGRESS,
+            RideStatus.WAITING,
+        } else None
+
     async def list_by(self, **filters):
         self.last_list_filters = filters
         if filters.get("driver_id") == self.ride.driver_id:
@@ -98,6 +118,31 @@ async def test_business_driver_user_can_read_assigned_ride_detail() -> None:
 
     assert result["id"] == str(RIDE_ID)
     assert result["status"] == "matched"
+
+
+@pytest.mark.asyncio
+async def test_passenger_can_restore_their_active_ride() -> None:
+    result = await service_with(matched_ride()).get_active_ride(
+        actor_user_id=PASSENGER_ID,
+        actor_role="user",
+    )
+
+    assert result["id"] == str(RIDE_ID)
+    assert result["arrival"]["free_seconds"] == 180
+    assert result["arrival"]["price_per_minute_xof"] == 100
+    assert result["arrival"]["no_show_after_seconds"] == 600
+
+
+@pytest.mark.asyncio
+async def test_active_ride_returns_not_found_when_no_ride_exists() -> None:
+    ride = matched_ride()
+    ride.status = RideStatus.COMPLETED
+
+    with pytest.raises(ApiError) as exc_info:
+        await service_with(ride).get_active_ride(actor_user_id=PASSENGER_ID, actor_role="user")
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.code == "ACTIVE_RIDE_NOT_FOUND"
 
 
 @pytest.mark.asyncio

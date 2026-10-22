@@ -123,6 +123,19 @@ class PaymentService:
             },
         }
 
+    async def get_passenger_debt(self, debt_id: UUID, *, passenger_user_id: UUID) -> dict:
+        """Read one debt after a provider return or WebSocket reconnect.
+
+        DiddiPay remains authoritative for provider processing. This route
+        exposes DiddiGo's current business eligibility state only.
+        """
+        debt = await self.payment_repo.find_debt_by_id(debt_id)
+        if debt is None:
+            raise ApiError(404, ErrorCode.PASSENGER_DEBT_NOT_FOUND, "Dette passager introuvable.")
+        if debt.passenger_user_id != passenger_user_id:
+            raise ApiError(403, ErrorCode.RIDE_NOT_OWNED_BY_USER, "Cette dette ne vous appartient pas.")
+        return _passenger_debt_payload(debt)
+
     async def prepare_passenger_debt_payment(
         self,
         debt_id: UUID,
@@ -141,6 +154,11 @@ class PaymentService:
             customer_phone=customer_phone,
             mobile_money_network=mobile_money_network,
         )
+        # The provider owns the expiry. Expose it when supplied, but never
+        # manufacture one locally because that would mislead a reconnecting UI.
+        next_action = payment.get("next_action") if isinstance(payment.get("next_action"), dict) else None
+        payment["mobile_money_network"] = mobile_money_network
+        payment["expires_at"] = next_action.get("expires_at") if next_action else None
         await self.payment_repo.update_debt_status(debt.id, status=PassengerDebtStatus.MOBILE_MONEY_PENDING)
         return {
             "debt": _passenger_debt_payload(await self.payment_repo.find_debt_by_id(debt.id)),

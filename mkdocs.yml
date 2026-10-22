@@ -47,6 +47,7 @@ nav:
   - API:
       - Vue d'ensemble: api/index.md
       - Contrat HTTP et WebSocket: api/API_CONTRACT.md
+      - Catalogue d'erreurs: api/error-catalog.md
       - Questions ouvertes: api/open-questions.md
       - Compatibilité WebSocket: realtime/WEBSOCKET_CONTRACT.md
   - Architecture:
@@ -67,6 +68,7 @@ nav:
       - Clarifications V2: frontend/DIDDIGO_FRONTEND_CLARIFICATIONS_2026-10-12_V2.md
       - Retraits chauffeur: frontend/DIDDIGO_DRIVER_WITHDRAWALS_BRIEF_2026-10-10.md
       - Dette passager (20 octobre): frontend/DIDDIGO_FRONTEND_PASSENGER_DEBT_BRIEF_2026-10-20.md
+      - Brief integre (22 octobre): frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-22.md
   - Intégrations:
       - DiddiFiles: integrations/diddifiles.md
       - DiddiPay: integrations/diddipay.md
@@ -92,6 +94,7 @@ nav:
       - 20 octobre 2026: changelog/2026-10-20.md
       - 20 octobre 2026 - DiddiSupport: changelog/2026-10-20-support-context.md
       - 20 octobre 2026 - Scoring: changelog/2026-10-20-scoring-fairness.md
+      - 22 octobre 2026: changelog/2026-10-22.md
 
 exclude_docs: |
   archive/

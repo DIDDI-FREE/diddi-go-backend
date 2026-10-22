@@ -1,12 +1,12 @@
 # Contrat API DiddiGo — HTTP et WebSocket
 
-Version documentaire : `draft.2026-10-20`. Périmètre : implémentation locale, applications passager/chauffeur, Backoffice et services internes.
+Version documentaire : `draft.2026-10-22`. Perimetre : implementation locale, applications passager/chauffeur, Backoffice et services internes.
 
 Ce contrat est exploitable comme référence d'intégration, mais reste un **brouillon incomplet** : les réponses HTTP non typées et les décisions non vérifiées sont recensées dans [open-questions.md](open-questions.md). Il ne certifie pas la version déployée : le contrôle staging du 14 octobre 2026 à 18:38 UTC exposait encore 136 opérations, contre 138 dans le dépôt.
 
 ## Références et navigation
 
-Ce dossier contient uniquement quatre fichiers. Les règles humaines sont maintenues ici ; les schémas HTTP dans [openapi.yaml](openapi.yaml), les messages WebSocket dans [asyncapi.yaml](asyncapi.yaml), et les questions techniques/MVP dans [open-questions.md](open-questions.md).
+Les regles humaines sont maintenues ici ; les schemas HTTP dans [openapi.yaml](openapi.yaml), les messages WebSocket dans [asyncapi.yaml](asyncapi.yaml), les erreurs stables dans [error-catalog.md](error-catalog.md), et les questions techniques/MVP dans [open-questions.md](open-questions.md).
 
 - [HTTP et autorisation](#connexion-http)
 - [WebSocket](#websocket) et [reconnexion](#reconnexion)
@@ -143,7 +143,7 @@ Portée : code local au 20 octobre 2026 ; version déployée à contrôler sépa
 | Auth socket | Jeton accès dans la query `token` ; validation à la connexion ; revalidation en cours de socket non garantie |
 | En-tête de corrélation | `X-Request-ID` et `error.request_id` quand présents ; ce n'est pas une clé d'idempotence |
 | Enum inconnue | Ne pas déduire une nouvelle permission ou transition ; relire l'état et tolérer les notifications futures |
-| Version | `draft.2026-10-20` pour ce dossier ; `0.1.0` applicatif n'identifie pas un build staging |
+| Version | `draft.2026-10-22` pour ce dossier ; `0.1.0` applicatif n'identifie pas un build staging |
 
 ### Erreurs HTTP
 
@@ -197,8 +197,9 @@ Format standard :
 | 409 | `EARLY_STOP_REQUEST_EXPIRED` | Fenêtre de deux minutes expirée | Refaire la demande |
 | 503 | `EARLY_STOP_PRICING_UNAVAILABLE` | Trace chauffeur insuffisante | Conserver la course active et réessayer |
 
-Ce catalogue complete l'OpenAPI. Chaque nouveau code stable doit etre ajoute
-dans cette section et dans le changelog du jour.
+Le catalogue complet, classe par domaine et action frontend, est publie dans
+[error-catalog.md](error-catalog.md). Chaque nouveau code stable doit etre
+ajoute a ce fichier et au changelog du jour.
 
 <a id="websocket"></a>
 
@@ -389,7 +390,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 ## Inventaire HTTP
 
 <!-- generated:http-inventory:start -->
-135 chemins ; 149 opérations HTTP.
+138 chemins ; 152 opérations HTTP.
 
 | Méthode | Chemin | Opération | Réponses documentées |
 |---|---|---|---|
@@ -508,6 +509,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 | GET | `/v1/me/scores` | Get My Scores | 200 |
 | GET | `/v1/partners/me` | Get My Partners | 200 |
 | GET | `/v1/passenger/debts` | List Passenger Debts | 200, 422 |
+| GET | `/v1/passenger/debts/{debt_id}` | Get Passenger Debt | 200, 422 |
 | POST | `/v1/passenger/debts/{debt_id}/cash-request` | Request Passenger Debt Cash Settlement | 200, 422 |
 | POST | `/v1/passenger/debts/{debt_id}/confirm-cash` | Confirm Passenger Debt Cash Settlement | 200, 422 |
 | POST | `/v1/passenger/debts/{debt_id}/mobile-money/prepare` | Prepare Passenger Debt Mobile Money | 200, 422 |
@@ -515,8 +517,10 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 | POST | `/v1/payments/{ride_id}/confirm-cash` | Confirm Cash | 200, 422 |
 | POST | `/v1/payments/{ride_id}/prepare` | Prepare Payment | 200, 422 |
 | GET | `/v1/places/search` | Search Places | 200, 422 |
+| GET | `/v1/pro/metiers` | Get My Diddigo Metiers | 200 |
 | POST | `/v1/rides` | Create Ride | 201, 422 |
 | GET | `/v1/rides` | List Rides | 200, 422 |
+| GET | `/v1/rides/active/current` | Get Active Ride | 200 |
 | POST | `/v1/rides/pricing/estimate` | Estimate Pricing | 200, 422 |
 | GET | `/v1/rides/shared/{token}` | Get Shared Ride | 200, 422 |
 | GET | `/v1/rides/{ride_id}` | Get Ride | 200, 422 |

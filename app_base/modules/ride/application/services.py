@@ -356,6 +356,24 @@ class RideService:
         )
         return _paginated_rides(rides, total, page=page, page_size=page_size)
 
+    async def get_active_ride(self, *, actor_user_id: UUID, actor_role: str) -> dict:
+        """Return the caller's single active ride, if any.
+
+        The database rule already prevents a passenger from holding multiple
+        active rides. Drivers are similarly assigned to at most one active
+        ride, so the response is intentionally a resource, not a list.
+        """
+        if _normalise_actor_role(actor_role) == "driver":
+            ride = await self.ride_repo.find_active_by_driver_user_id(actor_user_id)
+            viewer_role = "driver"
+        else:
+            ride = await self.ride_repo.find_active_by_passenger_user_id(actor_user_id)
+            viewer_role = "passenger"
+        if ride is None:
+            raise ApiError(404, "ACTIVE_RIDE_NOT_FOUND", "Aucune course active pour cet utilisateur.")
+        driver = await self._driver_payload(ride)
+        return _ride_detail_payload(ride, driver=driver, viewer_role=viewer_role)
+
     async def update_status(
         self,
         ride_id: UUID,
@@ -1368,6 +1386,9 @@ def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -
             "waiting_started_at": iso_utc(ride.pre_ride_wait_started_at),
             "waiting_seconds": ride.pre_ride_wait_seconds,
             "waiting_fee": int(ride.pre_ride_wait_fee) if money_visible else None,
+            "free_seconds": settings.pre_ride_wait_free_seconds,
+            "price_per_minute_xof": settings.pre_ride_wait_price_per_minute_xof,
+            "no_show_after_seconds": settings.pre_ride_no_show_seconds,
         },
         "start_authorization": {
             "code": _ride_start_code(ride.id)

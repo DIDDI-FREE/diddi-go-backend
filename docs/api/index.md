@@ -35,3 +35,9 @@ mkdocs build --strict
 ```
 
 Le changelog du jour et le guide métier concerné doivent être mis à jour dans la même pull request.
+
+## Nouvelles lectures de reprise
+
+- `GET /v1/rides/active/current` restaure la course non terminee du passager ou du chauffeur. Un `404 ACTIVE_RIDE_NOT_FOUND` signifie qu'il n'y a rien a reprendre.
+- `GET /v1/passenger/debts/{debt_id}` relit une dette precise apres un retour Mobile Money. DiddiGo expose son etat metier ; DiddiPay reste la source de verite fournisseur.
+- `GET /v1/pro/metiers` est une vue **DiddiGo locale** du profil professionnel chauffeur. Elle ne remplace pas la future agregation DiddiFree Pro/DiddiFreeID.
