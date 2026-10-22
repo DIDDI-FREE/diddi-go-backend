@@ -363,6 +363,20 @@ async def test_rating_requires_a_completed_ride(client, passenger, driver) -> No
     assert response.json()["error"]["code"] == "RIDE_NOT_COMPLETED"
 
 
+async def test_payment_preparation_requires_a_completed_ride(client, passenger, driver) -> None:
+    ride_id = await matched_ride(client, passenger, driver)
+
+    response = await client.post(
+        f"/v1/payments/{ride_id}/prepare",
+        json={"method": "mobile_money", "mobile_money_network": "wave"},
+        headers=passenger,
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "RIDE_NOT_COMPLETED"
+    assert response.json()["error"]["details"]["ride_status"] in {"matched", "driver_en_route"}
+
+
 async def test_passenger_rating_updates_public_driver_rating(client, passenger, driver) -> None:
     ride_id, _ = await complete_ride(client, passenger, driver)
 

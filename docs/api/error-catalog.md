@@ -50,6 +50,7 @@ garanties dans cette enveloppe.
 | 404 | `PASSENGER_DEBT_NOT_FOUND` | Rafraichir la liste ; ne pas deviner une dette. |
 | 409 | `PASSENGER_DEBT_SETTLEMENT_INVALID` | Rafraichir la dette, elle est reglee ou dans un etat incompatible. |
 | 409 | `PAYMENT_OPERATION_CONFLICT` | Relire course, paiement ou dette avant une nouvelle tentative. |
+| 409 | `RIDE_NOT_COMPLETED` | Attendre la fin effective de la course puis relire son montant final avant de preparer le paiement. |
 | 422 | `INVALID_PAYMENT_METHOD` | Afficher cash ou Mobile Money avec reseau obligatoire. |
 | 503 | `PAYMENT_CONFIGURATION_MISSING`, `PAYMENT_PROVIDER_UNAVAILABLE` | Afficher une indisponibilite temporaire ; ne pas creer de doublon. |
 | 409 | `IDEMPOTENCY_CONFLICT`, `IDEMPOTENCY_IN_PROGRESS` | Conserver la meme cle pour le meme retry ; relire la dette si le traitement est en cours. |

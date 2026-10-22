@@ -70,7 +70,7 @@ La demande émet `ride.status_changed` avec `status=early_stop_requested`. **Cet
 | Opération | Règle |
 |---|---|
 | Création de course | `payment_method` vaut `cash` ou `mobile_money` ; les anciennes méthodes de recharge wallet ne sont pas des méthodes de course |
-| `POST /v1/payments/{ride_id}/prepare` | Envoyer explicitement `method=mobile_money` et `mobile_money_network=orange|wave|mtn` ; avec `cash`, ne pas envoyer de réseau |
+| `POST /v1/payments/{ride_id}/prepare` | Autorise uniquement une course `completed` avec montant final ; envoyer explicitement `method=mobile_money` et `mobile_money_network=orange|wave|mtn` ; une fin normale et un arrêt anticipé confirmé utilisent tous deux `completed` |
 | Reprise numérique | Une intention active est réutilisée ; une intention terminale admissible ou expirée peut être remplacée ; relire `GET /v1/payments/{ride_id}` après retour navigateur |
 | `POST /v1/payments/{ride_id}/confirm-cash` | Chauffeur affecté disposant d'un profil, corps `amount_collected` ; ne pas déduire le paiement d'un écran de succès |
 | `POST /v1/drivers/me/wallet/withdrawals/quote` | Devis serveur : montant, frais, net, devise, expiration |

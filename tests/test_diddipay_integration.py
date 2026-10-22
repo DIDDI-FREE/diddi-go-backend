@@ -354,6 +354,32 @@ async def test_prepare_wave_creates_diddipay_intent(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_prepare_payment_rejects_ride_before_completion() -> None:
+    ride = make_completed_ride()
+    ride.status = RideStatus.IN_PROGRESS
+    gateway = FakeDiddiPay(uuid4())
+    service = PaymentService(
+        payment_repo=FakePaymentRepo(),
+        ride_repo=FakeRideRepo(ride),
+        diddipay=gateway,
+    )
+
+    with pytest.raises(ApiError) as exc_info:
+        await service.prepare_payment(
+            ride.id,
+            "mobile_money",
+            payer_user_id=ride.passenger_user_id,
+            customer_email="client@example.com",
+            mobile_money_network="wave",
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.code == "RIDE_NOT_COMPLETED"
+    assert exc_info.value.details == {"ride_status": "in_progress"}
+    assert gateway.last_payload is None
+
+
+@pytest.mark.asyncio
 async def test_prepare_wave_replaces_failed_intent_and_then_reuses_retry(monkeypatch) -> None:
     monkeypatch.setattr(
         "app_base.modules.payment.application.services.settings.diddigo_consumer_return_url",

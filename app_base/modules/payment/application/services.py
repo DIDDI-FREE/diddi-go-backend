@@ -300,6 +300,19 @@ class PaymentService:
             raise ApiError(404, ErrorCode.RIDE_NOT_FOUND, "Aucune course trouvee avec cet identifiant.")
         if ride.passenger_user_id != payer_user_id:
             raise ApiError(403, ErrorCode.RIDE_NOT_OWNED_BY_USER, "Cette course ne vous appartient pas.")
+        if ride.status is not RideStatus.COMPLETED:
+            raise ApiError(
+                409,
+                ErrorCode.RIDE_NOT_COMPLETED,
+                "Le paiement ne peut etre prepare qu'apres la fin de la course.",
+                {"ride_status": ride.status.value},
+            )
+        if ride.final_fare is None or ride.final_fare <= 0:
+            raise ApiError(
+                409,
+                ErrorCode.PAYMENT_OPERATION_CONFLICT,
+                "Le montant final de la course est indisponible.",
+            )
         try:
             payment_method = PaymentMethod(method)
         except ValueError as exc:
