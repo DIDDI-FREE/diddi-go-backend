@@ -13,6 +13,7 @@ from app_base.modules.payment.domain.entities import (
     DriverWallet,
     DriverWithdrawal,
     DriverWithdrawalQuote,
+    DriverWithdrawalVerification,
     PassengerDebt,
     Transaction,
 )
@@ -104,6 +105,27 @@ class PaymentRepository(Protocol):
     async def get_or_create_wallet(self, driver_id: UUID, *, currency: str = "XOF") -> DriverWallet: ...
 
     async def withdrawal_reserved_total(self, driver_id: UUID) -> object: ...
+
+    async def find_withdrawal_by_quote_id(self, quote_id: UUID) -> DriverWithdrawal | None: ...
+
+    async def save_withdrawal_verification(
+        self, verification: DriverWithdrawalVerification
+    ) -> DriverWithdrawalVerification: ...
+
+    async def find_latest_withdrawal_verification(
+        self, driver_id: UUID
+    ) -> DriverWithdrawalVerification | None: ...
+
+    async def consume_withdrawal_verification(
+        self,
+        verification_id: UUID,
+        *,
+        driver_id: UUID,
+        beneficiary_destination: dict[str, Any],
+        code_hash: str,
+        max_attempts: int,
+        now: datetime,
+    ) -> DriverWithdrawalVerification: ...
 
     async def list_ledger_entries(
         self,

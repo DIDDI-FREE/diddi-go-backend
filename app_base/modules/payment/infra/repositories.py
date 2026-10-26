@@ -25,6 +25,7 @@ from app_base.modules.payment.domain.entities import (
     DriverWallet,
     DriverWithdrawal,
     DriverWithdrawalQuote,
+    DriverWithdrawalVerification,
     PassengerDebt,
     PassengerDebtStatus,
     PaymentMethod,
@@ -37,6 +38,22 @@ from app_base.modules.payment.domain.entities import (
     WithdrawalStatus,
 )
 from app_base.modules.payment.infra import models as orm
+
+
+def _withdrawal_verification_to_domain(
+    row: orm.DriverWithdrawalVerificationModel,
+) -> DriverWithdrawalVerification:
+    return DriverWithdrawalVerification(
+        id=row.id,
+        driver_id=row.driver_id,
+        beneficiary_destination=row.beneficiary_destination,
+        recipient_phone=row.recipient_phone,
+        code_hash=row.code_hash,
+        expires_at=row.expires_at,
+        attempt_count=row.attempt_count,
+        consumed_at=row.consumed_at,
+        created_at=row.created_at,
+    )
 
 
 class SqlAlchemyPaymentRepository:
@@ -473,6 +490,71 @@ class SqlAlchemyPaymentRepository:
         await self._session.flush()
         return quote
 
+    async def save_withdrawal_verification(
+        self, verification: DriverWithdrawalVerification
+    ) -> DriverWithdrawalVerification:
+        self._session.add(
+            orm.DriverWithdrawalVerificationModel(
+                id=verification.id,
+                driver_id=verification.driver_id,
+                beneficiary_destination=verification.beneficiary_destination,
+                recipient_phone=verification.recipient_phone,
+                code_hash=verification.code_hash,
+                expires_at=verification.expires_at,
+                attempt_count=verification.attempt_count,
+                consumed_at=verification.consumed_at,
+                created_at=verification.created_at or datetime.now(UTC),
+            )
+        )
+        await self._session.flush()
+        return verification
+
+    async def find_latest_withdrawal_verification(
+        self, driver_id: UUID
+    ) -> DriverWithdrawalVerification | None:
+        result = await self._session.execute(
+            select(orm.DriverWithdrawalVerificationModel)
+            .where(orm.DriverWithdrawalVerificationModel.driver_id == driver_id)
+            .order_by(orm.DriverWithdrawalVerificationModel.created_at.desc())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        return _withdrawal_verification_to_domain(row) if row is not None else None
+
+    async def consume_withdrawal_verification(
+        self,
+        verification_id: UUID,
+        *,
+        driver_id: UUID,
+        beneficiary_destination: dict[str, Any],
+        code_hash: str,
+        max_attempts: int,
+        now: datetime,
+    ) -> DriverWithdrawalVerification:
+        result = await self._session.execute(
+            select(orm.DriverWithdrawalVerificationModel)
+            .where(orm.DriverWithdrawalVerificationModel.id == verification_id)
+            .with_for_update()
+        )
+        row = result.scalar_one_or_none()
+        if row is None or row.driver_id != driver_id:
+            raise LookupError("WITHDRAWAL_VERIFICATION_NOT_FOUND")
+        if row.consumed_at is not None:
+            raise LookupError("WITHDRAWAL_VERIFICATION_USED")
+        if row.expires_at <= now:
+            raise LookupError("WITHDRAWAL_VERIFICATION_EXPIRED")
+        if row.attempt_count >= max_attempts:
+            raise LookupError("WITHDRAWAL_VERIFICATION_LOCKED")
+        if row.beneficiary_destination != beneficiary_destination or row.code_hash != code_hash:
+            row.attempt_count += 1
+            await self._session.flush()
+            if row.attempt_count >= max_attempts:
+                raise LookupError("WITHDRAWAL_VERIFICATION_LOCKED")
+            raise LookupError("WITHDRAWAL_VERIFICATION_INVALID")
+        row.consumed_at = now
+        await self._session.flush()
+        return _withdrawal_verification_to_domain(row)
+
     async def reserve_withdrawal_from_quote(self, withdrawal: DriverWithdrawal, *, now: datetime) -> DriverWithdrawal:
         quote_result = await self._session.execute(
             select(orm.DriverWithdrawalQuoteModel)
@@ -562,6 +644,13 @@ class SqlAlchemyPaymentRepository:
 
     async def find_withdrawal_by_id(self, withdrawal_id: UUID) -> DriverWithdrawal | None:
         row = await self._session.get(orm.DriverWithdrawalModel, withdrawal_id)
+        return self._withdrawal_to_domain(row) if row else None
+
+    async def find_withdrawal_by_quote_id(self, quote_id: UUID) -> DriverWithdrawal | None:
+        result = await self._session.execute(
+            select(orm.DriverWithdrawalModel).where(orm.DriverWithdrawalModel.quote_id == quote_id)
+        )
+        row = result.scalar_one_or_none()
         return self._withdrawal_to_domain(row) if row else None
 
     async def find_withdrawal_by_payout_id(self, payout_id: UUID) -> DriverWithdrawal | None:

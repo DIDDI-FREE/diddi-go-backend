@@ -63,6 +63,19 @@ _SUPPLEMENT_FIXED_AMOUNTS = {
     "baggage_large": Decimal("1000"),
 }
 _SUPPLEMENT_OTHER_MAX = Decimal("1000")
+_SUPPLEMENT_CATALOG = (
+    {"type": "toll", "label": "Peage", "amount_xof": 500},
+    {"type": "parking", "label": "Parking", "amount_xof": 200},
+    {"type": "baggage_standard", "label": "Bagage", "amount_xof": 500},
+    {"type": "baggage_large", "label": "Bagage volumineux", "amount_xof": 1000},
+    {
+        "type": "other",
+        "label": "Autre frais",
+        "minimum_amount_xof": 1,
+        "maximum_amount_xof": 1000,
+        "requires_custom_label": True,
+    },
+)
 
 
 def iso_utc(dt: datetime | None) -> str | None:
@@ -364,6 +377,10 @@ class RideService:
             raise ApiError(404, "ACTIVE_RIDE_NOT_FOUND", "Aucune course active pour cet utilisateur.")
         driver = await self._driver_payload(ride)
         return _ride_detail_payload(ride, driver=driver, viewer_role=viewer_role)
+
+    def get_supplement_catalog(self) -> dict:
+        """Expose pricing rules so mobile clients never hard-code fare add-ons."""
+        return {"currency": "XOF", "items": list(_SUPPLEMENT_CATALOG)}
 
     async def update_status(
         self,
@@ -801,6 +818,7 @@ class RideService:
         actor_role: str,
         supplement_type: str,
         amount: Decimal | None,
+        custom_label: str | None = None,
     ) -> dict:
         ride = await self._require_active_ride_for_driver(
             ride_id,
@@ -810,11 +828,23 @@ class RideService:
         )
         supplement_type = supplement_type.strip().lower()
         amount = _supplement_amount(supplement_type, amount)
+        if supplement_type == "other":
+            custom_label = (custom_label or "").strip()
+            if not custom_label:
+                raise ApiError(
+                    422,
+                    "SUPPLEMENT_LABEL_REQUIRED",
+                    "Un libelle est requis pour un autre frais.",
+                    {"field": "custom_label"},
+                )
+        else:
+            custom_label = None
         supplement = RideSupplement(
             id=uuid4(),
             ride_id=ride.id,
             amount=amount,
             reason=supplement_type,
+            custom_label=custom_label,
             source="catalog",
             status="pending",
             created_by_user_id=actor_user_id,
@@ -1365,6 +1395,7 @@ def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -
         "payment": {
             "method": ride.payment_method.value,
             "transaction_id": str(ride.payment_transaction_id) if ride.payment_transaction_id else None,
+            "ready": ride.status is RideStatus.COMPLETED and ride.final_fare is not None and ride.final_fare > 0,
         },
         "quote_id": str(ride.quote_id) if ride.quote_id else None,
         "early_stop": {
@@ -1423,6 +1454,7 @@ def _supplement_payload(supplement: RideSupplement) -> dict:
         "amount": int(supplement.amount),
         "reason": supplement.reason,
         "type": supplement.reason,
+        "custom_label": supplement.custom_label,
         "source": supplement.source,
         "status": supplement.status,
         "created_by_user_id": str(supplement.created_by_user_id) if supplement.created_by_user_id else None,

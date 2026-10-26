@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from hashlib import sha256
+from secrets import randbelow
 from uuid import UUID
 
 from app_base.core.error_codes import ErrorCode
@@ -16,6 +18,7 @@ from app_base.modules.payment.domain.entities import (
     DriverTopup,
     DriverWithdrawal,
     DriverWithdrawalQuote,
+    DriverWithdrawalVerification,
     PaymentMethod,
     PaymentStatus,
     TopupStatus,
@@ -28,6 +31,7 @@ from app_base.modules.payment.domain.interfaces import PaymentRepository
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.ride.domain.entities import Ride
 from app_base.modules.ride.domain.interfaces import DriverProfileRepository
+from app_base.shared_kernel.contracts.sms import SmsProvider
 
 
 @dataclass
@@ -36,6 +40,7 @@ class DriverWalletService:
     driver_repo: DriverProfileRepository
     diddipay: DiddiPayClient | None = None
     return_contexts: PaymentReturnContextStore | None = None
+    sms: SmsProvider | None = None
 
     async def get_wallet(self, *, driver_user_id: UUID) -> dict:
         driver_id = await self._driver_id_for_user(driver_user_id)
@@ -226,11 +231,46 @@ class DriverWalletService:
         quote_id: UUID,
         beneficiary_reference: str,
         beneficiary_destination: dict,
+        verification_id: UUID,
+        verification_code: str,
+        profile_phone: str,
     ) -> dict:
         driver_id = await self._driver_id_for_user(driver_user_id)
         if not beneficiary_reference.strip():
             raise ApiError(422, "WITHDRAWAL_BENEFICIARY_REQUIRED", "Le beneficiaire est requis.")
+        if not profile_phone:
+            raise ApiError(
+                409,
+                "WITHDRAWAL_PROFILE_PHONE_REQUIRED",
+                "Un numero de profil verifie est requis pour confirmer le retrait.",
+            )
+        existing = await self.payment_repo.find_withdrawal_by_quote_id(quote_id)
+        if existing is not None:
+            if existing.driver_id != driver_id or existing.beneficiary_destination != beneficiary_destination:
+                raise ApiError(409, "WITHDRAWAL_QUOTE_ALREADY_USED", "Ce devis de retrait est deja utilise.")
+            return _withdrawal_payload(existing)
         now = datetime.now(UTC)
+        try:
+            await self.payment_repo.consume_withdrawal_verification(
+                verification_id,
+                driver_id=driver_id,
+                beneficiary_destination=beneficiary_destination,
+                code_hash=_otp_hash(verification_code),
+                max_attempts=settings.driver_withdrawal_otp_max_attempts,
+                now=now,
+            )
+        except LookupError as exc:
+            code = str(exc)
+            status = 400
+            if code == "WITHDRAWAL_VERIFICATION_NOT_FOUND":
+                status = 404
+            elif code == "WITHDRAWAL_VERIFICATION_USED":
+                status = 409
+            elif code == "WITHDRAWAL_VERIFICATION_EXPIRED":
+                status = 410
+            elif code == "WITHDRAWAL_VERIFICATION_LOCKED":
+                status = 429
+            raise ApiError(status, code, "Verification du retrait impossible.") from exc
         withdrawal_id = DriverWithdrawal.new_id()
         withdrawal = DriverWithdrawal(
             id=withdrawal_id,
@@ -292,6 +332,70 @@ class DriverWalletService:
         withdrawal = await self.apply_withdrawal_provider_payload(withdrawal, payout)
         await self.payment_repo.commit()
         return _withdrawal_payload(withdrawal)
+
+    async def request_withdrawal_verification(
+        self,
+        *,
+        driver_user_id: UUID,
+        profile_phone: str,
+        beneficiary_destination: dict,
+    ) -> dict:
+        """Send a payout-specific OTP to the verified identity phone."""
+        driver_id = await self._driver_id_for_user(driver_user_id)
+        normalized_phone = profile_phone.strip()
+        if not normalized_phone:
+            raise ApiError(
+                409,
+                "WITHDRAWAL_PROFILE_PHONE_REQUIRED",
+                "Un numero de profil verifie est requis pour confirmer le retrait.",
+            )
+        now = datetime.now(UTC)
+        latest = await self.payment_repo.find_latest_withdrawal_verification(driver_id)
+        if (
+            latest is not None
+            and latest.consumed_at is None
+            and latest.expires_at > now
+            and latest.created_at is not None
+            and (now - latest.created_at).total_seconds() < settings.driver_withdrawal_otp_retry_seconds
+        ):
+            raise ApiError(
+                429,
+                "WITHDRAWAL_VERIFICATION_RATE_LIMITED",
+                "Veuillez attendre avant de demander un nouveau code de retrait.",
+                {"retry_after_seconds": settings.driver_withdrawal_otp_retry_seconds},
+            )
+        if self.sms is None:
+            raise ApiError(503, "SMS_NOT_CONFIGURED", "La confirmation SMS des retraits est indisponible.")
+        code = f"{randbelow(1_000_000):06d}"
+        verification = DriverWithdrawalVerification(
+            id=DriverWithdrawalVerification.new_id(),
+            driver_id=driver_id,
+            beneficiary_destination=beneficiary_destination,
+            recipient_phone=normalized_phone,
+            code_hash=_otp_hash(code),
+            expires_at=now + timedelta(seconds=settings.driver_withdrawal_otp_ttl_seconds),
+            created_at=now,
+        )
+        await self.payment_repo.save_withdrawal_verification(verification)
+        await self.payment_repo.commit()
+        try:
+            await self.sms.send(
+                recipient=normalized_phone,
+                message=f"DiddiGo: votre code de confirmation de retrait est {code}. Il expire dans 5 minutes.",
+                idempotency_key=f"diddigo:withdrawal-verification:{verification.id}",
+            )
+        except Exception as exc:
+            raise ApiError(
+                503,
+                "WITHDRAWAL_VERIFICATION_DELIVERY_FAILED",
+                "Le code de retrait n'a pas pu etre envoye.",
+            ) from exc
+        return {
+            "verification_id": str(verification.id),
+            "expires_at": verification.expires_at.isoformat(),
+            "recipient_phone_masked": _mask_phone(normalized_phone),
+            "retry_after_seconds": settings.driver_withdrawal_otp_retry_seconds,
+        }
 
     async def get_withdrawal(self, *, driver_user_id: UUID, withdrawal_id: UUID) -> dict:
         driver_id = await self._driver_id_for_user(driver_user_id)
@@ -538,6 +642,16 @@ def _withdrawal_payload(withdrawal: DriverWithdrawal) -> dict:
         "succeeded_at": withdrawal.succeeded_at.isoformat() if withdrawal.succeeded_at else None,
         "released_at": withdrawal.released_at.isoformat() if withdrawal.released_at else None,
     }
+
+
+def _otp_hash(code: str) -> str:
+    return sha256(code.encode("utf-8")).hexdigest()
+
+
+def _mask_phone(phone: str) -> str:
+    if len(phone) <= 4:
+        return "****"
+    return f"{'*' * (len(phone) - 4)}{phone[-4:]}"
 
 
 def _withdrawal_status_from_diddipay(status: str) -> WithdrawalStatus:

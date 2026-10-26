@@ -148,6 +148,9 @@ class Settings(BaseSettings):
     driver_withdrawal_min_amount_xof: int = Field(default=2000, ge=1)
     driver_withdrawal_fee_xof: int = Field(default=0, ge=0)
     driver_withdrawal_quote_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+    driver_withdrawal_otp_ttl_seconds: int = Field(default=300, ge=60, le=900)
+    driver_withdrawal_otp_retry_seconds: int = Field(default=60, ge=10, le=600)
+    driver_withdrawal_otp_max_attempts: int = Field(default=5, ge=1, le=10)
     ride_emergency_rate_limit_seconds: int = Field(default=60, ge=1, le=3600)
     ride_emergency_contact_notify_once: bool = True
     vehicle_kyv_required_photos: str = "front,back,left,right,interior,plate"

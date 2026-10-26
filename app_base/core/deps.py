@@ -363,11 +363,13 @@ async def driver_wallet_service(
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
     redis: Redis = Depends(get_redis),
     diddipay: DiddiPayClient = Depends(get_diddipay),
+    sms: SmsProvider = Depends(get_sms_provider),
 ) -> DriverWalletService:
     return DriverWalletService(
         payment_repo=payment_repo_dep,
         driver_repo=driver_repo_dep,
         diddipay=diddipay,
+        sms=sms,
         return_contexts=PaymentReturnContextStore(
             redis,
             ttl_seconds=settings.payment_return_context_ttl_seconds,

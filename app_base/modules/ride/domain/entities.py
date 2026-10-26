@@ -480,6 +480,7 @@ class RideSupplement:
     ride_id: UUID
     amount: Decimal
     reason: str
+    custom_label: str | None = None
     source: str = "manual"
     status: str = "pending"
     created_by_user_id: UUID | None = None

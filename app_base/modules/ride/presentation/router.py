@@ -63,6 +63,7 @@ from app_base.modules.ride.presentation.schemas import (
     RideStartRequest,
     RideStatusUpdateRequest,
     RideStopCreateRequest,
+    RideSupplementCatalogResponse,
     RideSupplementCreateRequest,
     RideSupplementDecisionRequest,
     RideSupplementListResponse,
@@ -292,9 +293,19 @@ async def get_ride_score(
 async def get_active_ride(
     service: RideService = Depends(ride_service),
     current_user: UserModel = Depends(get_current_user),
+    as_role: str | None = Query(default=None, pattern="^(passenger|driver)$"),
 ) -> dict:
     """Restore the passenger's or driver's current non-terminal ride."""
-    return await service.get_active_ride(actor_user_id=current_user.id, actor_role=current_user.role)
+    return await service.get_active_ride(
+        actor_user_id=current_user.id,
+        actor_role=as_role or current_user.role,
+    )
+
+
+@router.get("/config/supplements", response_model=RideSupplementCatalogResponse)
+async def get_supplement_catalog(service: RideService = Depends(ride_service)) -> dict:
+    """Return the server-controlled supplement catalogue used by the ride flow."""
+    return service.get_supplement_catalog()
 
 
 @router.get("/{ride_id}")
@@ -518,6 +529,7 @@ async def add_ride_supplement(
         actor_role=current_user.role,
         amount=payload.amount,
         supplement_type=payload.type or "",
+        custom_label=payload.custom_label,
     )
     await manager.broadcast_supplement_changed(ride_id, result)
     return result

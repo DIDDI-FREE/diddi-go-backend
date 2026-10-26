@@ -515,6 +515,7 @@ class RideSupplementModel(Base):
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     reason: Mapped[str] = mapped_column(String(120), nullable=False)
+    custom_label: Mapped[str | None] = mapped_column(String(120), nullable=True)
     source: Mapped[str] = mapped_column(String(10), nullable=False, default="manual")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     created_by_user_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)

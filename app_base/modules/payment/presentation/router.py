@@ -34,6 +34,8 @@ from app_base.modules.payment.presentation.schemas import (
     DriverWithdrawalQuoteResponse,
     DriverWithdrawalRequest,
     DriverWithdrawalResponse,
+    DriverWithdrawalVerificationRequest,
+    DriverWithdrawalVerificationResponse,
     PassengerDebtListResponse,
     PassengerDebtPaymentPreparationResponse,
     PassengerDebtResponse,
@@ -259,6 +261,24 @@ async def request_driver_withdrawal(
         driver_user_id=current_user.id,
         quote_id=payload.quote_id,
         beneficiary_reference=payload.beneficiary_reference,
+        beneficiary_destination=payload.beneficiary_destination.model_dump(),
+        verification_id=payload.verification_id,
+        verification_code=payload.verification_code,
+        profile_phone=current_user.phone,
+    )
+
+
+@wallet_router.post("/withdrawals/verification/request", response_model=DriverWithdrawalVerificationResponse)
+async def request_driver_withdrawal_verification(
+    payload: DriverWithdrawalVerificationRequest,
+    service: DriverWalletService = Depends(driver_wallet_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    """Send a transaction OTP to the driver's identity phone before a payout."""
+    return await service.request_withdrawal_verification(
+        driver_user_id=current_user.id,
+        profile_phone=current_user.phone,
         beneficiary_destination=payload.beneficiary_destination.model_dump(),
     )
 

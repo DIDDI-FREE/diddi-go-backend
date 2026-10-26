@@ -139,6 +139,7 @@ class RideStopCreateRequest(BaseModel):
 class RideSupplementCreateRequest(BaseModel):
     type: str | None = Field(default=None, min_length=1, max_length=40)
     amount: Decimal | None = Field(default=None, gt=0)
+    custom_label: str | None = Field(default=None, min_length=1, max_length=120)
     reason: str | None = Field(default=None, min_length=1, max_length=120)
 
     @model_validator(mode="after")
@@ -149,6 +150,8 @@ class RideSupplementCreateRequest(BaseModel):
             self.type = self.reason
         if self.type is None:
             raise ValueError("type is required")
+        if self.type.strip().lower() == "other" and self.custom_label is None:
+            raise ValueError("custom_label is required when type is other")
         return self
 
 
@@ -206,6 +209,7 @@ class RideSupplementResponse(BaseModel):
     amount: int
     reason: str
     type: Literal["toll", "parking", "baggage_standard", "baggage_large", "other"]
+    custom_label: str | None = None
     source: Literal["catalog"]
     status: Literal["pending", "accepted", "disputed"]
     created_by_user_id: UUID | None = None
@@ -217,6 +221,20 @@ class RideSupplementResponse(BaseModel):
 class RideSupplementListResponse(BaseModel):
     items: list[RideSupplementResponse]
     supplements_total: int
+
+
+class RideSupplementCatalogItem(BaseModel):
+    type: Literal["toll", "parking", "baggage_standard", "baggage_large", "other"]
+    label: str
+    amount_xof: int | None = None
+    minimum_amount_xof: int | None = None
+    maximum_amount_xof: int | None = None
+    requires_custom_label: bool = False
+
+
+class RideSupplementCatalogResponse(BaseModel):
+    currency: Literal["XOF"]
+    items: list[RideSupplementCatalogItem]
 
 
 class RideEmergencyRequest(BaseModel):

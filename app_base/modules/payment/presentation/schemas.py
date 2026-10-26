@@ -110,6 +110,21 @@ class DriverWithdrawalRequest(BaseModel):
     quote_id: UUID
     beneficiary_reference: str = Field(min_length=1, max_length=128)
     beneficiary_destination: MobileMoneyBeneficiaryDestination
+    verification_id: UUID
+    verification_code: str = Field(pattern=r"^\d{6}$")
+
+
+class DriverWithdrawalVerificationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    beneficiary_destination: MobileMoneyBeneficiaryDestination
+
+
+class DriverWithdrawalVerificationResponse(BaseModel):
+    verification_id: UUID
+    expires_at: datetime
+    recipient_phone_masked: str
+    retry_after_seconds: int
 
 
 class DriverWithdrawalQuoteResponse(BaseModel):

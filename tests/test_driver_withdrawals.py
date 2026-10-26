@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
@@ -30,6 +31,40 @@ class PayoutGateway:
             "status": self.status,
             "failure_code": "provider_rejected" if self.status == "failed" else None,
         }
+
+
+class SmsCapture:
+    """Captures the transaction OTP without ever persisting a plaintext code."""
+
+    def __init__(self) -> None:
+        self.code: str | None = None
+
+    async def send(self, *, recipient, message, idempotency_key):
+        match = re.search(r"(\d{6})", message)
+        assert match is not None
+        self.code = match.group(1)
+
+    async def close(self) -> None:
+        return None
+
+
+async def _verified_withdrawal_payload(client, driver: dict[str, str], quote_id: str, destination: dict) -> dict:
+    sms = SmsCapture()
+    app.state.sms_provider = sms
+    verification = await client.post(
+        "/v1/drivers/me/wallet/withdrawals/verification/request",
+        json={"beneficiary_destination": destination},
+        headers=driver,
+    )
+    assert verification.status_code == 200, verification.text
+    assert sms.code is not None
+    return {
+        "quote_id": quote_id,
+        "beneficiary_reference": "driver:test",
+        "beneficiary_destination": destination,
+        "verification_id": verification.json()["verification_id"],
+        "verification_code": sms.code,
+    }
 
 
 async def _credit_wallet(driver_id: UUID, amount: int) -> None:
@@ -66,17 +101,10 @@ async def test_driver_withdrawal_succeeds_without_double_debit(client, driver) -
         headers=driver,
     )
     assert quote.status_code == 200, quote.text
+    destination = {"type": "mobile_money", "phone": "+2250700000000", "network": "mtn"}
     response = await client.post(
         "/v1/drivers/me/wallet/withdrawals",
-        json={
-            "quote_id": quote.json()["quote_id"],
-            "beneficiary_reference": "driver:test",
-            "beneficiary_destination": {
-                "type": "mobile_money",
-                "phone": "+2250700000000",
-                "network": "mtn",
-            },
-        },
+        json=await _verified_withdrawal_payload(client, driver, quote.json()["quote_id"], destination),
         headers=driver,
     )
 
@@ -84,11 +112,7 @@ async def test_driver_withdrawal_succeeds_without_double_debit(client, driver) -
     assert response.json()["status"] == "succeeded"
     assert response.json()["net_amount"] == 5_000
     assert gateway.created["amount"] == 5_000
-    assert gateway.created["beneficiary_destination"] == {
-        "type": "mobile_money",
-        "phone": "+2250700000000",
-        "network": "mtn",
-    }
+    assert gateway.created["beneficiary_destination"] == destination
     assert response.json()["beneficiary_destination"] == gateway.created["beneficiary_destination"]
     wallet = (await client.get("/v1/drivers/me/wallet", headers=driver)).json()
     assert wallet["balance"] == 0
@@ -106,17 +130,10 @@ async def test_failed_withdrawal_releases_reserved_balance(client, driver) -> No
         json={"amount": 2_000},
         headers=driver,
     )
+    destination = {"type": "mobile_money", "phone": "+2250700000000", "network": "orange"}
     response = await client.post(
         "/v1/drivers/me/wallet/withdrawals",
-        json={
-            "quote_id": quote.json()["quote_id"],
-            "beneficiary_reference": "driver:test",
-            "beneficiary_destination": {
-                "type": "mobile_money",
-                "phone": "+2250700000000",
-                "network": "orange",
-            },
-        },
+        json=await _verified_withdrawal_payload(client, driver, quote.json()["quote_id"], destination),
         headers=driver,
     )
 
@@ -150,17 +167,10 @@ async def test_processing_withdrawal_exposes_available_and_reserved_balances(cli
         headers=driver,
     )
 
+    destination = {"type": "mobile_money", "phone": "+2250700000000", "network": "moov"}
     response = await client.post(
         "/v1/drivers/me/wallet/withdrawals",
-        json={
-            "quote_id": quote.json()["quote_id"],
-            "beneficiary_reference": "driver:test",
-            "beneficiary_destination": {
-                "type": "mobile_money",
-                "phone": "+2250700000000",
-                "network": "moov",
-            },
-        },
+        json=await _verified_withdrawal_payload(client, driver, quote.json()["quote_id"], destination),
         headers=driver,
     )
     wallet = (await client.get("/v1/drivers/me/wallet", headers=driver)).json()
@@ -183,15 +193,8 @@ async def test_replaying_consumed_quote_returns_same_withdrawal_without_double_d
         json={"amount": 2_000},
         headers=driver,
     )
-    payload = {
-        "quote_id": quote.json()["quote_id"],
-        "beneficiary_reference": "driver:test",
-        "beneficiary_destination": {
-            "type": "mobile_money",
-            "phone": "+2250700000000",
-            "network": "mtn",
-        },
-    }
+    destination = {"type": "mobile_money", "phone": "+2250700000000", "network": "mtn"}
+    payload = await _verified_withdrawal_payload(client, driver, quote.json()["quote_id"], destination)
 
     first = await client.post("/v1/drivers/me/wallet/withdrawals", json=payload, headers=driver)
     replay = await client.post("/v1/drivers/me/wallet/withdrawals", json=payload, headers=driver)

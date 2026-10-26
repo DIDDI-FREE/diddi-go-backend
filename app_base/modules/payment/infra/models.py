@@ -206,6 +206,24 @@ class DriverWithdrawalQuoteModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
 
 
+class DriverWithdrawalVerificationModel(Base):
+    __tablename__ = "driver_withdrawal_verifications"
+    __table_args__ = (
+        Index("idx_payment_withdrawal_verifications_driver_created", "driver_id", "created_at"),
+        {"schema": "payment"},
+    )
+
+    id: Mapped[UUID] = mapped_column(_PG_UUID, primary_key=True)
+    driver_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False, index=True)
+    beneficiary_destination: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    recipient_phone: Mapped[str] = mapped_column(String(16), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempt_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+
 class DriverWithdrawalModel(Base):
     __tablename__ = "driver_withdrawals"
     __table_args__ = (

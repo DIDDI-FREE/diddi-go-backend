@@ -220,6 +220,25 @@ class DriverWithdrawalQuote:
 
 
 @dataclass
+class DriverWithdrawalVerification:
+    """One-time confirmation tied to a withdrawal destination, never to an auth session."""
+
+    id: UUID
+    driver_id: UUID
+    beneficiary_destination: dict[str, Any]
+    recipient_phone: str
+    code_hash: str
+    expires_at: datetime
+    attempt_count: int = 0
+    consumed_at: datetime | None = None
+    created_at: datetime | None = None
+
+    @staticmethod
+    def new_id() -> UUID:
+        return uuid4()
+
+
+@dataclass
 class DriverWithdrawal:
     id: UUID
     driver_id: UUID
