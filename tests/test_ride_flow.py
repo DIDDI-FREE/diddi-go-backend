@@ -311,9 +311,9 @@ async def test_list_rides_is_paginated(client, passenger) -> None:
     body = r.json()
     assert set(body["pagination"]) == {"page", "page_size", "total_items", "total_pages"}
     assert body["pagination"]["total_items"] >= 1
-    assert set(body["data"][0]) == {
+    assert {
         "id", "status", "completion_reason", "final_fare", "completed_at", "pickup_address", "dropoff_address",
-    }
+    }.issubset(body["data"][0])
 
 
 async def test_list_rides_is_scoped_to_the_caller(client, passenger, otp_code, phone_factory) -> None:

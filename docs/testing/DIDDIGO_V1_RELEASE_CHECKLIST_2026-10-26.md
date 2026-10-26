@@ -1,8 +1,8 @@
 # DiddiGo - Checklist de release V1
 
-**Edition :** `2026-10-26`  
-**Statut :** registre stateful de la candidate `v1.0.0-rc.1`  
-**Branche source :** `stage`  
+**Edition :** `2026-10-26`
+**Statut :** registre stateful de la candidate `v1.0.0-rc.1`
+**Branche source :** `stage`
 **Promotion cible :** le meme commit immuable vers `main`.
 
 Cette edition ne remplace pas la checklist du 19 octobre. Elle centralise la

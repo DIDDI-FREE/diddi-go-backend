@@ -1,7 +1,7 @@
 # DiddiGo V1 - Release Candidate
 
-**Date :** 26 octobre 2026  
-**Statut :** candidate de lancement terrain controle  
+**Date :** 26 octobre 2026
+**Statut :** candidate de lancement terrain controle
 **Portee :** Abidjan, applications passager et chauffeur, backoffice et
 integrations DiddiFree necessaires au VTC.
 

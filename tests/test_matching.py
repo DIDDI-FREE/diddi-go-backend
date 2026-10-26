@@ -68,7 +68,12 @@ async def test_authenticated_user_can_create_a_driver_profile(client, passenger_
 async def test_vehicle_requires_a_profile_first(client, driver_headers) -> None:
     r = await client.post(
         "/v1/drivers/vehicle",
-        json={"plate_number": "CI-4429-AB", "category": "standard"},
+        json={
+            "plate_number": "CI-4429-AB",
+            "make": "Toyota",
+            "model": "Yaris",
+            "category": "standard",
+        },
         headers=driver_headers,
     )
     assert r.status_code == 404
@@ -112,7 +117,7 @@ async def test_admin_can_list_and_open_pending_kyc(client, driver_headers, admin
 async def test_driver_can_resubmit_rejected_kyc_over_http(client, driver_headers, admin_headers) -> None:
     profile = await client.post(
         "/v1/drivers/profile",
-        json={"license_number": "CI-999", "license_document_file_id": str(uuid4())},
+        json={"license_number": "CI-999", **full_driver_kyc_documents()},
         headers=driver_headers,
     )
     assert profile.status_code == 201
@@ -120,11 +125,22 @@ async def test_driver_can_resubmit_rejected_kyc_over_http(client, driver_headers
 
     rejected = await client.post(
         f"/v1/drivers/{driver_id}/kyc/reject",
-        json={"notes": "document illisible"},
+        json={
+            "notes": "document illisible",
+            "documents": [
+                {
+                    "document_type": "license_front",
+                    "decision": "rejected",
+                    "reason_code": "unreadable",
+                    "reason": "Le permis est illisible.",
+                    "expected_correction": "Envoyer une photo nette du permis.",
+                },
+            ],
+        },
         headers=admin_headers,
     )
     assert rejected.status_code == 200
-    assert rejected.json()["status"] == "suspended"
+    assert rejected.json()["status"] == "pending_verification"
 
     new_file_id = str(uuid4())
     resubmitted = await client.post(

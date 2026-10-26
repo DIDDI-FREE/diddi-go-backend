@@ -1,6 +1,6 @@
 """Pilotage daily summary contract and access checks."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -12,12 +12,16 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app_base.core.deps import ride_summary_service
 from app_base.core.errors import ApiError, api_error_handler
-from app_base.modules.ride.application.summary_service import RideSummaryService
+from app_base.modules.ride.application.summary_service import ABIDJAN_TIMEZONE, RideSummaryService
 from app_base.modules.ride.domain.summary import RideFinanceSummaryTotals, RideSummaryTotals
 from app_base.modules.ride.infra.summary_repository import SqlAlchemyRideSummaryRepository
 from app_base.modules.ride.presentation.summary_router import require_pilotage, router
 
 pytestmark = pytest.mark.unit
+
+# Summary endpoints deliberately reject old dates. Keep this fixture valid as
+# calendar time progresses instead of pinning the suite to a past day.
+REPORT_DAY = (datetime.now(ABIDJAN_TIMEZONE).date() - timedelta(days=1)).isoformat()
 
 
 class FakeSummaryRepository:
@@ -70,14 +74,14 @@ def finance_totals(**overrides) -> RideFinanceSummaryTotals:
 async def test_daily_summary_uses_abidjan_day_and_exact_totals() -> None:
     repository = FakeSummaryRepository(totals(3, 2, "4500"))
 
-    result = await RideSummaryService(repository).daily_summary("2026-09-19")
+    result = await RideSummaryService(repository).daily_summary(REPORT_DAY)
 
     assert repository.period == (
-        datetime(2026, 9, 19, tzinfo=UTC),
-        datetime(2026, 9, 20, tzinfo=UTC),
+        datetime.fromisoformat(REPORT_DAY).replace(tzinfo=UTC),
+        (datetime.fromisoformat(REPORT_DAY) + timedelta(days=1)).replace(tzinfo=UTC),
     )
     assert result["module"] == "diddigo"
-    assert result["date"] == "2026-09-19"
+    assert result["date"] == REPORT_DAY
     assert result["timezone"] == "Africa/Abidjan"
     assert result["rides_requested"] == 3
     assert result["rides_completed"] == 2
@@ -87,7 +91,7 @@ async def test_daily_summary_uses_abidjan_day_and_exact_totals() -> None:
 
 @pytest.mark.asyncio
 async def test_empty_day_returns_zeros() -> None:
-    result = await RideSummaryService(FakeSummaryRepository(totals())).daily_summary("2026-09-19")
+    result = await RideSummaryService(FakeSummaryRepository(totals())).daily_summary(REPORT_DAY)
 
     assert (result["rides_requested"], result["rides_completed"], result["completed_fare_total_xof"]) == (0, 0, 0)
 
@@ -95,7 +99,7 @@ async def test_empty_day_returns_zeros() -> None:
 @pytest.mark.asyncio
 async def test_pilotage_daily_summary_uses_normalized_v1_contract() -> None:
     result = await RideSummaryService(FakeSummaryRepository(totals(3, 2, "4500"))).pilotage_daily_summary(
-        "2026-09-19",
+        REPORT_DAY,
     )
 
     assert result["contract_version"] == "pilotage.v1"
@@ -119,7 +123,7 @@ async def test_pilotage_daily_summary_uses_normalized_v1_contract() -> None:
 async def test_pilotage_finance_summary_exposes_accounting_controls_and_topups() -> None:
     repository = FakeSummaryRepository(totals(), finance_totals())
 
-    result = await RideSummaryService(repository).pilotage_finance_summary("2026-09-19")
+    result = await RideSummaryService(repository).pilotage_finance_summary(REPORT_DAY)
 
     metrics = {metric["name"]: metric["value"] for metric in result["metrics"]}
     assert result["contract_version"] == "pilotage.v1"
@@ -137,7 +141,7 @@ async def test_pilotage_finance_summary_rejects_payment_allocation_mismatch() ->
     repository = FakeSummaryRepository(totals(), finance_totals(cash_payments_xof=Decimal("39999")))
 
     with pytest.raises(ApiError) as error:
-        await RideSummaryService(repository).pilotage_finance_summary("2026-09-19")
+        await RideSummaryService(repository).pilotage_finance_summary(REPORT_DAY)
 
     assert error.value.code == "PAYMENT_ALLOCATION_MISMATCH"
 
@@ -147,7 +151,7 @@ async def test_pilotage_finance_summary_rejects_fare_allocation_mismatch() -> No
     repository = FakeSummaryRepository(totals(), finance_totals(platform_commission_xof=Decimal("19999")))
 
     with pytest.raises(ApiError) as error:
-        await RideSummaryService(repository).pilotage_finance_summary("2026-09-19")
+        await RideSummaryService(repository).pilotage_finance_summary(REPORT_DAY)
 
     assert error.value.code == "FARE_ALLOCATION_MISMATCH"
 
@@ -157,7 +161,7 @@ async def test_pilotage_finance_summary_rejects_overpaid_driver() -> None:
     repository = FakeSummaryRepository(totals(), finance_totals(driver_amount_paid_xof=Decimal("80001")))
 
     with pytest.raises(ApiError) as error:
-        await RideSummaryService(repository).pilotage_finance_summary("2026-09-19")
+        await RideSummaryService(repository).pilotage_finance_summary(REPORT_DAY)
 
     assert error.value.code == "DRIVER_PAYMENT_MISMATCH"
 
@@ -183,7 +187,7 @@ async def test_missing_final_fare_is_counted_but_not_added(monkeypatch) -> None:
         lambda *args, **kwargs: events.append((args, kwargs)),
     )
 
-    result = await RideSummaryService(FakeSummaryRepository(totals(1, 1, "0", 1))).daily_summary("2026-09-19")
+    result = await RideSummaryService(FakeSummaryRepository(totals(1, 1, "0", 1))).daily_summary(REPORT_DAY)
 
     assert result["rides_completed"] == 1
     assert result["completed_fare_total_xof"] == 0
@@ -196,7 +200,7 @@ async def test_fractional_xof_is_not_silently_truncated(monkeypatch) -> None:
     monkeypatch.setattr("app_base.modules.ride.application.summary_service.log_event", lambda *args, **kwargs: None)
 
     with pytest.raises(ApiError) as error:
-        await RideSummaryService(FakeSummaryRepository(totals(1, 1, "120.50"))).daily_summary("2026-09-19")
+        await RideSummaryService(FakeSummaryRepository(totals(1, 1, "120.50"))).daily_summary(REPORT_DAY)
 
     assert error.value.code == "INVALID_RIDE_FARE"
 
@@ -280,7 +284,7 @@ async def test_summary_route_rejects_missing_service_token() -> None:
     app = summary_app(repository)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/internal/v1/ride-summary?date=2026-09-19")
+        response = await client.get(f"/internal/v1/ride-summary?date={REPORT_DAY}")
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "TOKEN_MISSING"
@@ -294,7 +298,7 @@ async def test_summary_route_rejects_missing_client_id() -> None:
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(
-            "/internal/v1/ride-summary?date=2026-09-19",
+            f"/internal/v1/ride-summary?date={REPORT_DAY}",
             headers={"Authorization": "Bearer fake-token"},
         )
 
@@ -314,7 +318,7 @@ async def test_summary_route_rejects_missing_scope(monkeypatch) -> None:
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(
-            "/internal/v1/ride-summary?date=2026-09-19",
+            f"/internal/v1/ride-summary?date={REPORT_DAY}",
             headers={"Authorization": "Bearer fake-token", "X-Client-ID": "pilotage-staging-diddigo"},
         )
 
@@ -329,7 +333,7 @@ async def test_summary_route_returns_report_to_authorized_pilotage() -> None:
     app = summary_app(repository, authorized=True)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/internal/v1/ride-summary?date=2026-09-19")
+        response = await client.get(f"/internal/v1/ride-summary?date={REPORT_DAY}")
 
     assert response.status_code == 200
     assert response.json()["completed_fare_total_xof"] == 4500
@@ -341,7 +345,7 @@ async def test_normalized_pilotage_route_returns_v1_contract() -> None:
     app = summary_app(repository, authorized=True)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/internal/pilotage/daily-summary?date=2026-09-19")
+        response = await client.get(f"/internal/pilotage/daily-summary?date={REPORT_DAY}")
 
     assert response.status_code == 200
     payload = response.json()
@@ -363,7 +367,7 @@ async def test_summary_route_reports_sql_failure_without_leaking_details(monkeyp
     app = summary_app(FailingRepository(), authorized=True)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/internal/v1/ride-summary?date=2026-09-19")
+        response = await client.get(f"/internal/v1/ride-summary?date={REPORT_DAY}")
 
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "RIDE_SUMMARY_UNAVAILABLE"
