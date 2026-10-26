@@ -15,7 +15,7 @@
 | DiddiFreeID | `IDENTITY_*`, `CAPABILITY_PROJECTION_*` | JWT, profils et projection des capacités. |
 | DiddiFiles | `DIDDIFILES_*` | fichiers KYC/KYV. |
 | DiddiPay | `DIDDIPAY_*`, `DIDDIGO_*`, `PAYMENT_RECONCILIATION_*` | paiement, callbacks, retours et réconciliation. |
-| Chauffeur/course | `DRIVER_*`, `WAITING_*`, `MATCHING_*` | éligibilité wallet, attente et dispatch. |
+| Chauffeur/course | `DRIVER_*`, `WAITING_*`, `MATCHING_*` | éligibilité wallet, attente, dispatch et OTP de retrait. |
 | Push/urgence | `PUSH_*`, `FCM_*`, `EMERGENCY_*` | push, contact support et alertes. |
 | Pilotage | `RIDE_SUMMARY_*`, `PILOTAGE_*` | endpoints et cache des rapports internes. |
 | Portail documentaire | `DOCS_*` | publication MkDocs dans la stack DiddiGo. |
@@ -25,6 +25,17 @@
 Les stacks Compose définissent les valeurs de substitution et les valeurs requises. En Portainer, renseigner les secrets exclusivement dans les variables de stack ou un secret manager : `JWT_SECRET`, mots de passe PostgreSQL, clés/callbacks DiddiPay, secrets de clients DiddiFreeID/DiddiMap/DiddiFiles, et identifiants FCM/SMTP/WhatsApp.
 
 Après tout changement de variable, redéployer la stack ; l'application ne fait pas de hot reload de configuration.
+
+## OTP de retrait chauffeur
+
+| Variable | Valeur par défaut | Règle |
+|---|---:|---|
+| `DRIVER_WITHDRAWAL_OTP_TTL_SECONDS` | `300` | Durée de validité du code de retrait. |
+| `DRIVER_WITHDRAWAL_OTP_RETRY_SECONDS` | `60` | Délai minimal avant un nouveau code pour la même demande. |
+| `DRIVER_WITHDRAWAL_OTP_MAX_ATTEMPTS` | `5` | Nombre maximal de codes erronés avant verrouillage du challenge. |
+
+Le code est envoyé au téléphone vérifié du profil chauffeur. Il ne doit jamais
+être envoyé automatiquement à la destination de retrait choisie.
 
 ## Contrôle avant déploiement
 

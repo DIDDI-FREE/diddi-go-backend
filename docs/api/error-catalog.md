@@ -1,6 +1,6 @@
 # Catalogue d'erreurs DiddiGo
 
-Version : `2026-10-22`. Ce catalogue est la reference frontend pour les
+Version : `2026-10-23`. Ce catalogue est la reference frontend pour les
 erreurs metier DiddiGo. OpenAPI decrit les schemas ; ce document explique quoi
 faire. Le format normal est :
 
@@ -38,7 +38,7 @@ garanties dans cette enveloppe.
 |---:|---|---|
 | 409 | `WAITING_TELEMETRY_REQUIRED`, `VEHICLE_NOT_STOPPED` | Publier une position GPS recente ou attendre l'arret reel du vehicule. |
 | 409 | `WAITING_INVALID_RIDE_STATUS`, `WAITING_STOP_ENDPOINT_REQUIRED` | Relire la course et utiliser la bonne action. |
-| 422 | `INVALID_SUPPLEMENT_TYPE`, `INVALID_SUPPLEMENT_AMOUNT` | Recharger le catalogue tarifaire. |
+| 422 | `INVALID_SUPPLEMENT_TYPE`, `INVALID_SUPPLEMENT_AMOUNT`, `SUPPLEMENT_LABEL_REQUIRED` | Recharger le catalogue tarifaire ; demander un libelle pour `other`. |
 | 404 | `SUPPLEMENT_NOT_FOUND` | Recharger les supplements. |
 | 409 | `SUPPLEMENT_ALREADY_DECIDED` | Recharger les supplements. |
 
@@ -51,6 +51,9 @@ garanties dans cette enveloppe.
 | 422 | `INVALID_PAYMENT_METHOD` | Afficher cash ou Mobile Money avec reseau obligatoire. |
 | 503 | `PAYMENT_CONFIGURATION_MISSING`, `PAYMENT_PROVIDER_UNAVAILABLE` | Afficher une indisponibilite temporaire ; ne pas creer de doublon. |
 | 409 | `IDEMPOTENCY_CONFLICT`, `IDEMPOTENCY_IN_PROGRESS` | Conserver la meme cle pour le meme retry ; relire le paiement si le traitement est en cours. |
+| 409 | `WITHDRAWAL_PROFILE_PHONE_REQUIRED`, `WITHDRAWAL_QUOTE_ALREADY_USED`, `WITHDRAWAL_VERIFICATION_USED` | Completer le profil ou relire le retrait existant ; ne pas creer un second payout. |
+| 400/404/410/429 | `WITHDRAWAL_VERIFICATION_INVALID`, `WITHDRAWAL_VERIFICATION_NOT_FOUND`, `WITHDRAWAL_VERIFICATION_EXPIRED`, `WITHDRAWAL_VERIFICATION_LOCKED`, `WITHDRAWAL_VERIFICATION_RATE_LIMITED` | Afficher l'echec OTP ; permettre une nouvelle demande quand le delai le permet. |
+| 503 | `SMS_NOT_CONFIGURED`, `WITHDRAWAL_VERIFICATION_DELIVERY_FAILED` | Afficher une indisponibilite temporaire ; ne jamais contourner l'OTP. |
 
 Les codes `PASSENGER_DEBT_*` sont conserves pour les routes historiques
 `/v1/passenger/debts/*`, hors parcours MVP courant. Un echec Mobile Money ne

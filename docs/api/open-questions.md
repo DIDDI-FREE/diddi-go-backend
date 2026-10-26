@@ -74,6 +74,7 @@ Les champs détaillés sont dans x-contract de openapi.yaml. Une correction du c
 | `GET /v1/rides/shared/{token}` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `GET /v1/rides/{ride_id}/score` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `GET /v1/rides/active/current` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
+| `GET /v1/rides/config/supplements` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `GET /v1/rides/{ride_id}` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `PATCH /v1/rides/{ride_id}/status` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/rides/{ride_id}/waiting/start` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
@@ -167,6 +168,7 @@ Les champs détaillés sont dans x-contract de openapi.yaml. Une correction du c
 | `POST /v1/drivers/me/wallet/withdrawals/quote` | roles, state-before-after, request, errors, retry, side-effects, dependency-failure |
 | `POST /v1/drivers/me/wallet/withdrawals` | roles, state-before-after, request, errors, retry, side-effects, dependency-failure |
 | `GET /v1/drivers/me/wallet/withdrawals` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
+| `POST /v1/drivers/me/wallet/withdrawals/verification/request` | roles, state-before-after, request, errors, retry, side-effects, dependency-failure |
 | `GET /v1/drivers/me/wallet/withdrawals/{withdrawal_id}` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `GET /v1/admin/drivers/{driver_id}/wallet` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `GET /v1/admin/drivers/{driver_id}/wallet/ledger` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |

@@ -55,6 +55,13 @@ Les erreurs indiquées sont les principales erreurs connues, pas une liste exhau
 | `POST /v1/rides/{ride_id}/cancel` | Participant/admin, course non terminale | Statut d'annulation passager ou chauffeur selon acteur/motif | Déjà annulée : `409 RIDE_ALREADY_CANCELLED` ; relire la course |
 | `POST /v1/rides/{ride_id}/emergency` | Participant autorisé ; quota respecté | Alerte persistée puis résultats de notification | `429 EMERGENCY_RATE_LIMITED`, `details.retry_after_seconds` ; pas de garantie de livraison de tous les canaux |
 
+### Reprise applicative
+
+`GET /v1/rides/active/current` accepte `as_role=passenger|driver`. L'application
+passager doit envoyer `passenger`, DiddiGo Plus doit envoyer `driver`. Cette
+précision évite une réponse ambiguë lorsqu'une même identité possède une course
+active dans chaque rôle.
+
 ### Arrêt anticipé
 
 Le passager propriétaire demande `POST /v1/rides/{ride_id}/early-stop/request` en `in_progress` ou `waiting`. La réponse contient un montant provisoire et une expiration deux minutes après la demande ; répéter la demande renouvelle cette fenêtre dans le code actuel.
@@ -74,14 +81,24 @@ La demande émet `ride.status_changed` avec `status=early_stop_requested`. **Cet
 | Reprise numérique | Une intention active est réutilisée ; une intention terminale admissible ou expirée peut être remplacée ; relire `GET /v1/payments/{ride_id}` après retour navigateur |
 | `POST /v1/payments/{ride_id}/confirm-cash` | Chauffeur affecté disposant d'un profil, corps `amount_collected` ; ne pas déduire le paiement d'un écran de succès |
 | `POST /v1/drivers/me/wallet/withdrawals/quote` | Devis serveur : montant, frais, net, devise, expiration |
-| `POST /v1/drivers/me/wallet/withdrawals` | `quote_id`, `beneficiary_reference`, `beneficiary_destination` obligatoires ; destination Mobile Money avec téléphone E.164 |
+| `POST /v1/drivers/me/wallet/withdrawals/verification/request` | Envoie un OTP transactionnel au numero du profil authentifie. Le corps contient la destination Mobile Money, mais le code ne part jamais a cette destination par defaut. |
+| `POST /v1/drivers/me/wallet/withdrawals` | `quote_id`, `beneficiary_reference`, `beneficiary_destination`, `verification_id`, `verification_code` obligatoires ; la preuve OTP est liee au chauffeur et a la destination. |
 | Retry retrait | Le dépôt retrouve le retrait lié au devis consommé ; le contrat de changement de bénéficiaire sur rejeu reste `UNKNOWN` |
 | Retour paiement | Pages HTML `/payments/return` et `/wallet/return` ; REST reste la source financière de vérité |
 | Webhook DiddiPay | Réponse vide 204 pour traitement normal, 200 pour doublon ; signature invalide : 401 ; secret absent : 503 |
 
+Dans la lecture de course, `payment.ready=true` signifie uniquement que la
+course terminée possède un `final_fare` payable. Ce champ ne confirme ni le
+paiement numérique ni les espèces : l'application doit lire l'état de paiement
+ou attendre la confirmation chauffeur selon le moyen choisi.
+
 ### Prix et configuration
 
 Course normale : devis accepté + attente pré-course + attente en course + suppléments acceptés. La trace GPS ne remplace pas silencieusement le devis ; l'arrêt anticipé utilise une tarification réelle spécifique.
+
+Le catalogue de suppléments est expose par `GET /v1/rides/config/supplements`.
+L'application ne doit pas coder les montants en dur. Une proposition `other`
+exige `custom_label`, en plus du montant plafonne par le catalogue.
 
 L'attente pré-course est proratisée à la seconde après franchise ; l'attente en course facture chaque minute commencée. Utiliser les valeurs de `/arrive`, les montants REST et `online_requirements.wallet` ; les valeurs par défaut dans la documentation ne prouvent pas les paramètres de staging.
 
@@ -390,7 +407,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 ## Inventaire HTTP
 
 <!-- generated:http-inventory:start -->
-138 chemins ; 152 opérations HTTP.
+140 chemins ; 154 opérations HTTP.
 
 | Méthode | Chemin | Opération | Réponses documentées |
 |---|---|---|---|
@@ -491,6 +508,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 | POST | `/v1/drivers/me/wallet/withdrawals` | Request Driver Withdrawal | 201, 422 |
 | GET | `/v1/drivers/me/wallet/withdrawals` | List Driver Withdrawals | 200, 422 |
 | POST | `/v1/drivers/me/wallet/withdrawals/quote` | Quote Driver Withdrawal | 200, 422 |
+| POST | `/v1/drivers/me/wallet/withdrawals/verification/request` | Request Driver Withdrawal Verification | 200, 422 |
 | GET | `/v1/drivers/me/wallet/withdrawals/{withdrawal_id}` | Get Driver Withdrawal | 200, 422 |
 | POST | `/v1/drivers/offline` | Go Offline | 200 |
 | POST | `/v1/drivers/online` | Go Online | 200, 422 |
@@ -520,7 +538,8 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 | GET | `/v1/pro/metiers` | Get My Diddigo Metiers | 200 |
 | POST | `/v1/rides` | Create Ride | 201, 422 |
 | GET | `/v1/rides` | List Rides | 200, 422 |
-| GET | `/v1/rides/active/current` | Get Active Ride | 200 |
+| GET | `/v1/rides/active/current` | Get Active Ride | 200, 422 |
+| GET | `/v1/rides/config/supplements` | Get Supplement Catalog | 200 |
 | POST | `/v1/rides/pricing/estimate` | Estimate Pricing | 200, 422 |
 | GET | `/v1/rides/shared/{token}` | Get Shared Ride | 200, 422 |
 | GET | `/v1/rides/{ride_id}` | Get Ride | 200, 422 |

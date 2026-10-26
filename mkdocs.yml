@@ -44,6 +44,7 @@ nav:
   - Accueil: README.md
   - Produit:
       - MVP figé: product/DIDDIGO-MVP-FIGE.md
+      - Release candidate V1 (26 octobre): releases/DIDDIGO_V1_RC_2026-10-26.md
   - API:
       - Vue d'ensemble: api/index.md
       - Contrat HTTP et WebSocket: api/API_CONTRACT.md
@@ -70,6 +71,7 @@ nav:
       - Retraits chauffeur: frontend/DIDDIGO_DRIVER_WITHDRAWALS_BRIEF_2026-10-10.md
       - Dette passager (20 octobre): frontend/DIDDIGO_FRONTEND_PASSENGER_DEBT_BRIEF_2026-10-20.md
       - Brief integre (22 octobre): frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-22.md
+      - Brief integre (23 octobre): frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-23.md
   - Intégrations:
       - DiddiFiles: integrations/diddifiles.md
       - DiddiPay: integrations/diddipay.md
@@ -80,6 +82,7 @@ nav:
       - SMS: integrations/sms.md
   - Tests:
       - Checklist du 19 octobre: testing/DIDDIGO_TEST_CHECKLIST_2026-10-19.md
+      - Release V1 (26 octobre): testing/DIDDIGO_V1_RELEASE_CHECKLIST_2026-10-26.md
       - DiddiSupport (20 octobre): testing/DIDDIGO_DIDDISUPPORT_TEST_CHECKLIST_2026-10-20.md
       - DiddiComms: integrations/diddicomms.md
   - Références:
@@ -97,6 +100,7 @@ nav:
       - 20 octobre 2026 - DiddiSupport: changelog/2026-10-20-support-context.md
       - 20 octobre 2026 - Scoring: changelog/2026-10-20-scoring-fairness.md
       - 22 octobre 2026: changelog/2026-10-22.md
+      - 23 octobre 2026: changelog/2026-10-23.md
 
 exclude_docs: |
   archive/

@@ -15,7 +15,24 @@ Une course terminée normalement et un arrêt anticipé confirmé ont tous deux
 `status=completed`. Le champ `completion_reason` explique la fin, mais ne
 change pas la règle de paiement.
 - Recharge : creation d'un top-up et suivi jusqu'au statut terminal.
-- Retrait : destination beneficiaire obligatoire, puis suivi du payout.
+- Retrait : devis serveur, choix de la destination Mobile Money, puis OTP de
+  confirmation envoye au numero lie au profil du chauffeur avant le payout.
+
+## Confirmation de retrait
+
+Le chauffeur peut choisir un numero Mobile Money de destination. Ce numero ne
+remplace pas le numero connu de son compte : DiddiGo envoie le code de
+confirmation au telephone du profil authentifie.
+
+1. Demander `POST /v1/drivers/me/wallet/withdrawals/verification/request`
+   avec `beneficiary_destination`.
+2. Saisir le code recu au numero de profil.
+3. Creer le retrait avec le meme `beneficiary_destination`, le
+   `verification_id` et le `verification_code`.
+
+La preuve expire apres cinq minutes, est liee a cette destination et ne peut
+etre consommee qu'une fois. Un retry identique d'un retrait deja cree retourne
+le retrait existant sans envoyer un second payout.
 
 ## Echec Mobile Money
 

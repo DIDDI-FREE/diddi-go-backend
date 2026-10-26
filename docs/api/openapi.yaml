@@ -1290,17 +1290,47 @@ paths:
       summary: Get Active Ride
       description: Restore the passenger's or driver's current non-terminal ride.
       operationId: get_active_ride_v1_rides_active_current_get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: as_role
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^(passenger|driver)$
+          - type: 'null'
+          title: As Role
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
+                additionalProperties: true
                 title: Response Get Active Ride V1 Rides Active Current Get
-      security:
-      - OAuth2PasswordBearer: []
+        '422':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+              examples:
+                validation:
+                  summary: Exemple synthétique de validation locale
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La requête est invalide.
+                      details:
+                        violations:
+                        - loc:
+                          - query
+                          - q
+                          msg: Field required
+                          type: missing
       x-contract:
         source: app.openapi() ; opération get_active_ride_v1_rides_active_current_get
         purpose: Get Active Ride
@@ -1308,6 +1338,31 @@ paths:
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
         request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
         response: UNKNOWN — champs de succès non spécifiés.
+        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
+        retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
+        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
+        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /v1/rides/config/supplements:
+    get:
+      tags:
+      - ride
+      summary: Get Supplement Catalog
+      description: Return the server-controlled supplement catalogue used by the ride flow.
+      operationId: get_supplement_catalog_v1_rides_config_supplements_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideSupplementCatalogResponse'
+      x-contract:
+        source: app.openapi() ; opération get_supplement_catalog_v1_rides_config_supplements_get
+        purpose: Get Supplement Catalog
+        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
+        state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
+        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
+        response: Schémas ci-dessus.
         errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
         retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
@@ -8031,6 +8086,59 @@ paths:
         retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
         dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /v1/drivers/me/wallet/withdrawals/verification/request:
+    post:
+      tags:
+      - driver-wallet
+      summary: Request Driver Withdrawal Verification
+      description: Send a transaction OTP to the driver's identity phone before a payout.
+      operationId: request_driver_withdrawal_verification_v1_drivers_me_wallet_withdrawals_verification_request_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverWithdrawalVerificationRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverWithdrawalVerificationResponse'
+        '422':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+              examples:
+                validation:
+                  summary: Exemple synthétique de validation locale
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La requête est invalide.
+                      details:
+                        violations:
+                        - loc:
+                          - query
+                          - q
+                          msg: Field required
+                          type: missing
+      security:
+      - OAuth2PasswordBearer: []
+      x-contract:
+        source: app.openapi() ; opération request_driver_withdrawal_verification_v1_drivers_me_wallet_withdrawals_verification_request_post
+        purpose: Request Driver Withdrawal Verification
+        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
+        state-before-after: UNKNOWN — vérifier la précondition et la transition de cette opération.
+        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
+        response: Schémas ci-dessus.
+        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
+        retry: UNKNOWN — ne pas supposer une idempotence métier.
+        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
+        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
   /v1/drivers/me/wallet/withdrawals/{withdrawal_id}:
     get:
       tags:
@@ -11119,12 +11227,22 @@ components:
           title: Beneficiary Reference
         beneficiary_destination:
           $ref: '#/components/schemas/MobileMoneyBeneficiaryDestination'
+        verification_id:
+          type: string
+          format: uuid
+          title: Verification Id
+        verification_code:
+          type: string
+          pattern: ^\d{6}$
+          title: Verification Code
       additionalProperties: false
       type: object
       required:
       - quote_id
       - beneficiary_reference
       - beneficiary_destination
+      - verification_id
+      - verification_code
       title: DriverWithdrawalRequest
     DriverWithdrawalResponse:
       properties:
@@ -11224,6 +11342,38 @@ components:
       - beneficiary_reference
       - status
       title: DriverWithdrawalResponse
+    DriverWithdrawalVerificationRequest:
+      properties:
+        beneficiary_destination:
+          $ref: '#/components/schemas/MobileMoneyBeneficiaryDestination'
+      additionalProperties: false
+      type: object
+      required:
+      - beneficiary_destination
+      title: DriverWithdrawalVerificationRequest
+    DriverWithdrawalVerificationResponse:
+      properties:
+        verification_id:
+          type: string
+          format: uuid
+          title: Verification Id
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+        recipient_phone_masked:
+          type: string
+          title: Recipient Phone Masked
+        retry_after_seconds:
+          type: integer
+          title: Retry After Seconds
+      type: object
+      required:
+      - verification_id
+      - expires_at
+      - recipient_phone_masked
+      - retry_after_seconds
+      title: DriverWithdrawalVerificationResponse
     EarlyStopResponse:
       properties:
         ride_id:
@@ -12803,6 +12953,60 @@ components:
       - latitude
       - longitude
       title: RideStopCreateRequest
+    RideSupplementCatalogItem:
+      properties:
+        type:
+          type: string
+          enum:
+          - toll
+          - parking
+          - baggage_standard
+          - baggage_large
+          - other
+          title: Type
+        label:
+          type: string
+          title: Label
+        amount_xof:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Amount Xof
+        minimum_amount_xof:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Minimum Amount Xof
+        maximum_amount_xof:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Maximum Amount Xof
+        requires_custom_label:
+          type: boolean
+          title: Requires Custom Label
+          default: false
+      type: object
+      required:
+      - type
+      - label
+      title: RideSupplementCatalogItem
+    RideSupplementCatalogResponse:
+      properties:
+        currency:
+          type: string
+          const: XOF
+          title: Currency
+        items:
+          items:
+            $ref: '#/components/schemas/RideSupplementCatalogItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - currency
+      - items
+      title: RideSupplementCatalogResponse
     RideSupplementCreateRequest:
       properties:
         type:
@@ -12820,6 +13024,13 @@ components:
             pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           - type: 'null'
           title: Amount
+        custom_label:
+          anyOf:
+          - type: string
+            maxLength: 120
+            minLength: 1
+          - type: 'null'
+          title: Custom Label
         reason:
           anyOf:
           - type: string
@@ -12879,6 +13090,11 @@ components:
           - baggage_large
           - other
           title: Type
+        custom_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Custom Label
         source:
           type: string
           const: catalog

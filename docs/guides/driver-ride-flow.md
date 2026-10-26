@@ -19,9 +19,10 @@ moins de 30 secondes et une vitesse inferieure ou egale a 3 km/h.
 
 ## Supplements
 
-Le chauffeur choisit un type du catalogue. Il ne fixe pas librement le tarif,
-sauf `other`, plafonne a 1 000 XOF. La proposition reste hors prix tant que le
-passager ne l'a pas acceptee.
+Le chauffeur charge le catalogue serveur via
+`GET /v1/rides/config/supplements`. Il ne fixe pas librement le tarif, sauf
+`other`, plafonne a 1 000 XOF et accompagne d'un libelle obligatoire. La
+proposition reste hors prix tant que le passager ne l'a pas acceptee.
 
 ```http
 POST /v1/rides/{ride_id}/supplements
@@ -31,5 +32,5 @@ POST /v1/rides/{ride_id}/supplements
 {"type":"toll"}
 ```
 
-Pour `other`, le payload contient aussi `amount`. Le champ historique
-`reason` reste accepte temporairement comme alias de `type`.
+Pour `other`, le payload contient `amount` et `custom_label`. Le champ
+historique `reason` reste accepte temporairement comme alias de `type`.
