@@ -130,6 +130,25 @@ class SqlAlchemyRideRepository:
         row = result.scalar_one_or_none()
         return self._to_domain(row) if row is not None else None
 
+    async def find_active_by_passenger_user_id(self, user_id: UUID) -> Ride | None:
+        """Return the latest live ride owned by a passenger.
+
+        This mirrors the driver lookup used by the reconnect flow.  Keeping the
+        query in the repository ensures ``GET /rides/active/current`` works for
+        passengers without loading a paginated history first.
+        """
+        result = await self._session.execute(
+            select(orm.RideModel)
+            .where(
+                orm.RideModel.passenger_user_id == user_id,
+                orm.RideModel.status.in_([status.value for status in _ACTIVE_STATES]),
+            )
+            .order_by(orm.RideModel.requested_at.desc())
+            .limit(1),
+        )
+        row = result.scalar_one_or_none()
+        return self._to_domain(row) if row is not None else None
+
     async def list_by(
         self,
         *,

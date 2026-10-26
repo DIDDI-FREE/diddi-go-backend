@@ -294,6 +294,18 @@ async def test_http_user_can_list_own_driver_rides() -> None:
 
 
 @pytest.mark.asyncio
+async def test_http_passenger_can_restore_active_ride() -> None:
+    service = service_with(matched_ride())
+    app = ride_list_app(service, user_id=PASSENGER_ID, role="user")
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/v1/rides/active/current?as_role=passenger")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == str(RIDE_ID)
+
+
+@pytest.mark.asyncio
 async def test_http_verified_admin_can_list_all_rides() -> None:
     service = service_with(matched_ride())
     app = ride_list_app(service, user_id=OTHER_USER_ID, role="admin")

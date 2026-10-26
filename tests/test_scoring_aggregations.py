@@ -185,3 +185,45 @@ async def test_real_postgres_duplicate_rating_is_mapped_to_business_conflict() -
         assert error.value.code == "RATING_ALREADY_SUBMITTED"
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_real_postgres_finds_latest_active_ride_for_passenger() -> None:
+    passenger_id = uuid4()
+    active_ride_id = uuid4()
+    terminal_ride_id = uuid4()
+
+    try:
+        async with async_session_factory() as session:
+            session.add(
+                UserModel(
+                    id=passenger_id,
+                    phone=f"+225{passenger_id.int % 10_000_000_000:010d}",
+                    role="passenger",
+                )
+            )
+            session.add_all(
+                [
+                    _ride(
+                        ride_id=terminal_ride_id,
+                        passenger_id=passenger_id,
+                        driver_id=None,
+                        status="completed",
+                    ),
+                    _ride(
+                        ride_id=active_ride_id,
+                        passenger_id=passenger_id,
+                        driver_id=None,
+                        status="requested",
+                    ),
+                ]
+            )
+            await session.commit()
+
+            repository = SqlAlchemyRideRepository(session)
+            active_ride = await repository.find_active_by_passenger_user_id(passenger_id)
+
+        assert active_ride is not None
+        assert active_ride.id == active_ride_id
+    finally:
+        await engine.dispose()
