@@ -33,9 +33,16 @@ Après tout changement de variable, redéployer la stack ; l'application ne fait
 | `DRIVER_WITHDRAWAL_OTP_TTL_SECONDS` | `300` | Durée de validité du code de retrait. |
 | `DRIVER_WITHDRAWAL_OTP_RETRY_SECONDS` | `60` | Délai minimal avant un nouveau code pour la même demande. |
 | `DRIVER_WITHDRAWAL_OTP_MAX_ATTEMPTS` | `5` | Nombre maximal de codes erronés avant verrouillage du challenge. |
+| `WITHDRAWAL_OTP_LOG_CODE_FOR_TESTS` | `false` | Affiche le code OTP dans les logs uniquement en `development`, `test` ou `staging`. Ignoré en production. |
 
 Le code est envoyé au téléphone vérifié du profil chauffeur. Il ne doit jamais
 être envoyé automatiquement à la destination de retrait choisie.
+
+Chaque demande produit un événement JSON `withdrawal_otp.delivery_accepted`
+avec l'identifiant de vérification, le fournisseur, son statut, son identifiant
+de message et un téléphone masqué. L'événement `withdrawal_otp.delivery_failed`
+indique un échec d'envoi. Ni le code ni le numéro complet ne sont enregistrés
+par défaut.
 
 ## Contrôle avant déploiement
 

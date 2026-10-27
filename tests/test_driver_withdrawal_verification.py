@@ -6,6 +6,9 @@ import pytest
 
 from app_base.modules.payment.application import wallet_service as wallet_service_module
 from app_base.modules.payment.application.wallet_service import DriverWalletService
+from app_base.shared_kernel.contracts.sms import SmsDelivery
+
+pytestmark = pytest.mark.unit
 
 
 class _DriverRepository:
@@ -38,6 +41,7 @@ class _SmsProvider:
 
     async def send(self, **kwargs):
         self.calls.append(kwargs)
+        return SmsDelivery(provider="fake", status="accepted", message_id="sms-test-1")
 
     async def close(self) -> None:
         return None
@@ -72,3 +76,35 @@ async def test_withdrawal_otp_is_sent_to_profile_phone_and_binds_destination(mon
     assert sms.calls[0]["recipient"] == "+2250102030405"
     assert "123456" in sms.calls[0]["message"]
     assert result["recipient_phone_masked"].endswith("0405")
+
+
+@pytest.mark.asyncio
+async def test_withdrawal_otp_logs_code_only_when_staging_diagnostic_is_enabled(monkeypatch) -> None:
+    driver_id = uuid4()
+    events = []
+    service = DriverWalletService(
+        payment_repo=_PaymentRepository(),
+        driver_repo=_DriverRepository(driver_id),
+        sms=_SmsProvider(),
+    )
+    monkeypatch.setattr(wallet_service_module, "randbelow", lambda _: 654321)
+    monkeypatch.setattr(wallet_service_module.settings, "environment", "staging")
+    monkeypatch.setattr(wallet_service_module.settings, "withdrawal_otp_log_code_for_tests", True)
+    monkeypatch.setattr(wallet_service_module, "log_event", lambda *args, **kwargs: events.append((args, kwargs)))
+
+    await service.request_withdrawal_verification(
+        driver_user_id=uuid4(),
+        profile_phone="+2250102030405",
+        beneficiary_destination={"type": "mobile_money", "phone": "+2250700000000", "network": "wave"},
+    )
+
+    assert events[-1][0] == ("withdrawal_otp.delivery_accepted",)
+    assert events[-1][1]["otp_code"] == "654321"
+    assert events[-1][1]["otp_code_logged"] is True
+
+
+def test_withdrawal_otp_code_logging_is_forced_off_in_production(monkeypatch) -> None:
+    monkeypatch.setattr(wallet_service_module.settings, "environment", "production")
+    monkeypatch.setattr(wallet_service_module.settings, "withdrawal_otp_log_code_for_tests", True)
+
+    assert wallet_service_module.settings.can_log_withdrawal_otp_code is False

@@ -151,6 +151,9 @@ class Settings(BaseSettings):
     driver_withdrawal_otp_ttl_seconds: int = Field(default=300, ge=60, le=900)
     driver_withdrawal_otp_retry_seconds: int = Field(default=60, ge=10, le=600)
     driver_withdrawal_otp_max_attempts: int = Field(default=5, ge=1, le=10)
+    # Test-only diagnostic switch. It is deliberately ignored in production so
+    # an accidental Portainer variable can never expose a real OTP in logs.
+    withdrawal_otp_log_code_for_tests: bool = False
     ride_emergency_rate_limit_seconds: int = Field(default=60, ge=1, le=3600)
     ride_emergency_contact_notify_once: bool = True
     vehicle_kyv_required_photos: str = "front,back,left,right,interior,plate"
@@ -216,6 +219,15 @@ class Settings(BaseSettings):
         if self.identity_base_url:
             return f"{self.identity_base_url.rstrip('/')}/identity/v1/users/me"
         return None
+
+    @property
+    def can_log_withdrawal_otp_code(self) -> bool:
+        return self.withdrawal_otp_log_code_for_tests and self.environment.strip().lower() in {
+            "development",
+            "test",
+            "testing",
+            "staging",
+        }
 
 
 settings = Settings()

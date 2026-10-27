@@ -11,6 +11,7 @@ from uuid import UUID
 
 from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
+from app_base.core.observability import log_event
 from app_base.core.settings import settings
 from app_base.modules.payment.application.return_contexts import PaymentReturnContextStore
 from app_base.modules.payment.domain.entities import (
@@ -379,17 +380,36 @@ class DriverWalletService:
         await self.payment_repo.save_withdrawal_verification(verification)
         await self.payment_repo.commit()
         try:
-            await self.sms.send(
+            delivery = await self.sms.send(
                 recipient=normalized_phone,
                 message=f"DiddiGo: votre code de confirmation de retrait est {code}. Il expire dans 5 minutes.",
                 idempotency_key=f"diddigo:withdrawal-verification:{verification.id}",
             )
         except Exception as exc:
+            log_event(
+                "withdrawal_otp.delivery_failed",
+                level="warning",
+                verification_id=verification.id,
+                driver_id=driver_id,
+                provider=settings.sms_provider,
+                error_type=type(exc).__name__,
+            )
             raise ApiError(
                 503,
                 "WITHDRAWAL_VERIFICATION_DELIVERY_FAILED",
                 "Le code de retrait n'a pas pu etre envoye.",
             ) from exc
+        log_event(
+            "withdrawal_otp.delivery_accepted",
+            verification_id=verification.id,
+            driver_id=driver_id,
+            provider=delivery.provider,
+            provider_status=delivery.status,
+            provider_message_id=delivery.message_id,
+            recipient_phone_masked=_mask_phone(normalized_phone),
+            otp_code=code if settings.can_log_withdrawal_otp_code else None,
+            otp_code_logged=settings.can_log_withdrawal_otp_code,
+        )
         return {
             "verification_id": str(verification.id),
             "expires_at": verification.expires_at.isoformat(),
