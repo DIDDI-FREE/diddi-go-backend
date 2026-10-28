@@ -8,7 +8,11 @@ from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.application.emergency_contact_service import EmergencyContactService
 from app_base.modules.ride.application.scoring_service import ScoringService
-from app_base.modules.ride.presentation.schemas import EmergencyContactUpsertRequest, MyScoresResponse
+from app_base.modules.ride.presentation.schemas import (
+    EmergencyContactUpsertRequest,
+    MyScoresResponse,
+    ProMetiersResponse,
+)
 
 router = APIRouter(prefix="/me", tags=["me"])
 pro_router = APIRouter(prefix="/pro", tags=["pro"])
@@ -26,7 +30,7 @@ async def get_my_capabilities(
     )
 
 
-@pro_router.get("/metiers")
+@pro_router.get("/metiers", response_model=ProMetiersResponse)
 async def get_my_diddigo_metiers(
     service: DriverService = Depends(driver_service),
     current_user: UserModel = Depends(get_current_active_user),

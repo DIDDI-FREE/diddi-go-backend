@@ -323,7 +323,8 @@ def make_completed_ride() -> Ride:
 
 
 @pytest.mark.asyncio
-async def test_prepare_wave_creates_diddipay_intent(monkeypatch) -> None:
+@pytest.mark.parametrize("network", ["wave", "moov"])
+async def test_prepare_mobile_money_creates_diddipay_intent(monkeypatch, network: str) -> None:
     monkeypatch.setattr(
         "app_base.modules.payment.application.services.settings.diddigo_consumer_return_url",
         "https://go.test/payments/return",
@@ -346,7 +347,7 @@ async def test_prepare_wave_creates_diddipay_intent(monkeypatch) -> None:
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
         customer_phone="+2250700000000",
-        mobile_money_network="wave",
+        mobile_money_network=network,
     )
 
     assert payload["status"] == "requires_action"
@@ -355,7 +356,7 @@ async def test_prepare_wave_creates_diddipay_intent(monkeypatch) -> None:
     assert payload["next_action"]["type"] == "redirect"
     assert gateway.last_idempotency_key == f"diddigo:ride:{ride.id}:collection:v1"
     assert gateway.last_payload["business_reference"] == f"diddigo:ride:{ride.id}"
-    assert gateway.last_payload["network"] == "wave"
+    assert gateway.last_payload["network"] == network
     assert gateway.last_payload["callback_url"] == "https://go.test/payments/return?context=opaque-context"
     assert contexts.created == {
         "flow": "ride_payment",
@@ -541,6 +542,12 @@ def test_payment_requests_reject_client_owned_callback_urls() -> None:
             mobile_money_network="wave",
             callback_url="https://attacker.test/redirect",
         )
+
+
+def test_payment_request_accepts_moov_mobile_money_network() -> None:
+    payload = PaymentPreparationRequest(method="mobile_money", mobile_money_network="moov")
+
+    assert payload.mobile_money_network == "moov"
 
     with pytest.raises(ValidationError):
         DriverTopupRequest(

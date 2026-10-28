@@ -4,10 +4,11 @@ DiddiGo possède le prix métier, les commissions et le grand livre chauffeur.
 DiddiPay exécute les paiements numériques, remboursements et retraits.
 
 - Course cash : choix à la création puis confirmation par le chauffeur uniquement.
-- Course Mobile Money : choix à la création, puis réseau `orange`, `wave` ou `mtn`
+- Course Mobile Money : choix à la création, puis réseau `orange`, `wave`, `mtn` ou `moov`
   lors de la préparation. La préparation est autorisée uniquement après
   `status=completed` et après calcul du montant final. DiddiPay reste le
-  fournisseur technique.
+  fournisseur technique. L'acceptation par DiddiGo ne garantit pas que le
+  réseau est activé chez DiddiPay dans un environnement donné.
 - Course normale : devis figé + attentes + suppléments acceptés.
 - Arrêt anticipé : tarif calculé depuis la trace GPS chauffeur réelle.
 

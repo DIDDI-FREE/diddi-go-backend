@@ -26,9 +26,22 @@ def test_passenger_debt_routes_are_exposed_in_openapi() -> None:
 
 
 def test_active_ride_and_local_pro_routes_are_exposed_in_openapi() -> None:
-    paths = app.openapi()["paths"]
+    schema = app.openapi()
+    paths = schema["paths"]
     assert "/v1/rides/active/current" in paths
     assert "/v1/pro/metiers" in paths
+    assert paths["/v1/rides/{ride_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"][
+        "$ref"
+    ].endswith("RideDetailResponse")
+    assert paths["/v1/rides/active/current"]["get"]["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ]["$ref"].endswith("RideDetailResponse")
+    assert paths["/v1/pro/metiers"]["get"]["responses"]["200"]["content"]["application/json"]["schema"][
+        "$ref"
+    ].endswith("ProMetiersResponse")
+    assert schema["components"]["schemas"]["PaymentPreparationRequest"]["properties"]["mobile_money_network"][
+        "anyOf"
+    ][0]["enum"] == ["orange", "wave", "mtn", "moov"]
 
 
 @pytest.mark.parametrize("schema", [VehicleCreateRequest, VehicleUpdateRequest])

@@ -22,7 +22,7 @@ class PaymentPreparationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     method: Literal["cash", "mobile_money"] = "cash"
-    mobile_money_network: Literal["orange", "wave", "mtn"] | None = None
+    mobile_money_network: Literal["orange", "wave", "mtn", "moov"] | None = None
     customer_email: str | None = Field(default=None, min_length=3, max_length=255)
     customer_phone: str | None = Field(default=None, min_length=4, max_length=32)
 
@@ -72,7 +72,7 @@ class PassengerDebtPaymentResponse(BaseModel):
     payment_intent_id: UUID | None = Field(...)
     business_reference: str | None = Field(...)
     next_action: PaymentNextActionResponse | None = Field(...)
-    mobile_money_network: Literal["orange", "wave", "mtn"]
+    mobile_money_network: Literal["orange", "wave", "mtn", "moov"]
     expires_at: datetime | None = Field(...)
 
 

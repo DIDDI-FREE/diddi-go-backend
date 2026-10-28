@@ -729,9 +729,7 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                type: object
-                title: Response Get My Diddigo Metiers V1 Pro Metiers Get
+                $ref: '#/components/schemas/ProMetiersResponse'
       security:
       - OAuth2PasswordBearer: []
       x-contract:
@@ -740,7 +738,7 @@ paths:
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
         request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
-        response: UNKNOWN — champs de succès non spécifiés.
+        response: Schémas ci-dessus.
         errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
         retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
@@ -1308,9 +1306,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response Get Active Ride V1 Rides Active Current Get
+                $ref: '#/components/schemas/RideDetailResponse'
         '422':
           description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
           content:
@@ -1337,7 +1333,7 @@ paths:
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
         request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
-        response: UNKNOWN — champs de succès non spécifiés.
+        response: Schémas ci-dessus.
         errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
         retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
@@ -1389,9 +1385,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response Get Ride V1 Rides  Ride Id  Get
+                $ref: '#/components/schemas/RideDetailResponse'
         '422':
           description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
           content:
@@ -1418,7 +1412,7 @@ paths:
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
         request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
-        response: UNKNOWN — champs de succès non spécifiés.
+        response: Schémas ci-dessus.
         errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
         retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
@@ -10246,6 +10240,30 @@ components:
       - messaging_allowed
       - calling_allowed
       title: CommsTaskResponse
+    ConsumerCapabilityResponse:
+      properties:
+        type:
+          type: string
+          const: passenger
+          title: Type
+        enabled:
+          type: boolean
+          title: Enabled
+        status:
+          type: string
+          title: Status
+        blocking_reasons:
+          items:
+            type: string
+          type: array
+          title: Blocking Reasons
+      type: object
+      required:
+      - type
+      - enabled
+      - status
+      - blocking_reasons
+      title: ConsumerCapabilityResponse
     DeviceRegisterRequest:
       properties:
         platform:
@@ -10843,6 +10861,61 @@ components:
           title: National Id Expires At
       type: object
       title: DriverKycResubmitRequest
+    DriverProfessionalProfileResponse:
+      properties:
+        type:
+          type: string
+          const: driver
+          title: Type
+        exists:
+          type: boolean
+          title: Exists
+        status:
+          type: string
+          title: Status
+        verification_status:
+          type: string
+          title: Verification Status
+        can_go_online:
+          type: boolean
+          title: Can Go Online
+        blocking_reasons:
+          items:
+            type: string
+          type: array
+          title: Blocking Reasons
+        driver_profile_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Driver Profile Id
+        vehicle:
+          anyOf:
+          - $ref: '#/components/schemas/DriverVehicleCapabilityResponse'
+          - type: 'null'
+        score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Score
+        online_requirements:
+          anyOf:
+          - additionalProperties:
+              additionalProperties: true
+              type: object
+            type: object
+          - type: 'null'
+          title: Online Requirements
+      type: object
+      required:
+      - type
+      - exists
+      - status
+      - verification_status
+      - can_go_online
+      - blocking_reasons
+      title: DriverProfessionalProfileResponse
     DriverProfileCreateRequest:
       properties:
         license_number:
@@ -11172,6 +11245,42 @@ components:
       - amount
       - customer_email
       title: DriverTopupRequest
+    DriverVehicleCapabilityResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        status:
+          type: string
+          title: Status
+        active:
+          type: boolean
+          title: Active
+        category:
+          type: string
+          title: Category
+        comfort_level:
+          type: string
+          title: Comfort Level
+        owner_type:
+          type: string
+          title: Owner Type
+        partner_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Partner Id
+      type: object
+      required:
+      - id
+      - status
+      - active
+      - category
+      - comfort_level
+      - owner_type
+      title: DriverVehicleCapabilityResponse
     DriverWithdrawalQuoteRequest:
       properties:
         amount:
@@ -12098,6 +12207,7 @@ components:
           - orange
           - wave
           - mtn
+          - moov
           title: Mobile Money Network
         expires_at:
           anyOf:
@@ -12209,6 +12319,7 @@ components:
             - orange
             - wave
             - mtn
+            - moov
           - type: 'null'
           title: Mobile Money Network
         customer_email:
@@ -12626,6 +12737,30 @@ components:
       - reason
       - expires_at
       title: PriorityEventView
+    ProMetiersResponse:
+      properties:
+        scope:
+          type: string
+          const: diddigo_local
+          title: Scope
+        user_id:
+          type: string
+          format: uuid
+          title: User Id
+        metiers:
+          items:
+            $ref: '#/components/schemas/DriverProfessionalProfileResponse'
+          type: array
+          title: Metiers
+        consumer:
+          $ref: '#/components/schemas/ConsumerCapabilityResponse'
+      type: object
+      required:
+      - scope
+      - user_id
+      - metiers
+      - consumer
+      title: ProMetiersResponse
     RefreshRequest:
       properties:
         refresh_token:
@@ -12653,6 +12788,45 @@ components:
       required:
       - phone
       title: RegisterRequest
+    RideArrivalResponse:
+      properties:
+        arrived_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Arrived At
+        waiting_started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Waiting Started At
+        waiting_seconds:
+          type: integer
+          title: Waiting Seconds
+        waiting_fee:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Waiting Fee
+        free_seconds:
+          type: integer
+          title: Free Seconds
+        price_per_minute_xof:
+          type: integer
+          title: Price Per Minute Xof
+        no_show_after_seconds:
+          type: integer
+          title: No Show After Seconds
+      type: object
+      required:
+      - waiting_seconds
+      - free_seconds
+      - price_per_minute_xof
+      - no_show_after_seconds
+      title: RideArrivalResponse
+      description: Arrival and pre-departure waiting settings, safe to restore after reconnect.
     RideCancelRequest:
       properties:
         reason:
@@ -12685,6 +12859,191 @@ components:
       required:
       - quote_id
       title: RideCreateRequest
+    RideDetailResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        status:
+          type: string
+          title: Status
+        completion_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Completion Reason
+        passenger:
+          $ref: '#/components/schemas/RidePassengerResponse'
+        driver:
+          anyOf:
+          - $ref: '#/components/schemas/RideDriverResponse'
+          - type: 'null'
+        pickup:
+          $ref: '#/components/schemas/RidePointResponse'
+        dropoff:
+          $ref: '#/components/schemas/RidePointResponse'
+        vehicle_category:
+          type: string
+          title: Vehicle Category
+        comfort_level:
+          type: string
+          title: Comfort Level
+        estimated_fare:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Estimated Fare
+        final_fare:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Final Fare
+        currency:
+          type: string
+          title: Currency
+        distance_km:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Distance Km
+        duration_seconds:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Duration Seconds
+        pricing:
+          $ref: '#/components/schemas/RidePricingResponse'
+        trace_analysis:
+          $ref: '#/components/schemas/RideTraceAnalysisResponse'
+        waiting:
+          $ref: '#/components/schemas/RideWaitingResponse'
+        payment:
+          $ref: '#/components/schemas/RidePaymentResponse'
+        quote_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Quote Id
+        early_stop:
+          $ref: '#/components/schemas/RideEarlyStopResponse'
+        arrival:
+          $ref: '#/components/schemas/RideArrivalResponse'
+        start_authorization:
+          $ref: '#/components/schemas/RideStartAuthorizationResponse'
+        emergency:
+          $ref: '#/components/schemas/RideEmergencyResponse'
+        requested_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Requested At
+        matched_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Matched At
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Started At
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+      type: object
+      required:
+      - id
+      - status
+      - passenger
+      - pickup
+      - dropoff
+      - vehicle_category
+      - comfort_level
+      - currency
+      - pricing
+      - trace_analysis
+      - waiting
+      - payment
+      - early_stop
+      - arrival
+      - start_authorization
+      - emergency
+      title: RideDetailResponse
+      description: Canonical read model returned by ride detail and active-ride recovery.
+    RideDriverResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        full_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Full Name
+        rating_avg:
+          type: number
+          title: Rating Avg
+        rating_count:
+          type: integer
+          title: Rating Count
+        rating_status:
+          type: string
+          enum:
+          - new
+          - rated
+          title: Rating Status
+        phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone
+        photo_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Photo Url
+        vehicle:
+          anyOf:
+          - $ref: '#/components/schemas/RideVehiclePublicResponse'
+          - type: 'null'
+      type: object
+      required:
+      - id
+      - rating_avg
+      - rating_count
+      - rating_status
+      title: RideDriverResponse
+    RideEarlyStopResponse:
+      properties:
+        requested_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Requested At
+        expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expires At
+        confirmed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Confirmed At
+      type: object
+      title: RideEarlyStopResponse
     RideEmergencyRequest:
       properties:
         note:
@@ -12695,6 +13054,21 @@ components:
           title: Note
       type: object
       title: RideEmergencyRequest
+    RideEmergencyResponse:
+      properties:
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+        requested_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Requested At
+      type: object
+      title: RideEmergencyResponse
     RideLocationSamplePayload:
       properties:
         lat:
@@ -12783,6 +13157,138 @@ components:
       - accepted_samples
       - replayed
       title: RideLocationSamplesResponse
+    RidePassengerResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        full_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Full Name
+      type: object
+      required:
+      - id
+      title: RidePassengerResponse
+    RidePaymentResponse:
+      properties:
+        method:
+          type: string
+          enum:
+          - cash
+          - mobile_money
+          title: Method
+        transaction_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Transaction Id
+        ready:
+          type: boolean
+          title: Ready
+      type: object
+      required:
+      - method
+      - ready
+      title: RidePaymentResponse
+    RidePointResponse:
+      properties:
+        lat:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lat
+        lng:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lng
+        address:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Address
+      type: object
+      title: RidePointResponse
+    RidePricingResponse:
+      properties:
+        base_fare:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Base Fare
+        distance_fare:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Distance Fare
+        duration_fare:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Duration Fare
+        surge_multiplier:
+          type: number
+          title: Surge Multiplier
+        surge_cap:
+          type: number
+          title: Surge Cap
+        commission_rate:
+          type: number
+          title: Commission Rate
+        comfort_multiplier:
+          type: number
+          title: Comfort Multiplier
+        platform_commission:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Platform Commission
+        driver_payout_estimate:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Driver Payout Estimate
+        actual_distance_km:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Actual Distance Km
+        actual_duration_seconds:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Actual Duration Seconds
+        actual_pricing_fare:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Actual Pricing Fare
+        pricing_delta:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Pricing Delta
+        waiting_fee:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Waiting Fee
+        waiting_rate_per_minute:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Waiting Rate Per Minute
+      type: object
+      required:
+      - surge_multiplier
+      - surge_cap
+      - commission_rate
+      - comfort_multiplier
+      title: RidePricingResponse
     RideRatingRequest:
       properties:
         rating:
@@ -12905,6 +13411,36 @@ components:
       - sample_size
       - metrics
       title: RideScoreResponse
+    RideStartAuthorizationResponse:
+      properties:
+        code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Code
+        qr_payload:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Qr Payload
+        attempts:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Attempts
+        blocked:
+          type: boolean
+          title: Blocked
+        used_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Used At
+      type: object
+      required:
+      - blocked
+      title: RideStartAuthorizationResponse
     RideStartRequest:
       properties:
         code:
@@ -13140,6 +13676,107 @@ components:
       - source
       - status
       title: RideSupplementResponse
+    RideTraceAnalysisResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+        error_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Code
+        recommendation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Recommendation
+        quality_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Quality Label
+        quality_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Quality Score
+        points_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Points Count
+        usable_points_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Usable Points Count
+      type: object
+      required:
+      - status
+      title: RideTraceAnalysisResponse
+    RideVehiclePublicResponse:
+      properties:
+        make:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Make
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+        color:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Color
+        plate_number:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Plate Number
+        category:
+          type: string
+          title: Category
+        comfort_level:
+          type: string
+          title: Comfort Level
+      type: object
+      required:
+      - category
+      - comfort_level
+      title: RideVehiclePublicResponse
+    RideWaitingResponse:
+      properties:
+        active:
+          type: boolean
+          title: Active
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Started At
+        duration_seconds:
+          type: integer
+          title: Duration Seconds
+        fee:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Fee
+        rate_per_minute:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Rate Per Minute
+      type: object
+      required:
+      - active
+      - duration_seconds
+      title: RideWaitingResponse
     SupportParticipantResponse:
       properties:
         user_id:
@@ -13914,4 +14551,4 @@ components:
         password:
           scopes: {}
           tokenUrl: /v1/auth/otp/verify
-x-contract-version: draft.2026-10-22
+x-contract-version: draft.2026-10-28

@@ -392,6 +392,60 @@ async def test_capabilities_allow_active_driver_with_verified_vehicle() -> None:
 
 
 @pytest.mark.asyncio
+async def test_optional_transport_authorization_rejection_does_not_deactivate_verified_vehicle() -> None:
+    driver_repo = FakeDriverRepo()
+    vehicle_repo = FakeVehicleRepo()
+    service = DriverService(driver_repo=driver_repo, vehicle_repo=vehicle_repo)
+    user_id = uuid4()
+    admin_id = uuid4()
+
+    profile = await service.create_profile(user_id=user_id, license_number="CI-123456", **full_kyc_documents())
+    await service.approve_kyc(UUID(profile["id"]), reviewed_by_user_id=admin_id)
+    vehicle = await service.register_vehicle(
+        user_id=user_id,
+        plate_number="CE-123-AA",
+        make="Toyota",
+        model="Yaris",
+        color="gris",
+        category="standard",
+        registration_document_file_id=uuid4(),
+        insurance_document_file_id=uuid4(),
+        technical_inspection_document_file_id=uuid4(),
+        transport_authorization_document_file_id=uuid4(),
+        vehicle_front_photo_file_id=uuid4(),
+        vehicle_back_photo_file_id=uuid4(),
+        vehicle_left_photo_file_id=uuid4(),
+        vehicle_right_photo_file_id=uuid4(),
+        vehicle_interior_photo_file_id=uuid4(),
+        vehicle_plate_photo_file_id=uuid4(),
+    )
+    await service.approve_vehicle_kyv(UUID(vehicle["id"]), reviewed_by_user_id=admin_id)
+
+    rejected = await service.reject_vehicle_kyv(
+        UUID(vehicle["id"]),
+        reviewed_by_user_id=admin_id,
+        documents=[
+            {
+                "document_type": "transport_authorization",
+                "decision": "rejected",
+                "reason_code": "document_unreadable",
+                "reason": "Document illisible.",
+                "expected_correction": "Envoyer une photo lisible.",
+            }
+        ],
+    )
+
+    assert rejected["verification_status"] == "active"
+    transport_review = next(
+        review for review in rejected["document_reviews"] if review["document_type"] == "transport_authorization"
+    )
+    assert transport_review["status"] == "rejected"
+    resolved_profile, resolved_vehicle = await service.resolve_driver(user_id)
+    assert resolved_profile.id == UUID(profile["id"])
+    assert resolved_vehicle.id == UUID(vehicle["id"])
+
+
+@pytest.mark.asyncio
 async def test_register_vehicle_stores_registration_file_id() -> None:
     driver_repo = FakeDriverRepo()
     vehicle_repo = FakeVehicleRepo()

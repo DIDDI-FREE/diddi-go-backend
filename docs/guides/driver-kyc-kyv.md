@@ -41,3 +41,8 @@ le champ `vehicle.id` retourne par `GET /v1/drivers/me`.
 
 Les six vues obligatoires sont : avant, arriere, gauche, droite, interieur et
 plaque. La matrice des purposes est dans `integrations/diddifiles.md`.
+
+L'autorisation de transport est une piece **facultative**. Si elle est refusee,
+son motif et la correction attendue restent visibles dans `document_reviews`,
+mais elle ne retire pas a elle seule le statut `active` d'un vehicule dont les
+pieces KYV obligatoires restent approuvees.

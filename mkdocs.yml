@@ -63,16 +63,18 @@ nav:
       - SOS et sécurité: guides/sos-safety.md
       - Scoring: guides/scoring.md
   - Frontend:
+      - Brief courant (28 octobre): frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-28.md
       - Acces aux contrats: frontend/DIDDIGO_FRONTEND_CONTRACT_ACCESS_BRIEF_2026-10-19.md
-      - Brief integre (20 octobre): frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-20.md
       - KYC et KYV: frontend/DIDDIGO_FRONTEND_KYC_KYV_BRIEF_2026-10-19.md
-      - Brief du 12 octobre: frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-12.md
-      - Clarifications V2: frontend/DIDDIGO_FRONTEND_CLARIFICATIONS_2026-10-12_V2.md
       - Retraits chauffeur: frontend/DIDDIGO_DRIVER_WITHDRAWALS_BRIEF_2026-10-10.md
-      - Dette passager (20 octobre): frontend/DIDDIGO_FRONTEND_PASSENGER_DEBT_BRIEF_2026-10-20.md
-      - Brief integre (22 octobre): frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-22.md
-      - Brief integre (23 octobre): frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-23.md
       - Support et signalements (27 octobre): frontend/DIDDIGO_FRONTEND_SUPPORT_BRIEF_2026-10-27.md
+      - Historique frontend:
+          - Brief integre (20 octobre): frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-20.md
+          - Brief du 12 octobre: frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-12.md
+          - Clarifications V2: frontend/DIDDIGO_FRONTEND_CLARIFICATIONS_2026-10-12_V2.md
+          - Dette passager (20 octobre): frontend/DIDDIGO_FRONTEND_PASSENGER_DEBT_BRIEF_2026-10-20.md
+          - Brief integre (22 octobre): frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-22.md
+          - Brief integre (23 octobre): frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-23.md
   - Intégrations:
       - DiddiFiles: integrations/diddifiles.md
       - DiddiPay: integrations/diddipay.md
@@ -102,6 +104,7 @@ nav:
       - 20 octobre 2026 - Scoring: changelog/2026-10-20-scoring-fairness.md
       - 22 octobre 2026: changelog/2026-10-22.md
       - 23 octobre 2026: changelog/2026-10-23.md
+      - 28 octobre 2026: changelog/2026-10-28.md
 
 exclude_docs: |
   archive/

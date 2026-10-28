@@ -1,6 +1,6 @@
 # Contrat API DiddiGo — HTTP et WebSocket
 
-Version documentaire : `draft.2026-10-22`. Perimetre : implementation locale, applications passager/chauffeur, Backoffice et services internes.
+Version documentaire : `draft.2026-10-28`. Perimetre : implementation locale, applications passager/chauffeur, Backoffice et services internes.
 
 Ce contrat est exploitable comme référence d'intégration, mais reste un **brouillon incomplet** : les réponses HTTP non typées et les décisions non vérifiées sont recensées dans [open-questions.md](open-questions.md). Il ne certifie pas la version déployée : le contrôle staging du 14 octobre 2026 à 18:38 UTC exposait encore 136 opérations, contre 138 dans le dépôt.
 
@@ -77,7 +77,7 @@ La demande émet `ride.status_changed` avec `status=early_stop_requested`. **Cet
 | Opération | Règle |
 |---|---|
 | Création de course | `payment_method` vaut `cash` ou `mobile_money` ; les anciennes méthodes de recharge wallet ne sont pas des méthodes de course |
-| `POST /v1/payments/{ride_id}/prepare` | Autorise uniquement une course `completed` avec montant final ; envoyer explicitement `method=mobile_money` et `mobile_money_network=orange|wave|mtn` ; une fin normale et un arrêt anticipé confirmé utilisent tous deux `completed` |
+| `POST /v1/payments/{ride_id}/prepare` | Autorise uniquement une course `completed` avec montant final ; envoyer explicitement `method=mobile_money` et `mobile_money_network=orange|wave|mtn|moov` ; une fin normale et un arrêt anticipé confirmé utilisent tous deux `completed`. DiddiPay reste la source de vérité sur l'activation réelle d'un réseau. |
 | Reprise numérique | Une intention active est réutilisée ; une intention terminale admissible ou expirée peut être remplacée ; relire `GET /v1/payments/{ride_id}` après retour navigateur |
 | `POST /v1/payments/{ride_id}/confirm-cash` | Chauffeur affecté disposant d'un profil, corps `amount_collected` ; ne pas déduire le paiement d'un écran de succès |
 | `POST /v1/drivers/me/wallet/withdrawals/quote` | Devis serveur : montant, frais, net, devise, expiration |

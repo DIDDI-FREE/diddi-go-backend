@@ -586,15 +586,31 @@ class DriverService:
             reviewed_by_user_id=reviewed_by_user_id,
             reviewed_at=now,
         )
-        vehicle.verification_status = VehicleVerificationStatus.REJECTED
-        vehicle.verified_at = None
+        rejected_required_documents = any(
+            vehicle.document_reviews.get(document_type, {}).get("status") == "rejected"
+            for document_type in REQUIRED_VEHICLE_DOCUMENT_TYPES
+        )
+        # Transport authorization is intentionally optional. Its rejection is
+        # retained for audit but must not make an otherwise approved vehicle
+        # ineligible for matching.
+        if rejected_required_documents:
+            vehicle.verification_status = VehicleVerificationStatus.REJECTED
+            vehicle.verified_at = None
+        elif vehicle.verification_status is not VehicleVerificationStatus.ACTIVE:
+            vehicle.verification_status = VehicleVerificationStatus.PENDING_VERIFICATION
         vehicle.reviewed_at = now
         vehicle.review_notes = _review_note(notes, reviewed_by_user_id)
         # Keep the vehicle record visible/editable during correction. Matching
-        # still rejects it because verification_status is not active.
+        # rejects it only when a required document invalidates its KYV status.
         vehicle.active = True
         await self.vehicle_repo.save(vehicle)
-        log_event("driver.vehicle.kyv.rejected", level="warning", vehicle_id=vehicle.id, driver_id=vehicle.driver_id)
+        log_event(
+            "driver.vehicle.kyv.rejected" if rejected_required_documents else "driver.vehicle.kyv.document_rejected",
+            level="warning",
+            vehicle_id=vehicle.id,
+            driver_id=vehicle.driver_id,
+            verification_status=vehicle.verification_status.value,
+        )
         await self._publish_status_for_driver_id(vehicle.driver_id)
         return _vehicle_payload(vehicle)
 

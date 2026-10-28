@@ -28,10 +28,12 @@ nominaux, sauf lorsqu'une règle de sécurité minimale est indiquée.
   recevoir de communication métier et ne doit pas être persistée comme donnée
   de profil.
 
-### Réseaux Mobile Money différés
+### Disponibilité des réseaux Mobile Money
 
-- Le MVP accepte `orange`, `wave` et `mtn`.
-- `moov` reste hors MVP tant que le schéma typé DiddiPay ne l'accepte pas.
+- DiddiGo accepte `orange`, `wave`, `mtn` et `moov` dans ses requêtes.
+- L'activation réelle de chaque réseau appartient à DiddiPay et doit être
+  vérifiée séparément en staging puis en production. Le frontend ne doit pas
+  promettre un réseau sans cette validation fournisseur.
 - Un futur wallet DiddiPay/DiddiWallet sera un moyen de paiement distinct. Il
   ne doit pas être présenté comme disponible dans le MVP.
 

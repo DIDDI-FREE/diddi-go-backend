@@ -203,6 +203,167 @@ class RideArrivalResponse(BaseModel):
     no_show_after_seconds: int
 
 
+class RidePointResponse(BaseModel):
+    lat: float | None = None
+    lng: float | None = None
+    address: str | None = None
+
+
+class RidePassengerResponse(BaseModel):
+    id: UUID
+    full_name: str | None = None
+
+
+class RideVehiclePublicResponse(BaseModel):
+    make: str | None = None
+    model: str | None = None
+    color: str | None = None
+    plate_number: str | None = None
+    category: str
+    comfort_level: str
+
+
+class RideDriverResponse(BaseModel):
+    id: UUID
+    full_name: str | None = None
+    rating_avg: float
+    rating_count: int
+    rating_status: Literal["new", "rated"]
+    phone: str | None = None
+    photo_url: str | None = None
+    vehicle: RideVehiclePublicResponse | None = None
+
+
+class RidePricingResponse(BaseModel):
+    base_fare: int | None = None
+    distance_fare: int | None = None
+    duration_fare: int | None = None
+    surge_multiplier: float
+    surge_cap: float
+    commission_rate: float
+    comfort_multiplier: float
+    platform_commission: int | None = None
+    driver_payout_estimate: int | None = None
+    actual_distance_km: float | None = None
+    actual_duration_seconds: int | None = None
+    actual_pricing_fare: int | None = None
+    pricing_delta: int | None = None
+    waiting_fee: int | None = None
+    waiting_rate_per_minute: int | None = None
+
+
+class RideTraceAnalysisResponse(BaseModel):
+    status: str
+    error_code: str | None = None
+    recommendation: str | None = None
+    quality_label: str | None = None
+    quality_score: float | None = None
+    points_count: int | None = None
+    usable_points_count: int | None = None
+
+
+class RideWaitingResponse(BaseModel):
+    active: bool
+    started_at: datetime | None = None
+    duration_seconds: int
+    fee: int | None = None
+    rate_per_minute: int | None = None
+
+
+class RidePaymentResponse(BaseModel):
+    method: Literal["cash", "mobile_money"]
+    transaction_id: UUID | None = None
+    ready: bool
+
+
+class RideEarlyStopResponse(BaseModel):
+    requested_at: datetime | None = None
+    expires_at: datetime | None = None
+    confirmed_at: datetime | None = None
+
+
+class RideStartAuthorizationResponse(BaseModel):
+    code: str | None = None
+    qr_payload: str | None = None
+    attempts: int | None = None
+    blocked: bool
+    used_at: datetime | None = None
+
+
+class RideEmergencyResponse(BaseModel):
+    status: str | None = None
+    requested_at: datetime | None = None
+
+
+class RideDetailResponse(BaseModel):
+    """Canonical read model returned by ride detail and active-ride recovery."""
+
+    id: UUID
+    status: str
+    completion_reason: str | None = None
+    passenger: RidePassengerResponse
+    driver: RideDriverResponse | None = None
+    pickup: RidePointResponse
+    dropoff: RidePointResponse
+    vehicle_category: str
+    comfort_level: str
+    estimated_fare: int | None = None
+    final_fare: int | None = None
+    currency: str
+    distance_km: float | None = None
+    duration_seconds: int | None = None
+    pricing: RidePricingResponse
+    trace_analysis: RideTraceAnalysisResponse
+    waiting: RideWaitingResponse
+    payment: RidePaymentResponse
+    quote_id: UUID | None = None
+    early_stop: RideEarlyStopResponse
+    arrival: RideArrivalResponse
+    start_authorization: RideStartAuthorizationResponse
+    emergency: RideEmergencyResponse
+    requested_at: datetime | None = None
+    matched_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class DriverVehicleCapabilityResponse(BaseModel):
+    id: UUID
+    status: str
+    active: bool
+    category: str
+    comfort_level: str
+    owner_type: str
+    partner_id: UUID | None = None
+
+
+class DriverProfessionalProfileResponse(BaseModel):
+    type: Literal["driver"]
+    exists: bool
+    status: str
+    verification_status: str
+    can_go_online: bool
+    blocking_reasons: list[str]
+    driver_profile_id: UUID | None = None
+    vehicle: DriverVehicleCapabilityResponse | None = None
+    score: float | None = None
+    online_requirements: dict[str, dict] | None = None
+
+
+class ConsumerCapabilityResponse(BaseModel):
+    type: Literal["passenger"]
+    enabled: bool
+    status: str
+    blocking_reasons: list[str]
+
+
+class ProMetiersResponse(BaseModel):
+    scope: Literal["diddigo_local"]
+    user_id: UUID
+    metiers: list[DriverProfessionalProfileResponse]
+    consumer: ConsumerCapabilityResponse
+
+
 class RideSupplementResponse(BaseModel):
     id: UUID
     ride_id: UUID

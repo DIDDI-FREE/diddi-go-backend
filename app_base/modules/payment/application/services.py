@@ -332,12 +332,13 @@ class PaymentService:
             "orange",
             "wave",
             "mtn",
+            "moov",
         }:
             raise ApiError(
                 422,
                 ErrorCode.INVALID_PAYMENT_METHOD,
                 "Un reseau mobile money valide est requis.",
-                {"field": "mobile_money_network", "allowed": ["orange", "wave", "mtn"]},
+                {"field": "mobile_money_network", "allowed": ["orange", "wave", "mtn", "moov"]},
             )
         if not customer_email and customer_phone:
             normalized_phone = "".join(character for character in customer_phone if character.isdigit())

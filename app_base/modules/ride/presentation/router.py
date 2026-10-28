@@ -54,6 +54,7 @@ from app_base.modules.ride.presentation.schemas import (
     PricingEstimateRequest,
     RideCancelRequest,
     RideCreateRequest,
+    RideDetailResponse,
     RideEmergencyRequest,
     RideLocationSamplesRequest,
     RideLocationSamplesResponse,
@@ -289,7 +290,7 @@ async def get_ride_score(
     )
 
 
-@router.get("/active/current")
+@router.get("/active/current", response_model=RideDetailResponse)
 async def get_active_ride(
     service: RideService = Depends(ride_service),
     current_user: UserModel = Depends(get_current_user),
@@ -308,7 +309,7 @@ async def get_supplement_catalog(service: RideService = Depends(ride_service)) -
     return service.get_supplement_catalog()
 
 
-@router.get("/{ride_id}")
+@router.get("/{ride_id}", response_model=RideDetailResponse)
 async def get_ride(
     ride_id: UUID,
     service: RideService = Depends(ride_service),
