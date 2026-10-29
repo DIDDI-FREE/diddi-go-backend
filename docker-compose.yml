@@ -8,7 +8,9 @@ services:
       APP_ENV: ${APP_ENV:-development}
       API_PREFIX: ${API_PREFIX:-/v1}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
-      CORS_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:-^https?://(localhost|127\.0\.0\.1)(:\d+)?$}
+      # Local development plus every HTTPS DiddiFree web subdomain. Override
+      # CORS_ORIGIN_REGEX in Portainer only when a non-DiddiFree origin is needed.
+      CORS_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:-^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://([a-z0-9-]+\.)*diddifree\.com(:\d+)?$}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-json}
       DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/diddi_go}

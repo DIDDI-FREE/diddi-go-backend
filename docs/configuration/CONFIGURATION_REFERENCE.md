@@ -26,6 +26,19 @@ Les stacks Compose définissent les valeurs de substitution et les valeurs requi
 
 Après tout changement de variable, redéployer la stack ; l'application ne fait pas de hot reload de configuration.
 
+## CORS
+
+Les stacks Docker transmettent `CORS_ORIGINS` et `CORS_ORIGIN_REGEX` à
+l'application. Par défaut, `CORS_ORIGIN_REGEX` autorise :
+
+- `localhost` et `127.0.0.1`, sur tout port, pour le développement ;
+- `https://diddifree.com` et tout sous-domaine HTTPS de `diddifree.com`, par
+  exemple `https://www.diddifree.com` ou `https://go-staging.diddifree.com`.
+
+Les origines externes (par exemple une URL de recette temporaire) doivent être
+ajoutées explicitement dans `CORS_ORIGINS`, sous forme de liste séparée par des
+virgules. Ne pas remplacer la regex par `.*`.
+
 ## OTP de retrait chauffeur
 
 | Variable | Valeur par défaut | Règle |
