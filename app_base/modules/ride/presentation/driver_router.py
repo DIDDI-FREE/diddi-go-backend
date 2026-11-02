@@ -309,7 +309,10 @@ async def go_online(
     """Enter the matching pool. Rejected unless the driver is verified and
     has an active vehicle — matching must never offer a ride to a driver who
     cannot legally take it."""
-    profile, vehicle = await service.resolve_driver(current_user.id)
+    profile, vehicle = await service.resolve_driver(
+        current_user.id,
+        is_review_account=current_user.is_review_account,
+    )
     await eligibility.ensure_can_go_online(profile.id)
     position = GeoPoint(lat=payload.lat, lng=payload.lng)
     await locations.update_position(current_user.id, position)
@@ -329,6 +332,7 @@ async def go_online(
         vehicle_id=vehicle.id,
         lat=position.lat,
         lng=position.lng,
+        is_review_account=current_user.is_review_account,
     )
     await capabilities.publish_driver_status(
         current_user.id,

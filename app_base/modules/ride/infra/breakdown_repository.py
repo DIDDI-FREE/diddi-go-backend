@@ -40,7 +40,11 @@ class SqlAlchemyRideBreakdownRepository:
             dimension_expression.label("breakdown_key"),
             value_expression.label("breakdown_value"),
         ).select_from(RideModel)
-        statement = statement.where(timestamp >= start, timestamp < end)
+        statement = statement.where(
+            timestamp >= start,
+            timestamp < end,
+            RideModel.is_review_account.is_(False),
+        )
         if metric is not BreakdownMetric.RIDES_REQUESTED:
             statement = statement.where(RideModel.status == "completed")
         if metric is BreakdownMetric.COMPLETED_FARE_TOTAL_XOF:

@@ -107,6 +107,7 @@ class MatchingService:
             },
             vehicle_category=ride.vehicle_category.value,
             comfort_level=ride.comfort_level.value,
+            is_review_account=ride.is_review_account,
         )
 
         if ride.status != RideStatus.REQUESTED:
@@ -220,6 +221,8 @@ class MatchingService:
                 profile is not None,
             )
             raise ApiError(403, "DRIVER_NOT_VERIFIED", "Votre profil chauffeur n'est pas valide.")
+        if profile.is_review_account != ride.is_review_account:
+            raise ApiError(403, "REVIEW_COHORT_MISMATCH", "Cette course appartient a un autre groupe de test.")
 
         vehicle = await self.vehicle_repo.find_active_for_driver(profile.id)
         if vehicle is None:
@@ -284,6 +287,7 @@ class MatchingService:
             driver_user_id=driver_user_id,
             driver_id=profile.id,
             vehicle_id=vehicle.id,
+            is_review_account=ride.is_review_account,
         )
         return ride
 
@@ -412,6 +416,7 @@ class MatchingService:
             candidates_count=len(nearby),
             radius_km=radius_km,
             wave_number=wave_number,
+            is_review_account=ride.is_review_account,
         )
         if not nearby:
             # UC-287: no free driver within the (widened) radius — don't open a
@@ -567,6 +572,8 @@ class MatchingService:
         profile = await self.driver_repo.find_by_user_id(user_id)
         if profile is None:
             return False, "driver_profile_not_found"
+        if profile.is_review_account != ride.is_review_account:
+            return False, "review_cohort_mismatch"
         if profile.status != DriverStatus.ACTIVE:
             return False, f"driver_profile_not_active:{profile.status.value}"
         vehicle = await self.vehicle_repo.find_active_for_driver(profile.id)

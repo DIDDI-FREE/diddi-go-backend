@@ -22,7 +22,11 @@ class SqlAlchemyRideSummaryRepository:
     async def summarize_period(self, start: datetime, end: datetime) -> RideSummaryTotals:
         requested = (
             select(func.count(RideModel.id))
-            .where(RideModel.requested_at >= start, RideModel.requested_at < end)
+            .where(
+                RideModel.requested_at >= start,
+                RideModel.requested_at < end,
+                RideModel.is_review_account.is_(False),
+            )
             .scalar_subquery()
         )
         completed = (
@@ -40,6 +44,7 @@ class SqlAlchemyRideSummaryRepository:
                 RideModel.status == "completed",
                 RideModel.completed_at >= start,
                 RideModel.completed_at < end,
+                RideModel.is_review_account.is_(False),
             )
             .subquery()
         )
@@ -66,6 +71,7 @@ class SqlAlchemyRideSummaryRepository:
             RideModel.completed_at >= start,
             RideModel.completed_at < end,
             RideModel.currency == "XOF",
+            RideModel.is_review_account.is_(False),
         )
         collected_cash = exists(
             select(TransactionModel.id).where(

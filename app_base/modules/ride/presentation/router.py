@@ -207,6 +207,7 @@ async def create_ride(
     """
     ride = await service.request_ride(
         passenger_user_id=current_user.id,
+        is_review_account=current_user.is_review_account,
         quote_id=payload.quote_id,
         payment_method=payload.payment_method,
         scheduled_at=payload.scheduled_at,

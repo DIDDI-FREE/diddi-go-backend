@@ -211,6 +211,7 @@ async def _upsert_identity_shadow_user(user: UserModel, repo: SqlAlchemyUserRepo
         full_name=user.full_name,
         role=UserRole.ADMIN if user.role == "admin" else UserRole.PASSENGER,
         status=UserStatus.ACTIVE if user.status == "active" else UserStatus.SUSPENDED,
+        is_review_account=bool(getattr(user, "is_review_account", False)),
         created_at=user.created_at,
         updated_at=user.updated_at,
     )

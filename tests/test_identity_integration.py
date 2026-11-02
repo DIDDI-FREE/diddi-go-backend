@@ -2,6 +2,7 @@ from uuid import uuid4
 
 import pytest
 
+from app_base.core.errors import ApiError
 from app_base.core.identity import identity_mode_enabled, identity_payload_to_user_model
 from app_base.core.settings import settings
 
@@ -71,3 +72,20 @@ def test_identity_payload_keeps_legacy_diddigo_service_roles_during_migration():
     assert user.id == driver_id
     assert user.role == "driver"
     assert user.status == "active"
+
+
+def test_identity_payload_copies_review_claim_from_signed_token():
+    user = identity_payload_to_user_model(
+        {"sub": str(uuid4()), "role": "user", "status": "active", "is_review_account": True},
+    )
+
+    assert user.is_review_account is True
+
+
+def test_identity_payload_rejects_non_boolean_review_claim():
+    with pytest.raises(ApiError) as exc_info:
+        identity_payload_to_user_model(
+            {"sub": str(uuid4()), "role": "user", "status": "active", "is_review_account": "true"},
+        )
+
+    assert exc_info.value.code == "TOKEN_INVALID"

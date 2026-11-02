@@ -759,11 +759,19 @@ class DriverService:
         vehicle = await self._require_vehicle(vehicle_id)
         return _vehicle_payload(vehicle)
 
-    async def resolve_driver(self, user_id: UUID) -> tuple[DriverProfile, Vehicle]:
+    async def resolve_driver(
+        self,
+        user_id: UUID,
+        *,
+        is_review_account: bool | None = None,
+    ) -> tuple[DriverProfile, Vehicle]:
         """Profile + active vehicle for a driver about to go online or take a
         ride. Raises if either is missing — matching must never hand a ride to
         a driver with no vehicle on file."""
         profile = await self._require_profile(user_id)
+        if is_review_account is not None and profile.is_review_account != is_review_account:
+            profile.is_review_account = is_review_account
+            await self.driver_repo.save(profile)
         if profile.status != DriverStatus.ACTIVE:
             log_event(
                 "driver.online.blocked",

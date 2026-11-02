@@ -54,6 +54,7 @@ nav:
   - Architecture:
       - Exécution: architecture/RUNTIME_ARCHITECTURE.md
       - Portail documentaire: configuration/DOCUMENTATION_PORTAL.md
+      - Google Play Review (2 novembre): architecture/2026-11-02-google-play-review-cohort.md
   - Parcours métier:
       - Passager: guides/passenger-ride-flow.md
       - Chauffeur: guides/driver-ride-flow.md

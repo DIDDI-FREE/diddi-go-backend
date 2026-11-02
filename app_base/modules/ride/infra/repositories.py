@@ -588,6 +588,7 @@ class SqlAlchemyRideRepository:
         row.status = ride.status.value
         row.vehicle_category = ride.vehicle_category.value
         row.comfort_level = ride.comfort_level.value
+        row.is_review_account = ride.is_review_account
         row.pickup_location = _to_orm_geo(ride.pickup_location) if ride.pickup_location else row.pickup_location  # type: ignore[assignment]
         row.pickup_address = ride.pickup_address
         row.dropoff_location = _to_orm_geo(ride.dropoff_location) if ride.dropoff_location else row.dropoff_location  # type: ignore[assignment]
@@ -661,6 +662,7 @@ class SqlAlchemyRideRepository:
             status=RideStatus(row.status),
             vehicle_category=VehicleCategory(row.vehicle_category),
             comfort_level=ComfortLevel(row.comfort_level),
+            is_review_account=row.is_review_account,
             pickup_location=_from_orm_geo(row.pickup_location) if row.pickup_location is not None else None,
             pickup_address=row.pickup_address,
             dropoff_location=_from_orm_geo(row.dropoff_location) if row.dropoff_location is not None else None,
@@ -874,6 +876,7 @@ class SqlAlchemyDriverProfileRepository:
         row.kyc_status = profile.kyc_status.value
         row.kyc_document_reviews = profile.kyc_document_reviews
         row.kyc_review_history = profile.kyc_review_history
+        row.is_review_account = profile.is_review_account
         row.updated_at = datetime.now(UTC)
         await self._session.flush()
         return profile
@@ -951,6 +954,7 @@ class SqlAlchemyDriverProfileRepository:
             kyc_status=KycStatus(row.kyc_status),
             kyc_document_reviews=row.kyc_document_reviews or {},
             kyc_review_history=row.kyc_review_history or [],
+            is_review_account=row.is_review_account,
             rating_avg=row.rating_avg,
             rating_count=row.rating_count,
             license_verified_at=row.license_verified_at,

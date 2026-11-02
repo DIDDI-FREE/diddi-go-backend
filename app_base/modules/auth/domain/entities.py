@@ -37,6 +37,7 @@ class User:
     role: UserRole
     status: UserStatus = UserStatus.PENDING_VERIFICATION
     full_name: str | None = None
+    is_review_account: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

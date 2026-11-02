@@ -108,6 +108,32 @@ async def test_quote_is_persisted_and_snapshotted_into_ride():
 
 
 @pytest.mark.asyncio
+async def test_review_passenger_creates_review_ride():
+    service, quotes, _rides = service_with_repositories()
+    passenger_id = uuid4()
+    await service.create_quote(
+        passenger_user_id=passenger_id,
+        pickup=GeoPoint(lat=5.35, lng=-4.01),
+        pickup_address=None,
+        dropoff=GeoPoint(lat=5.32, lng=-4.02),
+        dropoff_address=None,
+        vehicle_category="standard",
+        comfort_level="standard",
+    )
+    quote = next(iter(quotes.quotes.values()))
+
+    ride = await service.request_ride(
+        passenger_user_id=passenger_id,
+        is_review_account=True,
+        quote_id=quote.id,
+        payment_method="cash",
+        scheduled_at=None,
+    )
+
+    assert ride.is_review_account is True
+
+
+@pytest.mark.asyncio
 async def test_expired_quote_is_rejected():
     service, quotes, _rides = service_with_repositories()
     passenger_id = uuid4()

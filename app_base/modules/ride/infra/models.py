@@ -94,6 +94,9 @@ class DriverProfileModel(Base):
         Numeric(3, 2), nullable=False, default=Decimal("5.00"), server_default="5.00",
     )
     rating_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_review_account: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()"),
     )
@@ -198,6 +201,9 @@ class RideModel(Base):
     status: Mapped[str] = mapped_column(String(30), nullable=False, index=True, default="requested")
     vehicle_category: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")
     comfort_level: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")
+    is_review_account: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     # -- Spatial columns: WGS84 geography (degrees); distances computed in meters on the sphere.
     pickup_location = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=False)
     pickup_address: Mapped[str | None] = mapped_column(Text, nullable=True)

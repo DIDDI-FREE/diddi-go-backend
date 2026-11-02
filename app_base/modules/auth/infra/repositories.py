@@ -52,6 +52,7 @@ class SqlAlchemyUserRepository(UserRepository):
                 full_name=user.full_name,
                 role=user.role.value if isinstance(user.role, UserRole) else user.role,
                 status=user.status.value if isinstance(user.status, UserStatus) else user.status,
+                is_review_account=user.is_review_account,
                 created_at=user.created_at or datetime.now(UTC),
                 updated_at=user.updated_at or datetime.now(UTC),
             )
@@ -60,6 +61,7 @@ class SqlAlchemyUserRepository(UserRepository):
             row.full_name = user.full_name
             row.role = user.role.value if isinstance(user.role, UserRole) else user.role
             row.status = user.status.value if isinstance(user.status, UserStatus) else user.status
+            row.is_review_account = user.is_review_account
             row.updated_at = datetime.now(UTC)
         await self._session.flush()
         return user
@@ -102,6 +104,7 @@ class SqlAlchemyUserRepository(UserRepository):
             full_name=row.full_name,
             role=UserRole(row.role),
             status=UserStatus(row.status),
+            is_review_account=row.is_review_account,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )

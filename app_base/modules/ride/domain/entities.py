@@ -147,6 +147,7 @@ class Ride:
     status: RideStatus = RideStatus.REQUESTED
     vehicle_category: VehicleCategory = VehicleCategory.STANDARD
     comfort_level: ComfortLevel = ComfortLevel.STANDARD
+    is_review_account: bool = False
 
     pickup_location: GeoPoint | None = None
     pickup_address: str | None = None
@@ -305,6 +306,7 @@ class DriverProfile:
     kyc_status: KycStatus = KycStatus.PENDING_VERIFICATION
     kyc_document_reviews: dict[str, dict] = field(default_factory=dict)
     kyc_review_history: list[dict] = field(default_factory=list)
+    is_review_account: bool = False
     # Public marketplaces conventionally start a new driver's displayed rating
     # at 5.00. `rating_count` and `rating_status` keep that baseline distinct
     # from an earned average.

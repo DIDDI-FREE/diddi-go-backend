@@ -188,6 +188,58 @@ async def test_matching_rejects_vehicle_below_requested_comfort_level() -> None:
 
 
 @pytest.mark.asyncio
+async def test_matching_excludes_real_driver_from_review_ride() -> None:
+    driver_user_id = uuid4()
+    driver_id = uuid4()
+    service = MatchingService(
+        ride_repo=None,
+        driver_repo=FakeDriverRepo(
+            DriverProfile(id=driver_id, user_id=driver_user_id, license_number="CI-123", status=DriverStatus.ACTIVE)
+        ),
+        vehicle_repo=FakeVehicleRepo(
+            Vehicle(id=uuid4(), driver_id=driver_id, plate_number="CI-123-AA")
+        ),
+        locations=None,
+        offers=None,
+    )
+    ride = Ride(id=uuid4(), passenger_user_id=uuid4(), is_review_account=True)
+
+    can_take, reason = await service._can_take_ride(driver_user_id, ride)
+
+    assert can_take is False
+    assert reason == "review_cohort_mismatch"
+
+
+@pytest.mark.asyncio
+async def test_matching_accepts_review_driver_for_review_ride() -> None:
+    driver_user_id = uuid4()
+    driver_id = uuid4()
+    service = MatchingService(
+        ride_repo=None,
+        driver_repo=FakeDriverRepo(
+            DriverProfile(
+                id=driver_id,
+                user_id=driver_user_id,
+                license_number="CI-123",
+                status=DriverStatus.ACTIVE,
+                is_review_account=True,
+            )
+        ),
+        vehicle_repo=FakeVehicleRepo(
+            Vehicle(id=uuid4(), driver_id=driver_id, plate_number="CI-123-AA")
+        ),
+        locations=None,
+        offers=None,
+    )
+    ride = Ride(id=uuid4(), passenger_user_id=uuid4(), is_review_account=True)
+
+    can_take, reason = await service._can_take_ride(driver_user_id, ride)
+
+    assert can_take is True
+    assert reason is None
+
+
+@pytest.mark.asyncio
 async def test_matching_accepts_vehicle_above_requested_comfort_level() -> None:
     driver_user_id = uuid4()
     driver_id = uuid4()

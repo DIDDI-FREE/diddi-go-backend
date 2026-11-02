@@ -160,6 +160,10 @@ def identity_payload_to_user_model(payload: dict, profile: dict | None = None):
     role = payload.get("role") or data.get("role") or "user"
     user.role = "passenger" if role == "user" else role
     user.status = payload.get("status") or data.get("status") or "active"
+    review_flag = payload.get("is_review_account", False)
+    if not isinstance(review_flag, bool):
+        raise ApiError(401, "TOKEN_INVALID", "Claim `is_review_account` invalide.")
+    user.is_review_account = review_flag
     user.requested_role = data.get("requested_role")
     now = datetime.now(UTC)
     user.created_at = data.get("created_at") or now
