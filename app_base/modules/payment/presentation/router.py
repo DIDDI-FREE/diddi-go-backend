@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
@@ -29,6 +31,7 @@ from app_base.modules.payment.application.services import PaymentService
 from app_base.modules.payment.application.wallet_service import DriverWalletService
 from app_base.modules.payment.presentation.schemas import (
     CashConfirmationRequest,
+    DriverEarningsResponse,
     DriverTopupRequest,
     DriverWithdrawalQuoteRequest,
     DriverWithdrawalQuoteResponse,
@@ -212,6 +215,23 @@ async def get_my_ledger(
     _driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
     return await service.get_ledger(driver_user_id=current_user.id, page=page, page_size=page_size)
+
+
+@wallet_router.get("/earnings", response_model=DriverEarningsResponse)
+async def get_my_earnings(
+    period: Literal["day", "week", "month"] = Query(default="day"),
+    from_date: date = Query(alias="from"),
+    to_date: date = Query(alias="to"),
+    service: DriverWalletService = Depends(driver_wallet_service),
+    current_user: UserModel = Depends(get_current_user),
+    _driver_profile: DriverProfile | None = Depends(require_business_driver),
+) -> dict:
+    return await service.get_earnings(
+        driver_user_id=current_user.id,
+        period=period,
+        from_date=from_date,
+        to_date=to_date,
+    )
 
 
 @wallet_router.post("/topups", status_code=201)

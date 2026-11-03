@@ -44,6 +44,7 @@ nav:
   - Accueil: README.md
   - Produit:
       - MVP figé: product/DIDDIGO-MVP-FIGE.md
+      - Plan historique de gains (3 novembre): product/DIDDIGO_DRIVER_EARNINGS_PLAN_2026-11-03.md
       - Release candidate V1 (26 octobre): releases/DIDDIGO_V1_RC_2026-10-26.md
   - API:
       - Vue d'ensemble: api/index.md
@@ -55,6 +56,7 @@ nav:
       - Exécution: architecture/RUNTIME_ARCHITECTURE.md
       - Portail documentaire: configuration/DOCUMENTATION_PORTAL.md
       - Google Play Review (2 novembre): architecture/2026-11-02-google-play-review-cohort.md
+      - Historique de gains (3 novembre): architecture/2026-11-03-driver-earnings-history.md
   - Parcours métier:
       - Passager: guides/passenger-ride-flow.md
       - Chauffeur: guides/driver-ride-flow.md
@@ -68,6 +70,7 @@ nav:
       - Acces aux contrats: frontend/DIDDIGO_FRONTEND_CONTRACT_ACCESS_BRIEF_2026-10-19.md
       - KYC et KYV: frontend/DIDDIGO_FRONTEND_KYC_KYV_BRIEF_2026-10-19.md
       - Retraits chauffeur: frontend/DIDDIGO_DRIVER_WITHDRAWALS_BRIEF_2026-10-10.md
+      - Historique de gains (3 novembre): frontend/DIDDIGO_FRONTEND_EARNINGS_BRIEF_2026-11-03.md
       - Support et signalements (27 octobre): frontend/DIDDIGO_FRONTEND_SUPPORT_BRIEF_2026-10-27.md
       - Historique frontend:
           - Brief integre (20 octobre): frontend/DIDDIGO_FRONTEND_BRIEF_2026-10-20.md
@@ -106,6 +109,7 @@ nav:
       - 22 octobre 2026: changelog/2026-10-22.md
       - 23 octobre 2026: changelog/2026-10-23.md
       - 28 octobre 2026: changelog/2026-10-28.md
+      - 3 novembre 2026: changelog/2026-11-03.md
 
 exclude_docs: |
   archive/

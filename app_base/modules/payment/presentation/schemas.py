@@ -7,7 +7,7 @@ Shape matches the API contract (`DiddiGo_Contrat_API.md` §3):
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -156,3 +156,29 @@ class DriverWithdrawalResponse(BaseModel):
     reserved_at: datetime | None = None
     succeeded_at: datetime | None = None
     released_at: datetime | None = None
+
+
+class DriverEarningsTotalsResponse(BaseModel):
+    ride_earnings_xof: int
+    platform_commissions_xof: int
+    withdrawals_succeeded_xof: int
+    pending_or_disputed_xof: int
+    available_balance_xof: int
+
+
+class DriverEarningsBucketResponse(BaseModel):
+    period_start: date
+    ride_earnings_xof: int
+    platform_commissions_xof: int
+    withdrawals_succeeded_xof: int
+    pending_or_disputed_xof: int
+
+
+class DriverEarningsResponse(BaseModel):
+    timezone: str
+    period: Literal["day", "week", "month"]
+    from_date: date
+    to_date: date
+    currency: Literal["XOF"]
+    summary: DriverEarningsTotalsResponse
+    buckets: list[DriverEarningsBucketResponse]

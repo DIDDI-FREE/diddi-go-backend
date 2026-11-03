@@ -57,6 +57,14 @@ nominaux, sauf lorsqu'une règle de sécurité minimale est indiquée.
 - Elles ne doivent pas être supprimées ni présentées comme prêtes pour le
   parcours de lancement.
 
+## Fonctionnalités reportées après V1
+
+- Tarification par zone : le tarif actuel est défini par ville et catégorie
+  véhicule. Une grille par zone dépend de zones canoniques DiddiMap.
+- Carte de forte demande : aucun calcul offre/demande par zone n'est livré.
+- Espace partenaire autonome : au lancement, la gestion des partenaires,
+  chauffeurs, véhicules et affectations reste administrative.
+
 ## Temps réel
 
 - Un token WebSocket invalide pendant le handshake produit actuellement un

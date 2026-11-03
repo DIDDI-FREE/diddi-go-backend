@@ -53,6 +53,7 @@ garanties dans cette enveloppe.
 | 409 | `IDEMPOTENCY_CONFLICT`, `IDEMPOTENCY_IN_PROGRESS` | Conserver la meme cle pour le meme retry ; relire le paiement si le traitement est en cours. |
 | 409 | `WITHDRAWAL_PROFILE_PHONE_REQUIRED`, `WITHDRAWAL_QUOTE_ALREADY_USED`, `WITHDRAWAL_VERIFICATION_USED` | Completer le profil ou relire le retrait existant ; ne pas creer un second payout. |
 | 400/404/410/429 | `WITHDRAWAL_VERIFICATION_INVALID`, `WITHDRAWAL_VERIFICATION_NOT_FOUND`, `WITHDRAWAL_VERIFICATION_EXPIRED`, `WITHDRAWAL_VERIFICATION_LOCKED`, `WITHDRAWAL_VERIFICATION_RATE_LIMITED` | Afficher l'echec OTP ; permettre une nouvelle demande quand le delai le permet. |
+| 422 | `INVALID_EARNINGS_PERIOD` | Corriger la granularité ou la plage demandée ; elle est limitée à 366 jours. |
 | 503 | `SMS_NOT_CONFIGURED`, `WITHDRAWAL_VERIFICATION_DELIVERY_FAILED` | Afficher une indisponibilite temporaire ; ne jamais contourner l'OTP. |
 
 Les codes `PASSENGER_DEBT_*` sont conserves pour les routes historiques

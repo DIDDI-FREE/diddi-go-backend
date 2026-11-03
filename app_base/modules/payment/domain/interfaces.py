@@ -8,6 +8,7 @@ from uuid import UUID
 
 from app_base.modules.payment.domain.entities import (
     KEEP,
+    DriverEarningsBucket,
     DriverLedgerEntry,
     DriverTopup,
     DriverWallet,
@@ -134,6 +135,15 @@ class PaymentRepository(Protocol):
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[DriverLedgerEntry], int]: ...
+
+    async def summarize_driver_earnings(
+        self,
+        driver_id: UUID,
+        *,
+        period: str,
+        start: datetime,
+        end: datetime,
+    ) -> list[DriverEarningsBucket]: ...
 
     async def record_ledger_entry_once(self, entry: DriverLedgerEntry) -> DriverLedgerEntry | None:
         """Return None when the same entry was already recorded."""

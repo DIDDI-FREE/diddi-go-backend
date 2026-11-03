@@ -7801,6 +7801,78 @@ paths:
         retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
         dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /v1/drivers/me/wallet/earnings:
+    get:
+      tags:
+      - driver-wallet
+      summary: Get My Earnings
+      operationId: get_my_earnings_v1_drivers_me_wallet_earnings_get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: period
+        in: query
+        required: false
+        schema:
+          enum:
+          - day
+          - week
+          - month
+          type: string
+          default: day
+          title: Period
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+          title: From
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverEarningsResponse'
+        '422':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+              examples:
+                validation:
+                  summary: Exemple synthétique de validation locale
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La requête est invalide.
+                      details:
+                        violations:
+                        - loc:
+                          - query
+                          - q
+                          msg: Field required
+                          type: missing
+      x-contract:
+        source: app.openapi() ; opération get_my_earnings_v1_drivers_me_wallet_earnings_get
+        purpose: Get My Earnings
+        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
+        state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
+        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
+        response: Schémas ci-dessus.
+        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
+        retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
+        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
+        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
   /v1/drivers/me/wallet/topups:
     post:
       tags:
@@ -10586,6 +10658,98 @@ components:
       - document_type
       - status
       title: DocumentReviewResponse
+    DriverEarningsBucketResponse:
+      properties:
+        period_start:
+          type: string
+          format: date
+          title: Period Start
+        ride_earnings_xof:
+          type: integer
+          title: Ride Earnings Xof
+        platform_commissions_xof:
+          type: integer
+          title: Platform Commissions Xof
+        withdrawals_succeeded_xof:
+          type: integer
+          title: Withdrawals Succeeded Xof
+        pending_or_disputed_xof:
+          type: integer
+          title: Pending Or Disputed Xof
+      type: object
+      required:
+      - period_start
+      - ride_earnings_xof
+      - platform_commissions_xof
+      - withdrawals_succeeded_xof
+      - pending_or_disputed_xof
+      title: DriverEarningsBucketResponse
+    DriverEarningsResponse:
+      properties:
+        timezone:
+          type: string
+          title: Timezone
+        period:
+          type: string
+          enum:
+          - day
+          - week
+          - month
+          title: Period
+        from_date:
+          type: string
+          format: date
+          title: From Date
+        to_date:
+          type: string
+          format: date
+          title: To Date
+        currency:
+          type: string
+          const: XOF
+          title: Currency
+        summary:
+          $ref: '#/components/schemas/DriverEarningsTotalsResponse'
+        buckets:
+          items:
+            $ref: '#/components/schemas/DriverEarningsBucketResponse'
+          type: array
+          title: Buckets
+      type: object
+      required:
+      - timezone
+      - period
+      - from_date
+      - to_date
+      - currency
+      - summary
+      - buckets
+      title: DriverEarningsResponse
+    DriverEarningsTotalsResponse:
+      properties:
+        ride_earnings_xof:
+          type: integer
+          title: Ride Earnings Xof
+        platform_commissions_xof:
+          type: integer
+          title: Platform Commissions Xof
+        withdrawals_succeeded_xof:
+          type: integer
+          title: Withdrawals Succeeded Xof
+        pending_or_disputed_xof:
+          type: integer
+          title: Pending Or Disputed Xof
+        available_balance_xof:
+          type: integer
+          title: Available Balance Xof
+      type: object
+      required:
+      - ride_earnings_xof
+      - platform_commissions_xof
+      - withdrawals_succeeded_xof
+      - pending_or_disputed_xof
+      - available_balance_xof
+      title: DriverEarningsTotalsResponse
     DriverKycApproveRequest:
       properties:
         notes:

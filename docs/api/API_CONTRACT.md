@@ -83,6 +83,7 @@ La demande émet `ride.status_changed` avec `status=early_stop_requested`. **Cet
 | `POST /v1/drivers/me/wallet/withdrawals/quote` | Devis serveur : montant, frais, net, devise, expiration |
 | `POST /v1/drivers/me/wallet/withdrawals/verification/request` | Envoie un OTP transactionnel au numero du profil authentifie. Le corps contient la destination Mobile Money, mais le code ne part jamais a cette destination par defaut. |
 | `POST /v1/drivers/me/wallet/withdrawals` | `quote_id`, `beneficiary_reference`, `beneficiary_destination`, `verification_id`, `verification_code` obligatoires ; la preuve OTP est liee au chauffeur et a la destination. |
+| `GET /v1/drivers/me/wallet/earnings` | Historique agrégé chauffeur. Envoyer `period=day|week|month`, `from=YYYY-MM-DD` et `to=YYYY-MM-DD` en heure Abidjan ; plage maximale 366 jours. Les gains, commissions, retraits réussis, montants en attente/litige et solde courant sont distincts. |
 | Retry retrait | Le dépôt retrouve le retrait lié au devis consommé ; le contrat de changement de bénéficiaire sur rejeu reste `UNKNOWN` |
 | Retour paiement | Pages HTML `/payments/return` et `/wallet/return` ; REST reste la source financière de vérité |
 | Webhook DiddiPay | Réponse vide 204 pour traitement normal, 200 pour doublon ; signature invalide : 401 ; secret absent : 503 |
@@ -407,7 +408,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 ## Inventaire HTTP
 
 <!-- generated:http-inventory:start -->
-140 chemins ; 154 opérations HTTP.
+141 chemins ; 155 opérations HTTP.
 
 | Méthode | Chemin | Opération | Réponses documentées |
 |---|---|---|---|
@@ -502,6 +503,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 | PATCH | `/v1/drivers/me/profile-photo` | Update My Profile Photo | 200, 422 |
 | PUT | `/v1/drivers/me/vehicle` | Update My Vehicle | 200, 422 |
 | GET | `/v1/drivers/me/wallet` | Get My Wallet | 200 |
+| GET | `/v1/drivers/me/wallet/earnings` | Get My Earnings | 200, 422 |
 | GET | `/v1/drivers/me/wallet/ledger` | Get My Ledger | 200, 422 |
 | POST | `/v1/drivers/me/wallet/topups` | Create Driver Topup | 201, 422 |
 | GET | `/v1/drivers/me/wallet/topups/{topup_id}` | Get Driver Topup | 200, 422 |

@@ -49,3 +49,25 @@ historiques, mais ne font pas partie du parcours MVP courant.
 
 Un top-up chauffeur n'est jamais un paiement de course. Les callbacks doivent
 etre idempotents et une reprise ne doit pas crediter deux fois le wallet.
+
+## Historique de gains
+
+Le tableau de bord chauffeur appelle :
+
+```text
+GET /v1/drivers/me/wallet/earnings?period=day&from=2026-11-01&to=2026-11-07
+```
+
+Les dates sont inclusives et interprétées en heure `Africa/Abidjan`. La plage
+ne dépasse pas 366 jours. La réponse distingue volontairement :
+
+- `ride_earnings_xof` : part chauffeur des courses dont le paiement est
+  confirmé, y compris le cash confirmé ;
+- `platform_commissions_xof` : commission DiddiFree des mêmes courses ;
+- `withdrawals_succeeded_xof` : argent effectivement versé vers Mobile Money ;
+- `pending_or_disputed_xof` : montant non acquis à ne pas présenter comme un
+  gain ;
+- `available_balance_xof` : solde wallet actuel, indépendant de la période.
+
+Le frontend affiche les `buckets` tels que fournis. Il ne reconstitue jamais
+ces totaux depuis les pages de `ledger`.

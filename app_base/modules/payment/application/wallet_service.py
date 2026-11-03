@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from hashlib import sha256
 from secrets import randbelow
@@ -58,6 +58,46 @@ class DriverWalletService:
         return {
             "data": [_ledger_payload(entry) for entry in entries],
             "pagination": {"page": page, "page_size": page_size, "total": total},
+        }
+
+    async def get_earnings(
+        self,
+        *,
+        driver_user_id: UUID,
+        period: str,
+        from_date: date,
+        to_date: date,
+    ) -> dict:
+        if period not in {"day", "week", "month"}:
+            raise ApiError(422, "INVALID_EARNINGS_PERIOD", "La granularite demandee est invalide.")
+        if from_date > to_date:
+            raise ApiError(422, "INVALID_EARNINGS_PERIOD", "La date de debut doit preceder la date de fin.")
+        if (to_date - from_date).days > 365:
+            raise ApiError(422, "INVALID_EARNINGS_PERIOD", "La periode ne peut pas depasser 366 jours.")
+
+        driver_id = await self._driver_id_for_user(driver_user_id)
+        rows = await self.payment_repo.summarize_driver_earnings(
+            driver_id,
+            period=period,
+            start=_abidjan_start(from_date),
+            end=_abidjan_start(to_date + timedelta(days=1)),
+        )
+        wallet = await self.payment_repo.get_or_create_wallet(driver_id)
+        buckets = [_earnings_bucket_payload(row) for row in rows]
+        return {
+            "timezone": "Africa/Abidjan",
+            "period": period,
+            "from_date": from_date,
+            "to_date": to_date,
+            "currency": wallet.currency,
+            "summary": {
+                "ride_earnings_xof": sum(row["ride_earnings_xof"] for row in buckets),
+                "platform_commissions_xof": sum(row["platform_commissions_xof"] for row in buckets),
+                "withdrawals_succeeded_xof": sum(row["withdrawals_succeeded_xof"] for row in buckets),
+                "pending_or_disputed_xof": sum(row["pending_or_disputed_xof"] for row in buckets),
+                "available_balance_xof": int(wallet.balance),
+            },
+            "buckets": buckets,
         }
 
     async def admin_get_wallet(self, driver_id: UUID) -> dict:
@@ -621,6 +661,23 @@ def _ledger_payload(entry: DriverLedgerEntry) -> dict:
         "description": entry.description,
         "created_at": entry.created_at.isoformat() if entry.created_at else None,
     }
+
+
+def _earnings_bucket_payload(bucket) -> dict:
+    return {
+        "period_start": bucket.period_start,
+        "ride_earnings_xof": int(bucket.ride_earnings),
+        "platform_commissions_xof": int(bucket.platform_commissions),
+        "withdrawals_succeeded_xof": int(bucket.withdrawals_succeeded),
+        "pending_or_disputed_xof": int(bucket.pending_or_disputed),
+    }
+
+
+def _abidjan_start(value: date) -> datetime:
+    # Public dates are calendar dates in the business timezone, never UTC dates.
+    from zoneinfo import ZoneInfo
+
+    return datetime.combine(value, time.min, tzinfo=ZoneInfo("Africa/Abidjan")).astimezone(UTC)
 
 
 def _topup_payload(topup: DriverTopup, *, next_action: dict | None) -> dict:

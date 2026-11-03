@@ -162,6 +162,7 @@ Les champs détaillés sont dans x-contract de openapi.yaml. Une correction du c
 | `POST /v1/passenger/debts/{debt_id}/confirm-cash` | roles, state-before-after, request, errors, retry, side-effects, dependency-failure |
 | `GET /v1/drivers/me/wallet` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `GET /v1/drivers/me/wallet/ledger` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
+| `GET /v1/drivers/me/wallet/earnings` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `POST /v1/drivers/me/wallet/topups` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `GET /v1/drivers/me/wallet/topups/{topup_id}` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `POST /v1/drivers/me/wallet/withdrawals/quote` | roles, state-before-after, request, errors, retry, side-effects, dependency-failure |

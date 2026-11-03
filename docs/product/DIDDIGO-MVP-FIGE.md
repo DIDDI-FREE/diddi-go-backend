@@ -172,3 +172,20 @@ Ces parcours sont la référence produit utilisée pour organiser les epics, tic
 ## 8. Hors de ce gel
 
 Le détail d'implémentation (routes exactes, schéma SQL, migrations, librairies, stratégie de retry, écrans et composants) est décidé dans les tickets techniques, tant qu'il respecte les règles de cette page. Les changements de règles produit nécessitent une mise à jour explicite de cette page avant développement.
+
+## 9. Décisions post-MVP enregistrées le 3 novembre 2026
+
+Ces décisions complètent la trajectoire V1 sans élargir le périmètre de
+lancement.
+
+| Sujet | Décision |
+|---|---|
+| Tarification par zone | Reportée dans `Later`. Le moteur actuel tarifie par ville et catégorie de véhicule ; aucune grille tarifaire par zone n'est introduite en V1. |
+| Zones de forte demande | Reportées dans `Later`. Elles exigent des zones canoniques et stables fournies par DiddiMap, ainsi qu'un calcul offre/demande qui n'existe pas encore. |
+| Espace partenaire autonome | Reporté dans `Later`. Au lancement, seuls les administrateurs DiddiGo créent et gèrent partenaires, chauffeurs, véhicules et affectations. |
+| Historique de gains chauffeur | Implémentation lancée le 3 novembre. Le backend DiddiGo fournit des agrégats fiables par jour, semaine et mois ; l'application ne recalcule pas les montants depuis le ledger paginé. |
+| Périodes de gains | Calendrier `Africa/Abidjan`. Les gains de courses, commissions DiddiFree, retraits effectués et solde disponible restent des valeurs distinctes. |
+| Courses litigieuses ou non confirmées | Visibles séparément lorsqu'elles existent, mais exclues des gains acquis. |
+
+Le détail technique et les étapes de livraison de l'historique de gains sont
+dans [le plan daté du 3 novembre 2026](DIDDIGO_DRIVER_EARNINGS_PLAN_2026-11-03.md).

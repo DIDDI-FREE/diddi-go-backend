@@ -7,12 +7,12 @@ Maps between `payment.domain.entities.Transaction` and the ORM
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,7 @@ from app_base.modules.payment.domain.entities import (
     KEEP,
     PENDING_PAYMENT_STATUSES,
     PENDING_TOPUP_STATUSES,
+    DriverEarningsBucket,
     DriverLedgerEntry,
     DriverTopup,
     DriverWallet,
@@ -38,6 +39,7 @@ from app_base.modules.payment.domain.entities import (
     WithdrawalStatus,
 )
 from app_base.modules.payment.infra import models as orm
+from app_base.modules.ride.infra.models import RideModel
 
 
 def _withdrawal_verification_to_domain(
@@ -361,6 +363,118 @@ class SqlAlchemyPaymentRepository:
             .limit(page_size),
         )
         return [self._ledger_to_domain(row) for row in result.scalars().all()], total
+
+    async def summarize_driver_earnings(
+        self,
+        driver_id: UUID,
+        *,
+        period: str,
+        start: datetime,
+        end: datetime,
+    ) -> list[DriverEarningsBucket]:
+        """Aggregate settled ride economics and payouts in local business time."""
+
+        acquired_statuses = (PaymentStatus.COLLECTED.value, PaymentStatus.SUCCEEDED.value)
+        pending_statuses = (
+            PaymentStatus.PENDING.value,
+            PaymentStatus.REQUIRES_ACTION.value,
+            PaymentStatus.PROCESSING.value,
+            PaymentStatus.DISPUTED.value,
+        )
+        local_settled_at = func.timezone(
+            "Africa/Abidjan",
+            case(
+                (
+                    orm.TransactionModel.status.in_(acquired_statuses),
+                    func.coalesce(
+                        orm.TransactionModel.collected_at,
+                        orm.TransactionModel.paid_at,
+                        RideModel.completed_at,
+                    ),
+                ),
+                else_=orm.TransactionModel.created_at,
+            ),
+        )
+        ride_bucket = func.date_trunc(period, local_settled_at).label("bucket")
+        utc_start = start.astimezone(UTC).replace(tzinfo=None)
+        utc_end = end.astimezone(UTC).replace(tzinfo=None)
+        rides_result = await self._session.execute(
+            select(
+                ride_bucket,
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (orm.TransactionModel.status.in_(acquired_statuses), RideModel.driver_payout_estimate),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("ride_earnings"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (orm.TransactionModel.status.in_(acquired_statuses), RideModel.platform_commission),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("platform_commissions"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (orm.TransactionModel.status.in_(pending_statuses), RideModel.driver_payout_estimate),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("pending_or_disputed"),
+            )
+            .select_from(orm.TransactionModel)
+            .join(RideModel, RideModel.id == orm.TransactionModel.ride_id)
+            .where(
+                RideModel.driver_id == driver_id,
+                RideModel.status == "completed",
+                local_settled_at >= utc_start,
+                local_settled_at < utc_end,
+            )
+            .group_by(ride_bucket)
+            .order_by(ride_bucket)
+        )
+
+        buckets: dict[date, DriverEarningsBucket] = {}
+        for row in rides_result:
+            bucket_date = row.bucket.date()
+            buckets[bucket_date] = DriverEarningsBucket(
+                period_start=bucket_date,
+                ride_earnings=Decimal(str(row.ride_earnings)),
+                platform_commissions=Decimal(str(row.platform_commissions)),
+                pending_or_disputed=Decimal(str(row.pending_or_disputed)),
+            )
+
+        local_withdrawal_at = func.timezone("Africa/Abidjan", orm.DriverWithdrawalModel.succeeded_at)
+        withdrawal_bucket = func.date_trunc(period, local_withdrawal_at).label("bucket")
+        withdrawals_result = await self._session.execute(
+            select(withdrawal_bucket, func.coalesce(func.sum(orm.DriverWithdrawalModel.amount), 0).label("total"))
+            .where(
+                orm.DriverWithdrawalModel.driver_id == driver_id,
+                orm.DriverWithdrawalModel.status == WithdrawalStatus.SUCCEEDED.value,
+                local_withdrawal_at >= utc_start,
+                local_withdrawal_at < utc_end,
+            )
+            .group_by(withdrawal_bucket)
+            .order_by(withdrawal_bucket)
+        )
+        for row in withdrawals_result:
+            bucket_date = row.bucket.date()
+            current = buckets.get(bucket_date, DriverEarningsBucket(period_start=bucket_date))
+            buckets[bucket_date] = DriverEarningsBucket(
+                period_start=bucket_date,
+                ride_earnings=current.ride_earnings,
+                platform_commissions=current.platform_commissions,
+                withdrawals_succeeded=Decimal(str(row.total)),
+                pending_or_disputed=current.pending_or_disputed,
+            )
+        return list(buckets.values())
 
     async def record_ledger_entry_once(self, entry: DriverLedgerEntry) -> DriverLedgerEntry | None:
         await self.get_or_create_wallet(entry.driver_id, currency=entry.currency)

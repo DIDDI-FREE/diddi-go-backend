@@ -14,6 +14,7 @@ from app_base.modules.payment.domain.entities import (
     WalletEntryType,
 )
 from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentRepository
+from app_base.shared_kernel.contracts.sms import SmsDelivery
 
 
 class PayoutGateway:
@@ -43,6 +44,7 @@ class SmsCapture:
         match = re.search(r"(\d{6})", message)
         assert match is not None
         self.code = match.group(1)
+        return SmsDelivery(provider="test", status="accepted", message_id="sms-test")
 
     async def close(self) -> None:
         return None

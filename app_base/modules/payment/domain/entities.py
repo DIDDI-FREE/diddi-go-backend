@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any
@@ -217,6 +217,17 @@ class DriverWithdrawalQuote:
     @staticmethod
     def new_id() -> UUID:
         return uuid4()
+
+
+@dataclass(frozen=True)
+class DriverEarningsBucket:
+    """One calendar bucket used by the driver earnings dashboard."""
+
+    period_start: date
+    ride_earnings: Decimal = Decimal("0")
+    platform_commissions: Decimal = Decimal("0")
+    withdrawals_succeeded: Decimal = Decimal("0")
+    pending_or_disputed: Decimal = Decimal("0")
 
 
 @dataclass
