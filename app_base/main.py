@@ -1,3 +1,6 @@
+import asyncio
+import secrets
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +21,7 @@ from app_base.core.metrics import render_prometheus
 from app_base.core.observability import configure_observability
 from app_base.core.request_logging import RequestLoggingMiddleware
 from app_base.core.settings import settings
+from app_base.core.telemetry import configure_telemetry, worker_health
 from app_base.modules.auth.presentation.router import router as auth_router
 from app_base.modules.notification.presentation import router as notification_router
 from app_base.modules.observability.presentation.router import router as observability_router
@@ -47,6 +51,7 @@ from app_base.modules.ride.presentation.support_context_router import router as 
 from app_base.modules.ride.presentation.websocket import router as ride_ws_router
 
 configure_observability(log_level=settings.log_level)
+configure_telemetry()
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.add_middleware(RequestLoggingMiddleware)
@@ -93,25 +98,49 @@ app.include_router(payment_return_router)
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "app": settings.app_name}
+    return {"status": "ok", "app": settings.app_name, "service": "diddigo", "version": settings.service_version}
 
 
 @app.get("/ready")
 async def readiness(request: Request) -> Response:
-    db_ok = await database_ready()
+    try:
+        db_ok = await asyncio.wait_for(database_ready(), timeout=2.5)
+    except Exception:
+        db_ok = False
     redis_pool = getattr(request.app.state, "redis", None)
     try:
-        redis_ok = redis_pool is not None and bool(await redis_pool.ping())
+        redis_ok = redis_pool is not None and bool(await asyncio.wait_for(redis_pool.ping(), timeout=2.5))
     except Exception:
         redis_ok = False
     payload = {
-        "status": "ready" if db_ok and redis_ok else "not_ready",
+        "status": "ready"
+        if db_ok and redis_ok and all(v == "ok" for v in worker_health().values())
+        else ("degraded" if db_ok and redis_ok else "unavailable"),
         "app": settings.app_name,
-        "components": {"database": "ok" if db_ok else "unavailable", "redis": "ok" if redis_ok else "unavailable"},
+        "components": {
+            "database": "ok" if db_ok else "unavailable",
+            "redis": "ok" if redis_ok else "unavailable",
+            "workers": worker_health(),
+        },
     }
     return JSONResponse(status_code=200 if db_ok and redis_ok else 503, content=payload)
 
 
-@app.get("/metrics", include_in_schema=False)
-def metrics() -> Response:
+def _metrics_response(request: Request) -> Response:
+    if not settings.observability_metrics_token:
+        return Response("metrics disabled\n", status_code=404, media_type="text/plain")
+    authorization = request.headers.get("authorization", "")
+    supplied = authorization.removeprefix("Bearer ").strip()
+    if not secrets.compare_digest(supplied, settings.observability_metrics_token):
+        return Response("unauthorized\n", status_code=401, media_type="text/plain")
     return Response(render_prometheus(), media_type="text/plain; version=0.0.4; charset=utf-8")
+
+
+@app.get("/internal/metrics", include_in_schema=False)
+def internal_metrics(request: Request) -> Response:
+    return _metrics_response(request)
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics(request: Request) -> Response:
+    return _metrics_response(request)

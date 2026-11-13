@@ -31,7 +31,8 @@ async def test_readiness_reports_all_dependencies_ready(monkeypatch) -> None:
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/ready")
     assert response.status_code == 200
-    assert response.json()["components"] == {"database": "ok", "redis": "ok"}
+    assert response.json()["components"]["database"] == "ok"
+    assert response.json()["components"]["redis"] == "ok"
 
 
 @pytest.mark.asyncio
@@ -41,8 +42,9 @@ async def test_readiness_is_503_when_database_and_redis_are_down(monkeypatch) ->
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/ready")
     assert response.status_code == 503
-    assert response.json()["status"] == "not_ready"
-    assert response.json()["components"] == {"database": "unavailable", "redis": "unavailable"}
+    assert response.json()["status"] == "unavailable"
+    assert response.json()["components"]["database"] == "unavailable"
+    assert response.json()["components"]["redis"] == "unavailable"
 
 
 @pytest.mark.asyncio

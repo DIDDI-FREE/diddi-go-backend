@@ -27,6 +27,7 @@ from fastapi import FastAPI
 from app_base.core.database import ping_db
 from app_base.core.redis import create_redis_pool
 from app_base.core.settings import settings
+from app_base.core.telemetry import register_worker
 from app_base.modules.notification.infra.sms import build_sms_provider
 from app_base.modules.payment.application.reconciliation import reconciliation_loop
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
@@ -89,6 +90,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.diddipay = DiddiPayClient()
 
     app.state.payment_reconciliation_task = None
+    register_worker("payment-reconciliation", settings.payment_reconciliation_enabled)
     if settings.payment_reconciliation_enabled:
         app.state.payment_reconciliation_task = asyncio.create_task(
             reconciliation_loop(app.state.redis),
@@ -96,6 +98,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
     app.state.capability_projection_task = None
+    register_worker("capability-projection", settings.capability_projection_enabled)
     if settings.capability_projection_enabled:
         app.state.capability_projection_task = asyncio.create_task(
             capability_projection_loop(app.state.identity_capabilities, app.state.driver_locations),

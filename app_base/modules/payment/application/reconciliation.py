@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app_base.core.database import async_session_factory
 from app_base.core.settings import settings
+from app_base.core.telemetry import worker_iteration
 from app_base.modules.payment.application.services import PaymentService, ReconciliationReport
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentRepository
@@ -78,7 +79,8 @@ async def reconciliation_loop(redis: Redis | None = None) -> None:
     while True:
         try:
             await asyncio.sleep(interval)
-            await _run_guarded(redis, ttl_seconds=interval)
+            with worker_iteration("payment-reconciliation"):
+                await _run_guarded(redis, ttl_seconds=interval)
         except asyncio.CancelledError:
             logger.info("payment reconciliation loop stopped")
             raise
