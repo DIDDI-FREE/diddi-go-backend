@@ -31,6 +31,28 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "json"
 
+    # DIDDI Observability v1. Values are intentionally unset where the
+    # central platform must provide an address or secret.
+    service_version: str = Field(default="0.1.0", validation_alias=AliasChoices("SERVICE_VERSION", "GIT_SHA"))
+    service_instance_id: str | None = Field(default=None, validation_alias=AliasChoices("SERVICE_INSTANCE_ID"))
+    diddi_deployment_id: str = Field(default="diddigo-local", validation_alias=AliasChoices("DIDDI_DEPLOYMENT_ID"))
+    diddi_component: str = Field(default="api", validation_alias=AliasChoices("DIDDI_COMPONENT"))
+    observability_metrics_token: str | None = Field(
+        default=None, validation_alias=AliasChoices("OBSERVABILITY_METRICS_TOKEN")
+    )
+    otel_exporter_otlp_endpoint: str | None = Field(
+        default=None, validation_alias=AliasChoices("OTEL_EXPORTER_OTLP_ENDPOINT")
+    )
+    otel_exporter_otlp_headers: str | None = Field(
+        default=None, validation_alias=AliasChoices("OTEL_EXPORTER_OTLP_HEADERS")
+    )
+    otel_traces_sampler_arg: float = Field(
+        default=0.1, ge=0, le=1, validation_alias=AliasChoices("OTEL_TRACES_SAMPLER_ARG")
+    )
+    otel_export_timeout_seconds: float = Field(default=5.0, gt=0, le=5)
+    otel_max_queue_size: int = Field(default=2048, ge=128, le=2048)
+    otel_schedule_delay_ms: int = Field(default=5000, ge=100, le=5000)
+
     # The runtime async engine uses `database_url` (asyncpg driver).
     # Alembic and any sync-only tooling can coexist with a separate url later.
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:15432/diddi_go"

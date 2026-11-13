@@ -1,0 +1,55 @@
+manifest_version: "1.0.0"
+protocol: DIDDI-Observability-v1
+service:
+  namespace: diddi
+  name: diddigo
+  version_source: SERVICE_VERSION or GIT_SHA
+  environment: ENVIRONMENT
+  instance_id: SERVICE_INSTANCE_ID or process-generated
+  deployment_id: DIDDI_DEPLOYMENT_ID
+  component: api
+  owner: DiddiGo team
+  repository: diddigo
+components:
+  api:
+    internal_port: 8000
+    health: /health
+    readiness: /ready
+    metrics: /internal/metrics
+    metrics_auth: Bearer OBSERVABILITY_METRICS_TOKEN
+    signals: [json_logs_stdout, http_metrics, otlp_traces]
+  workers:
+    names: [payment-reconciliation, capability-projection]
+    heartbeat_metric: diddi_worker_heartbeat_timestamp_seconds
+dependencies:
+  critical: [postgresql, redis]
+  optional: [diddimap, diddifiles, identity, diddipay]
+  observability: DiddiObserve
+collector:
+  endpoint: OTEL_EXPORTER_OTLP_ENDPOINT
+  headers_secret_ref: OTEL_EXPORTER_OTLP_HEADERS
+  protocol: OTLP/HTTP
+  timeout_seconds: OTEL_EXPORT_TIMEOUT_SECONDS
+  queue_limit: OTEL_MAX_QUEUE_SIZE
+configuration:
+  required_from_central_platform:
+    - OTEL_EXPORTER_OTLP_ENDPOINT
+    - OTEL_EXPORTER_OTLP_HEADERS (secret reference/value)
+    - OBSERVABILITY_METRICS_TOKEN (unique rotatable scrape secret)
+    - SERVICE_VERSION and DIDDI_DEPLOYMENT_ID
+  defaults:
+    OTEL_TRACES_SAMPLER_ARG: 0.1
+    OTEL_SCHEDULE_DELAY_MS: 5000
+    OTEL_MAX_QUEUE_SIZE: 2048
+security:
+  logs: stdout JSON; secrets, tokens, credentials, phone, email, IP and raw bodies suppressed
+  metrics: private authenticated endpoint; closed when token is absent
+  trace_headers: W3C traceparent/tracestate
+validation:
+  locally_evidenced: [C01, C02, C03, C05, C08, C09]
+  partially_local: [C04, C06, C10]
+  not_applicable:
+    C07: DiddiGo has polling workers, not an async message consumer; worker spans and W3C HTTP propagation are implemented.
+  central_required: [C07, C11, C12]
+  status: implementation_ready_not_end_to_end_certified
+  note: Publication does not certify collector ingestion, storage, dashboards, retention or alerts.

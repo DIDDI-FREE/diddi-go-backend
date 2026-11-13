@@ -10,6 +10,7 @@ from app_base.core.database import async_session_factory
 from app_base.core.metrics import set_value
 from app_base.core.observability import log_event
 from app_base.core.settings import settings
+from app_base.core.telemetry import worker_iteration
 from app_base.modules.ride.application.capability_projection import (
     DriverCapabilityProjectionDispatcher,
 )
@@ -29,28 +30,29 @@ async def capability_projection_loop(
     next_reconciliation = datetime.now(UTC)
     while True:
         try:
-            async with async_session_factory() as session:
-                repository = SqlAlchemyDriverCapabilityProjectionRepository(session)
-                dispatcher = DriverCapabilityProjectionDispatcher(
-                    repository,
-                    client,
-                    retry_base_seconds=settings.capability_projection_retry_base_seconds,
-                    retry_max_seconds=settings.capability_projection_retry_max_seconds,
-                )
-                await dispatcher.deliver_due(batch_size=settings.capability_projection_batch_size)
-                projection_metrics = await repository.projection_metrics(now=datetime.now(UTC))
-                for status in ("pending", "retry", "conflict", "dead_letter", "succeeded"):
-                    set_value("diddigo_capability_projection_backlog", 0, {"status": status})
-                for key, value in projection_metrics.items():
-                    if key.startswith("status:"):
-                        set_value(
-                            "diddigo_capability_projection_backlog",
-                            value,
-                            {"status": key.removeprefix("status:")},
-                        )
-                    else:
-                        set_value("diddigo_capability_projection_last_success_age_seconds", value)
-                await session.commit()
+            with worker_iteration("capability-projection"):
+                async with async_session_factory() as session:
+                    repository = SqlAlchemyDriverCapabilityProjectionRepository(session)
+                    dispatcher = DriverCapabilityProjectionDispatcher(
+                        repository,
+                        client,
+                        retry_base_seconds=settings.capability_projection_retry_base_seconds,
+                        retry_max_seconds=settings.capability_projection_retry_max_seconds,
+                    )
+                    await dispatcher.deliver_due(batch_size=settings.capability_projection_batch_size)
+                    projection_metrics = await repository.projection_metrics(now=datetime.now(UTC))
+                    for status in ("pending", "retry", "conflict", "dead_letter", "succeeded"):
+                        set_value("diddigo_capability_projection_backlog", 0, {"status": status})
+                    for key, value in projection_metrics.items():
+                        if key.startswith("status:"):
+                            set_value(
+                                "diddigo_capability_projection_backlog",
+                                value,
+                                {"status": key.removeprefix("status:")},
+                            )
+                        else:
+                            set_value("diddigo_capability_projection_last_success_age_seconds", value)
+                    await session.commit()
 
             now = datetime.now(UTC)
             if now >= next_reconciliation:
@@ -88,9 +90,7 @@ async def _reconcile(
                 break
             offset += len(page)
         online_user_ids = {
-            candidate.user_id
-            for candidate in candidates
-            if await locations.is_online_and_available(candidate.user_id)
+            candidate.user_id for candidate in candidates if await locations.is_online_and_available(candidate.user_id)
         }
         dispatcher = DriverCapabilityProjectionDispatcher(repository, client)
         await dispatcher.reconcile(

@@ -39,8 +39,8 @@ def test_log_event_emits_json_with_bound_request_id(monkeypatch) -> None:
     payload = json.loads(records[-1])
     assert payload["event"] == "ride.test_event"
     assert payload["request_id"] == request_id
-    assert payload["user_id"] == str(user_id)
-    assert payload["nested"] == {"ok": True}
+    assert payload["attributes"]["user_id"] == str(user_id)
+    assert payload["attributes"]["nested"] == {"ok": True}
     metrics = render_prometheus()
     assert 'diddigo_business_events_total{event="ride.test_event"} 1' in metrics
 
@@ -79,22 +79,20 @@ async def test_request_logging_middleware_adds_request_id_header(monkeypatch) ->
 
     assert response.headers["X-Request-ID"] == "req-client-1"
     payload = json.loads(records[-1])
-    assert payload["event"] == "http.request"
+    assert payload["event"] == "http.request.completed"
     assert payload["request_id"] == "req-client-1"
-    assert payload["path"] == "/v1/test"
-    assert payload["query"] == "token=%2A%2A%2A&q=abc"
+    assert payload["attributes"]["route"] == "/_unmatched"
+    assert "secret" not in json.dumps(payload)
     metrics = render_prometheus()
-    assert (
-        'diddigo_http_requests_total{method="GET",path="/v1/test",status_code="200",status_family="2xx"} 1'
-        in metrics
-    )
+    assert 'diddi_http_server_requests_total{method="GET",route="/_unmatched",status_code="200"} 1' in metrics
 
 
-def test_metrics_endpoint_exposes_prometheus_text() -> None:
+def test_metrics_endpoint_exposes_prometheus_text(monkeypatch) -> None:
     reset_metrics()
     log_event("ride.created", status="requested", payment_method="cash")
 
-    response = TestClient(app).get("/metrics")
+    monkeypatch.setattr("app_base.main.settings.observability_metrics_token", "test-token")
+    response = TestClient(app).get("/metrics", headers={"Authorization": "Bearer test-token"})
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/plain")
