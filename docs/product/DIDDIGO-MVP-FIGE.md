@@ -171,6 +171,26 @@ Ces parcours sont la référence produit utilisée pour organiser les epics, tic
 
 ## 8. Hors de ce gel
 
+### Extension C3 autorisée le 13 novembre 2026
+
+Le passager connecté peut consulter les chauffeurs disponibles autour du départ,
+avant de commander. La carte présente des positions approximatives sans identité,
+numéro de téléphone ni identifiant chauffeur. Elle filtre la catégorie et le niveau
+de confort et respecte la séparation entre comptes de revue et comptes réels.
+Les chauffeurs hors ligne, occupés, non validés ou non éligibles sont exclus.
+Cet aperçu borné ne réserve aucun chauffeur et ne garantit pas une attribution.
+La disponibilité est revérifiée lors de la demande de course.
+
+Critères de recette C3 : réponse vide sans chauffeur disponible, marqueurs pour les
+chauffeurs éligibles, exclusion des positions expirées et des courses actives,
+validation des coordonnées et des limites, accès authentifié uniquement.
+La route, son exemple et les limites sont décrits dans le guide passager ; tests
+de service et HTTP avec pytest, vérification Ruff et régénération du contrat API.
+Aucune nouvelle dépendance ni migration n'est nécessaire.
+
+Le changement de destination C13 reste en étude : cette extension C3 ne modifie
+pas la règle de prix figé. Voir l'analyse dans le guide passager.
+
 Le détail d'implémentation (routes exactes, schéma SQL, migrations, librairies, stratégie de retry, écrans et composants) est décidé dans les tickets techniques, tant qu'il respecte les règles de cette page. Les changements de règles produit nécessitent une mise à jour explicite de cette page avant développement.
 
 ## 9. Décisions post-MVP enregistrées le 3 novembre 2026

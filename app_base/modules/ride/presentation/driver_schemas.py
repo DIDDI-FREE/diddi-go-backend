@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
+from app_base.modules.ride.domain.entities import ComfortLevel, VehicleCategory
+
 DocumentType = Literal[
     "license_front",
     "license_back",
@@ -284,3 +286,20 @@ class DriverProfileResponse(BaseModel):
     profile_photo_file_id: UUID | None = None
     kyc: DriverKycResponse
     vehicle: VehicleResponse | None = None
+
+
+class NearbyDriverPosition(BaseModel):
+    lat: float
+    lng: float
+
+
+class NearbyDriverMarker(BaseModel):
+    position: NearbyDriverPosition
+    vehicle_category: VehicleCategory
+    comfort_level: ComfortLevel
+
+
+class NearbyDriversResponse(BaseModel):
+    drivers: list[NearbyDriverMarker]
+    radius_km: float
+    approximate: Literal[True] = True

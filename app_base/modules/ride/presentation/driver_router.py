@@ -1,7 +1,8 @@
 """Driver router — `/v1/drivers/*`.
 
 Onboarding (profile + vehicle) and availability (go online / offline).
-Every route is driver-only: a passenger token gets `403 FORBIDDEN_ROLE`.
+The nearby preview is available to active authenticated users. Management
+operations require the relevant driver profile or role.
 
 These endpoints are the prerequisite for matching — a ride can only be
 assigned to a driver who has a verified profile, an active vehicle, and a
@@ -13,7 +14,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 
 from app_base.core.auth_deps import get_current_active_user, require_business_driver, require_role
 from app_base.core.deps import (
@@ -21,13 +22,15 @@ from app_base.core.deps import (
     driver_online_eligibility_service,
     driver_service,
     get_driver_locations,
+    nearby_drivers_service,
 )
 from app_base.core.observability import log_event
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.ride.application.capability_projection import DurableDriverCapabilityPublisher
 from app_base.modules.ride.application.driver_online_eligibility import DriverOnlineEligibilityService
 from app_base.modules.ride.application.driver_service import DriverService
-from app_base.modules.ride.domain.entities import DriverProfile
+from app_base.modules.ride.application.nearby_drivers import NearbyDriversService
+from app_base.modules.ride.domain.entities import ComfortLevel, DriverProfile, VehicleCategory
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.presentation.driver_schemas import (
     DriverKycApproveRequest,
@@ -37,6 +40,7 @@ from app_base.modules.ride.presentation.driver_schemas import (
     DriverProfilePhotoUpdateRequest,
     DriverProfileResponse,
     GoOnlineRequest,
+    NearbyDriversResponse,
     VehicleCreateRequest,
     VehicleKyvResubmitRequest,
     VehicleUpdateRequest,
@@ -46,6 +50,34 @@ from app_base.shared_kernel.types import GeoPoint
 router = APIRouter(prefix="/drivers", tags=["driver"])
 admin_vehicle_router = APIRouter(prefix="/admin/vehicles", tags=["admin-vehicles"])
 logger = logging.getLogger("uvicorn.error")
+
+
+@router.get("/nearby", response_model=NearbyDriversResponse)
+async def nearby_drivers(
+    response: Response,
+    lat: float = Query(ge=-85.05112878, le=85.05112878),
+    lng: float = Query(ge=-180, le=180),
+    radius_km: float = Query(default=5.0, gt=0, le=10),
+    limit: int = Query(default=20, ge=1, le=50),
+    vehicle_category: VehicleCategory = Query(default=VehicleCategory.STANDARD),
+    comfort_level: ComfortLevel = Query(default=ComfortLevel.STANDARD),
+    current_user: UserModel = Depends(get_current_active_user),
+    service: NearbyDriversService = Depends(nearby_drivers_service),
+) -> dict:
+    """Anonymous approximate markers; an availability preview, not a reservation.
+
+    Nearest-first bounded sample of present, idle, eligible drivers in the
+    caller's review cohort. Coordinates are rounded to three decimal places.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    return await service.search(
+        origin=GeoPoint(lat=lat, lng=lng),
+        radius_km=radius_km,
+        limit=limit,
+        vehicle_category=vehicle_category,
+        comfort_level=comfort_level,
+        is_review_account=bool(current_user.is_review_account),
+    )
 
 
 @router.post("/profile", status_code=201)

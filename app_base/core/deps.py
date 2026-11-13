@@ -57,6 +57,7 @@ from app_base.modules.ride.application.driver_service import DriverService
 from app_base.modules.ride.application.emergency_contact_service import EmergencyContactService
 from app_base.modules.ride.application.emergency_notifications import EmergencyNotificationService
 from app_base.modules.ride.application.matching_service import MatchingService
+from app_base.modules.ride.application.nearby_drivers import NearbyDriversService
 from app_base.modules.ride.application.priority_service import DriverPriorityService, PriorityLedger
 from app_base.modules.ride.application.scoring_service import ScoringService
 from app_base.modules.ride.application.services import RideService
@@ -403,6 +404,16 @@ async def driver_service(
         capability_publisher=capability_publisher,
         online_eligibility=online_eligibility,
     )
+
+
+async def nearby_drivers_service(
+    drivers: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
+    vehicles: SqlAlchemyVehicleRepository = Depends(vehicle_repo),
+    rides: SqlAlchemyRideRepository = Depends(ride_repo),
+    locations: RedisDriverLocationService = Depends(get_driver_locations),
+    eligibility: DriverOnlineEligibilityService = Depends(driver_online_eligibility_service),
+) -> NearbyDriversService:
+    return NearbyDriversService(drivers, vehicles, rides, locations, eligibility)
 
 
 async def driver_provisioning_service(

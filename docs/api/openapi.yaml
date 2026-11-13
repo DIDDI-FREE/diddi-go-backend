@@ -6268,6 +6268,105 @@ paths:
         retry: UNKNOWN — ne pas supposer une idempotence métier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
         dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /v1/drivers/nearby:
+    get:
+      tags:
+      - driver
+      summary: Nearby Drivers
+      description: 'Anonymous approximate markers; an availability preview, not a reservation.
+
+
+        Nearest-first bounded sample of present, idle, eligible drivers in the
+
+        caller''s review cohort. Coordinates are rounded to three decimal places.'
+      operationId: nearby_drivers_v1_drivers_nearby_get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: lat
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 85.05112878
+          minimum: -85.05112878
+          title: Lat
+      - name: lng
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 180
+          minimum: -180
+          title: Lng
+      - name: radius_km
+        in: query
+        required: false
+        schema:
+          type: number
+          maximum: 10
+          exclusiveMinimum: 0
+          default: 5.0
+          title: Radius Km
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 50
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: vehicle_category
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/VehicleCategory'
+          default: standard
+      - name: comfort_level
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/ComfortLevel'
+          default: standard
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NearbyDriversResponse'
+        '422':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+              examples:
+                validation:
+                  summary: Exemple synthétique de validation locale
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La requête est invalide.
+                      details:
+                        violations:
+                        - loc:
+                          - query
+                          - q
+                          msg: Field required
+                          type: missing
+      x-contract:
+        source: app.openapi() ; opération nearby_drivers_v1_drivers_nearby_get
+        purpose: Nearby Drivers
+        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
+        state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
+        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
+        response: Schémas ci-dessus.
+        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
+        retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
+        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
+        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
   /v1/drivers/profile:
     post:
       tags:
@@ -10236,6 +10335,13 @@ components:
       required:
       - amount_collected
       title: CashConfirmationRequest
+    ComfortLevel:
+      type: string
+      enum:
+      - standard
+      - comfort
+      - premium
+      title: ComfortLevel
     CommsParticipantResponse:
       properties:
         user_id:
@@ -11800,6 +11906,53 @@ components:
       - service
       - passenger_score
       title: MyScoresResponse
+    NearbyDriverMarker:
+      properties:
+        position:
+          $ref: '#/components/schemas/NearbyDriverPosition'
+        vehicle_category:
+          $ref: '#/components/schemas/VehicleCategory'
+        comfort_level:
+          $ref: '#/components/schemas/ComfortLevel'
+      type: object
+      required:
+      - position
+      - vehicle_category
+      - comfort_level
+      title: NearbyDriverMarker
+    NearbyDriverPosition:
+      properties:
+        lat:
+          type: number
+          title: Lat
+        lng:
+          type: number
+          title: Lng
+      type: object
+      required:
+      - lat
+      - lng
+      title: NearbyDriverPosition
+    NearbyDriversResponse:
+      properties:
+        drivers:
+          items:
+            $ref: '#/components/schemas/NearbyDriverMarker'
+          type: array
+          title: Drivers
+        radius_km:
+          type: number
+          title: Radius Km
+        approximate:
+          type: boolean
+          const: true
+          title: Approximate
+          default: true
+      type: object
+      required:
+      - drivers
+      - radius_km
+      title: NearbyDriversResponse
     OTPRequest:
       properties:
         phone:
@@ -14115,6 +14268,13 @@ components:
       - msg
       - type
       title: ValidationError
+    VehicleCategory:
+      type: string
+      enum:
+      - standard
+      - comfort
+      - van
+      title: VehicleCategory
     VehicleCreateRequest:
       properties:
         plate_number:

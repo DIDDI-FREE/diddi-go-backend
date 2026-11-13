@@ -408,7 +408,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 ## Inventaire HTTP
 
 <!-- generated:http-inventory:start -->
-141 chemins ; 155 opérations HTTP.
+142 chemins ; 156 opérations HTTP.
 
 | Méthode | Chemin | Opération | Réponses documentées |
 |---|---|---|---|
@@ -512,6 +512,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 | POST | `/v1/drivers/me/wallet/withdrawals/quote` | Quote Driver Withdrawal | 200, 422 |
 | POST | `/v1/drivers/me/wallet/withdrawals/verification/request` | Request Driver Withdrawal Verification | 200, 422 |
 | GET | `/v1/drivers/me/wallet/withdrawals/{withdrawal_id}` | Get Driver Withdrawal | 200, 422 |
+| GET | `/v1/drivers/nearby` | Nearby Drivers | 200, 422 |
 | POST | `/v1/drivers/offline` | Go Offline | 200 |
 | POST | `/v1/drivers/online` | Go Online | 200, 422 |
 | POST | `/v1/drivers/profile` | Create Profile | 201, 422 |

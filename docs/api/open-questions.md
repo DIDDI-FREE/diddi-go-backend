@@ -135,6 +135,7 @@ Les champs détaillés sont dans x-contract de openapi.yaml. Une correction du c
 | `POST /internal/v1/admin/partners/{partner_id}/vehicles` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /internal/v1/admin/partners/{partner_id}/vehicles/{vehicle_id}/assign` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /internal/v1/admin/partners/{partner_id}/vehicles/{vehicle_id}/unassign` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
+| `GET /v1/drivers/nearby` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `POST /v1/drivers/profile` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/drivers/kyc/resubmit` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/drivers/vehicle` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
