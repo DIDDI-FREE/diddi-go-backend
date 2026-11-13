@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 
 from app_base.modules.notification.application import DeviceService, PushNotificationService
-from app_base.modules.notification.domain import UserDevice
+from app_base.modules.notification.domain import PushDeliveryError, UserDevice
 
 pytestmark = pytest.mark.unit
 
@@ -106,3 +108,57 @@ async def test_push_ride_offer_sends_to_fcm_devices_only() -> None:
         "ride_id": "ride-1",
         "expires_in_seconds": "15",
     }
+
+
+async def test_invalid_token_disabled_and_other_devices_still_receive(caplog):
+    repo = FakeDeviceRepo()
+    user_id = uuid4()
+    for token in ["old-invalid-token", "current-valid-token"]:
+        await repo.upsert(UserDevice(uuid4(), user_id, "android", "fcm", token))
+    gateway = FakeGateway()
+    gateway.send = AsyncMock(side_effect=[PushDeliveryError("UNREGISTERED", invalid_token=True), None])
+    service = PushNotificationService(repo, gateway)
+    with caplog.at_level(logging.INFO):
+        await service.send_ride_offer(driver_user_id=user_id, payload={"ride_id": "ride-1"})
+    assert not repo.devices[0].enabled
+    assert repo.devices[1].enabled
+    assert gateway.send.await_count == 2
+    assert '"event":"push.ride_offer.targets"' in caplog.text
+    assert '"active_devices_count":2' in caplog.text
+    assert '"event":"push.device.disabled"' in caplog.text
+    assert '"provider_code":"UNREGISTERED"' in caplog.text
+    assert "old-invalid-token" not in caplog.text
+    gateway.send.reset_mock(side_effect=True)
+    await service.send_ride_offer(driver_user_id=user_id, payload={"ride_id": "ride-2"})
+    assert gateway.send.await_count == 1
+    assert gateway.send.call_args.kwargs["token"] == "current-valid-token"
+
+
+@pytest.mark.parametrize("error", [
+    PushDeliveryError("UNAVAILABLE", status_code=503),
+    PushDeliveryError("INVALID_ARGUMENT", status_code=400),
+    RuntimeError("temporary failure"),
+    PushDeliveryError("PUSH_DISABLED"),
+])
+async def test_other_failures_keep_device_and_are_not_reported_as_sent(error, caplog):
+    repo = FakeDeviceRepo()
+    user_id = uuid4()
+    await repo.upsert(UserDevice(uuid4(), user_id, "android", "fcm", "keep-token"))
+    gateway = FakeGateway()
+    gateway.send = AsyncMock(side_effect=error)
+    with caplog.at_level(logging.INFO):
+        await PushNotificationService(repo, gateway).send_ride_offer(
+            driver_user_id=user_id, payload={"ride_id": "ride-1"},
+        )
+    assert repo.devices[0].enabled
+    assert '"event":"push.ride_offer.sent"' not in caplog.text
+
+
+async def test_no_device_is_explained_in_logs(caplog):
+    gateway = FakeGateway()
+    with caplog.at_level(logging.INFO):
+        await PushNotificationService(FakeDeviceRepo(), gateway).send_ride_offer(
+            driver_user_id=uuid4(), payload={"ride_id": "ride-1"},
+        )
+    assert not gateway.sent
+    assert "no_registered_device" in caplog.text

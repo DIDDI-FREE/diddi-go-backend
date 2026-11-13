@@ -40,7 +40,8 @@ Les décisions Q05, Q07, Q08, Q09, Q10, Q13 et Q14 ont été recueillies dans la
 - Arrêt anticipé unilatéral d'urgence avec revue support.
 - Paiement en revue manuelle lorsque la trace GPS est inutilisable.
 - DiddiWallet comme moyen de paiement passager.
-- Activation produit des escales déjà exposées techniquement.
+- Recalcul tarifaire des escales. Ajout et restitution activés le 13 novembre 2026 ;
+  pas de changement automatique du devis lors de l'ajout.
 
 ## Lacunes par opération
 
@@ -67,7 +68,7 @@ Les champs détaillés sont dans x-contract de openapi.yaml. Une correction du c
 | `GET /v1/places/search` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `POST /v1/rides/pricing/estimate` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/rides` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
-| `GET /v1/rides` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
+| `GET /v1/rides` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `POST /v1/rides/{ride_id}/accept` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/rides/{ride_id}/decline` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `GET /v1/rides/shared/{token}` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
@@ -83,7 +84,7 @@ Les champs détaillés sont dans x-contract de openapi.yaml. Une correction du c
 | `POST /v1/rides/{ride_id}/start` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/rides/{ride_id}/no-show` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/rides/{ride_id}/waiting/stop` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
-| `POST /v1/rides/{ride_id}/stops` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
+| `POST /v1/rides/{ride_id}/stops` | Aucun UNKNOWN détecté |
 | `POST /v1/rides/{ride_id}/supplements` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `GET /v1/rides/{ride_id}/supplements` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `POST /v1/rides/{ride_id}/supplements/{supplement_id}/decision` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |

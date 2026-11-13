@@ -1021,9 +1021,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response List Rides V1 Rides Get
+                $ref: '#/components/schemas/RideHistoryResponse'
         '422':
           description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
           content:
@@ -1050,7 +1048,7 @@ paths:
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
         request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
-        response: UNKNOWN — champs de succès non spécifiés.
+        response: Schémas ci-dessus.
         errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
         retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
@@ -1924,7 +1922,7 @@ paths:
       tags:
       - ride
       summary: Add Ride Stop
-      description: 'Driver adds an extra stop mid-ride (SCRUM-524 #2).'
+      description: Passenger owner or assigned driver adds a stop; no automatic price change.
       operationId: add_ride_stop_v1_rides__ride_id__stops_post
       security:
       - OAuth2PasswordBearer: []
@@ -1948,9 +1946,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response Add Ride Stop V1 Rides  Ride Id  Stops Post
+                $ref: '#/components/schemas/RideStopResponse'
         '422':
           description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
           content:
@@ -1971,17 +1967,43 @@ paths:
                           - q
                           msg: Field required
                           type: missing
+        '403':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+        '404':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+        '409':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+        '503':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
       x-contract:
         source: app.openapi() ; opération add_ride_stop_v1_rides__ride_id__stops_post
         purpose: Add Ride Stop
-        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
-        state-before-after: UNKNOWN — vérifier la précondition et la transition de cette opération.
-        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
-        response: UNKNOWN — champs de succès non spécifiés.
-        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
-        retry: UNKNOWN — ne pas supposer une idempotence métier.
-        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
-        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+        roles: Passager propriétaire, chauffeur affecté ou admin ; JWT utilisateur.
+        state-before-after: in_progress ou waiting, état inchangé ; ajout d'une escale.
+        request: RideStopCreateRequest ; latitude/longitude obligatoires, address/note facultatifs.
+        response: 201 RideStopResponse ; sequence zéro-based attribuée sous verrou de course.
+        errors: 403 RIDE_NOT_OWNED_BY_USER, 404 RIDE_NOT_FOUND, 409 RIDE_NOT_ACTIVE, 422 VALIDATION_ERROR ; erreurs
+          d'authentification communes.
+        retry: 'Non idempotent : relire stops après timeout avant de décider d''un nouvel ajout.'
+        side-effects: Commit puis ride.stop_added aux abonnés ; aucun recalcul tarifaire automatique.
+        dependency-failure: 'Erreur DB : rollback ; diffusion WS best effort après commit, récupération par HTTP
+          si notification manquée.'
   /v1/rides/{ride_id}/supplements:
     post:
       tags:
@@ -13200,6 +13222,11 @@ components:
           $ref: '#/components/schemas/RidePointResponse'
         dropoff:
           $ref: '#/components/schemas/RidePointResponse'
+        stops:
+          items:
+            $ref: '#/components/schemas/RideStopResponse'
+          type: array
+          title: Stops
         vehicle_category:
           type: string
           title: Vehicle Category
@@ -13386,6 +13413,108 @@ components:
           title: Requested At
       type: object
       title: RideEmergencyResponse
+    RideHistoryItemResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        status:
+          type: string
+          title: Status
+        completion_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Completion Reason
+        final_fare:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Final Fare
+        currency:
+          type: string
+          title: Currency
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+        pickup_address:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Pickup Address
+        dropoff_address:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dropoff Address
+        pickup:
+          $ref: '#/components/schemas/RidePointResponse'
+        dropoff:
+          $ref: '#/components/schemas/RidePointResponse'
+        planned_distance_km:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Planned Distance Km
+          description: Distance du devis, en kilomètres.
+        actual_distance_km:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Actual Distance Km
+          description: Distance mesurée ; null si indisponible.
+        trace_analysis_status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trace Analysis Status
+      type: object
+      required:
+      - id
+      - status
+      - currency
+      - pickup
+      - dropoff
+      title: RideHistoryItemResponse
+    RideHistoryPagination:
+      properties:
+        page:
+          type: integer
+          title: Page
+        page_size:
+          type: integer
+          title: Page Size
+        total_items:
+          type: integer
+          title: Total Items
+        total_pages:
+          type: integer
+          title: Total Pages
+      type: object
+      required:
+      - page
+      - page_size
+      - total_items
+      - total_pages
+      title: RideHistoryPagination
+    RideHistoryResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RideHistoryItemResponse'
+          type: array
+          title: Data
+        pagination:
+          $ref: '#/components/schemas/RideHistoryPagination'
+      type: object
+      required:
+      - data
+      - pagination
+      title: RideHistoryResponse
     RideLocationSamplePayload:
       properties:
         lat:
@@ -13806,6 +13935,49 @@ components:
       - latitude
       - longitude
       title: RideStopCreateRequest
+    RideStopResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        ride_id:
+          type: string
+          format: uuid
+          title: Ride Id
+        sequence:
+          type: integer
+          title: Sequence
+        latitude:
+          type: number
+          title: Latitude
+        longitude:
+          type: number
+          title: Longitude
+        address:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Address
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - ride_id
+      - sequence
+      - latitude
+      - longitude
+      title: RideStopResponse
     RideSupplementCatalogItem:
       properties:
         type:

@@ -230,6 +230,29 @@ def websocket_spec() -> dict:
         "GET /v1/rides/{ride_id} ; montant serveur faisant foi.",
     )
     add(
+        "RideStopAdded",
+        "ride.stop_added",
+        "send",
+        {
+            "ride_id": identifier,
+            "stop": object_schema({
+                "id": identifier, "ride_id": identifier, "sequence": integer,
+                "latitude": {"type": "number"}, "longitude": {"type": "number"},
+                "address": nullable_text, "note": nullable_text, "created_at": nullable_time,
+            }),
+            "at": timestamp,
+        },
+        {"ride_id": UUID_EXAMPLE, "stop": {
+            "id": UUID_EXAMPLE, "ride_id": UUID_EXAMPLE, "sequence": 0,
+            "latitude": 5.36, "longitude": -4.01, "address": "Plateau",
+            "note": None, "created_at": AT_EXAMPLE,
+        }, "at": AT_EXAMPLE},
+        "Escale persistée ; aucun changement automatique du prix.",
+        "Passager, chauffeur et admin abonnés à la course.",
+        "Après commit de POST /v1/rides/{ride_id}/stops.",
+        "GET /v1/rides/{ride_id} ou GET /v1/rides/active/current : liste stops ordonnée.",
+    )
+    add(
         "RideSupplementChanged",
         "ride.supplement_changed",
         "send",
@@ -445,6 +468,23 @@ def http_contract(raw: dict, sources: dict | None = None) -> tuple[dict, list[st
                 contract["retry"] = (
                     "Même batch_id + même corps : replay ; corps différent : 409 GPS_BATCH_IDEMPOTENCY_CONFLICT."
                 )
+            if path == "/v1/rides/{ride_id}/stops" and method == "post":
+                contract.update({
+                    "roles": "Passager propriétaire, chauffeur affecté ou admin ; JWT utilisateur.",
+                    "state-before-after": "in_progress ou waiting, état inchangé ; ajout d'une escale.",
+                    "request": "RideStopCreateRequest ; latitude/longitude obligatoires, address/note facultatifs.",
+                    "response": "201 RideStopResponse ; sequence zéro-based attribuée sous verrou de course.",
+                    "errors": "403 RIDE_NOT_OWNED_BY_USER, 404 RIDE_NOT_FOUND, 409 RIDE_NOT_ACTIVE, "
+                              "422 VALIDATION_ERROR ; erreurs d'authentification communes.",
+                    "retry": "Non idempotent : relire stops après timeout avant de décider d'un nouvel ajout.",
+                    "side-effects": "Commit puis ride.stop_added aux abonnés ; aucun recalcul tarifaire automatique.",
+                    "dependency-failure": "Erreur DB : rollback ; diffusion WS best effort après commit, "
+                                          "récupération par HTTP si notification manquée.",
+                })
+                for status in ("403", "404", "409", "503"):
+                    failure = deepcopy(error_response)
+                    failure["content"]["application/json"].pop("examples", None)
+                    responses.setdefault(status, failure)
             if path.endswith("/supplements/{supplement_id}/decision"):
                 contract["retry"] = (
                     "Même décision : idempotent ; changement de décision terminale : 409 SUPPLEMENT_ALREADY_DECIDED."

@@ -41,3 +41,13 @@ class PushGateway(Protocol):
         body: str,
         data: dict[str, str],
     ) -> None: ...
+
+
+class PushDeliveryError(Exception):
+    """Safe provider error metadata; never includes a token or response body."""
+
+    def __init__(self, code: str, *, status_code: int | None = None, invalid_token: bool = False) -> None:
+        super().__init__(code)
+        self.code = code
+        self.status_code = status_code
+        self.invalid_token = invalid_token

@@ -102,6 +102,8 @@ async def test_quote_is_persisted_and_snapshotted_into_ride():
     assert rides.rides[ride.id] is ride
     assert ride.quote_id == quote.id
     assert ride.estimated_fare == quote.estimated_fare
+    assert ride.pickup_address == quote.pickup_address == "Cocody"
+    assert ride.dropoff_address == quote.dropoff_address == "Plateau"
     assert ride.comfort_level == quote.comfort_level
     assert quote.ride_id == ride.id
     assert quote.consumed_at is not None

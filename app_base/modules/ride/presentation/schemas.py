@@ -136,6 +136,17 @@ class RideStopCreateRequest(BaseModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+class RideStopResponse(BaseModel):
+    id: UUID
+    ride_id: UUID
+    sequence: int
+    latitude: float
+    longitude: float
+    address: str | None = None
+    note: str | None = None
+    created_at: datetime | None = None
+
+
 class RideSupplementCreateRequest(BaseModel):
     type: str | None = Field(default=None, min_length=1, max_length=40)
     amount: Decimal | None = Field(default=None, gt=0)
@@ -207,6 +218,34 @@ class RidePointResponse(BaseModel):
     lat: float | None = None
     lng: float | None = None
     address: str | None = None
+
+
+class RideHistoryItemResponse(BaseModel):
+    id: UUID
+    status: str
+    completion_reason: str | None = None
+    final_fare: int | None = None
+    currency: str
+    completed_at: datetime | None = None
+    pickup_address: str | None = None
+    dropoff_address: str | None = None
+    pickup: RidePointResponse
+    dropoff: RidePointResponse
+    planned_distance_km: float | None = Field(default=None, description="Distance du devis, en kilomètres.")
+    actual_distance_km: float | None = Field(default=None, description="Distance mesurée ; null si indisponible.")
+    trace_analysis_status: str | None = None
+
+
+class RideHistoryPagination(BaseModel):
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+
+
+class RideHistoryResponse(BaseModel):
+    data: list[RideHistoryItemResponse]
+    pagination: RideHistoryPagination
 
 
 class RidePassengerResponse(BaseModel):
@@ -305,6 +344,7 @@ class RideDetailResponse(BaseModel):
     driver: RideDriverResponse | None = None
     pickup: RidePointResponse
     dropoff: RidePointResponse
+    stops: list[RideStopResponse] = Field(default_factory=list)
     vehicle_category: str
     comfort_level: str
     estimated_fare: int | None = None

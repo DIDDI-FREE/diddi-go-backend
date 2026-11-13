@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
+from hashlib import sha256
 from uuid import UUID
 
 from app_base.core.observability import log_event
-from app_base.modules.notification.domain import PushGateway, UserDevice, UserDeviceRepository
+from app_base.modules.notification.domain import PushDeliveryError, PushGateway, UserDevice, UserDeviceRepository
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -69,39 +70,29 @@ class PushNotificationService:
 
     async def send_ride_offer(self, *, driver_user_id: UUID, payload: dict) -> None:
         devices = await self.devices.active_for_user(driver_user_id)
+        context = {"driver_user_id": driver_user_id, "ride_id": payload.get("ride_id")}
+        log_event("push.ride_offer.targets", **context, active_devices_count=len(devices))
         if not devices:
-            logger.info("push_ride_offer_skipped driver_user_id=%s reason=no_registered_device", driver_user_id)
-            log_event(
-                "push.ride_offer.skipped",
-                driver_user_id=driver_user_id,
-                ride_id=payload.get("ride_id"),
-                reason="no_registered_device",
-            )
+            log_event("push.ride_offer.skipped", **context, reason="no_registered_device")
             return
-
         data = {
             "event": "ride.new_request",
             "ride_id": str(payload.get("ride_id", "")),
             "expires_in_seconds": str(payload.get("expires_in_seconds", "")),
         }
         for device in devices:
+            target = {
+                **context,
+                "device_id": device.id,
+                "platform": device.platform,
+                "provider": device.push_provider,
+                "token_fingerprint": sha256(device.push_token.encode()).hexdigest()[:16],
+                "last_seen_at": device.last_seen_at,
+            }
             if device.push_provider != "fcm":
-                logger.warning(
-                    "push_ride_offer_skipped driver_user_id=%s device_id=%s provider=%s reason=fcm_only",
-                    driver_user_id,
-                    device.id,
-                    device.push_provider,
-                )
-                log_event(
-                    "push.ride_offer.skipped",
-                    level="warning",
-                    driver_user_id=driver_user_id,
-                    device_id=device.id,
-                    ride_id=payload.get("ride_id"),
-                    provider=device.push_provider,
-                    reason="fcm_only",
-                )
+                log_event("push.ride_offer.skipped", **target, reason="unsupported_provider")
                 continue
+            log_event("push.ride_offer.attempted", **target)
             try:
                 await self.gateway.send(
                     token=device.push_token,
@@ -109,33 +100,21 @@ class PushNotificationService:
                     body="Une course est disponible pres de vous.",
                     data=data,
                 )
-                logger.info(
-                    "push_ride_offer_sent driver_user_id=%s device_id=%s provider=%s ride_id=%s",
-                    driver_user_id,
-                    device.id,
-                    device.push_provider,
-                    payload.get("ride_id"),
-                )
+                log_event("push.ride_offer.sent", **target)
+            except PushDeliveryError as exc:
+                if exc.code == "PUSH_DISABLED":
+                    log_event("push.ride_offer.skipped", **target, reason="push_disabled")
+                    continue
                 log_event(
-                    "push.ride_offer.sent",
-                    driver_user_id=driver_user_id,
-                    device_id=device.id,
-                    ride_id=payload.get("ride_id"),
-                    provider=device.push_provider,
+                    "push.ride_offer.failed", level="error", **target,
+                    provider_code=exc.code, status_code=exc.status_code, invalid_token=exc.invalid_token,
                 )
-            except Exception:
-                logger.exception(
-                    "push_ride_offer_failed driver_user_id=%s device_id=%s provider=%s ride_id=%s",
-                    driver_user_id,
-                    device.id,
-                    device.push_provider,
-                    payload.get("ride_id"),
-                )
+                if exc.invalid_token:
+                    await self.devices.disable(user_id=driver_user_id, push_token=device.push_token)
+                    log_event("push.device.disabled", **target, reason=exc.code)
+            except Exception as exc:
+                # Do not log exception bodies: provider errors may contain tokens.
                 log_event(
-                    "push.ride_offer.failed",
-                    level="error",
-                    driver_user_id=driver_user_id,
-                    device_id=device.id,
-                    ride_id=payload.get("ride_id"),
-                    provider=device.push_provider,
+                    "push.ride_offer.failed", level="error", **target,
+                    reason="gateway_error", error_type=type(exc).__name__, invalid_token=False,
                 )

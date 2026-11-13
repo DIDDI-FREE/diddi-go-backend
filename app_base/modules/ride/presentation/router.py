@@ -56,6 +56,7 @@ from app_base.modules.ride.presentation.schemas import (
     RideCreateRequest,
     RideDetailResponse,
     RideEmergencyRequest,
+    RideHistoryResponse,
     RideLocationSamplesRequest,
     RideLocationSamplesResponse,
     RideRatingRequest,
@@ -64,6 +65,7 @@ from app_base.modules.ride.presentation.schemas import (
     RideStartRequest,
     RideStatusUpdateRequest,
     RideStopCreateRequest,
+    RideStopResponse,
     RideSupplementCatalogResponse,
     RideSupplementCreateRequest,
     RideSupplementDecisionRequest,
@@ -319,7 +321,7 @@ async def get_ride(
     return await service.get_ride(ride_id, actor_user_id=current_user.id, actor_role=current_user.role)
 
 
-@router.get("")
+@router.get("", response_model=RideHistoryResponse)
 async def list_rides(
     service: RideService = Depends(ride_service),
     current_user: UserModel = Depends(get_current_user),
@@ -496,16 +498,15 @@ async def stop_waiting(
     return result
 
 
-@router.post("/{ride_id}/stops", status_code=201)
+@router.post("/{ride_id}/stops", status_code=201, response_model=RideStopResponse)
 async def add_ride_stop(
     ride_id: UUID,
     payload: RideStopCreateRequest,
     service: RideService = Depends(ride_service),
     current_user: UserModel = Depends(get_current_user),
-    _driver_profile: DriverProfile | None = Depends(require_business_driver),
 ) -> dict:
-    """Driver adds an extra stop mid-ride (SCRUM-524 #2)."""
-    return await service.add_stop(
+    """Passenger owner or assigned driver adds a stop; no automatic price change."""
+    result = await service.add_stop(
         ride_id,
         actor_user_id=current_user.id,
         actor_role=current_user.role,
@@ -514,6 +515,8 @@ async def add_ride_stop(
         address=payload.address,
         note=payload.note,
     )
+    await manager.broadcast_stop_added(ride_id, result)
+    return result
 
 
 @router.post("/{ride_id}/supplements", status_code=201)

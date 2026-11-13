@@ -19,6 +19,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app_base.core.errors import ApiError
 from app_base.modules.ride.domain.entities import (
     ComfortLevel,
     DriverProfile,
@@ -273,6 +274,19 @@ class SqlAlchemyRideRepository:
         return (result.scalar_one() or 0) > 0
 
     async def add_stop(self, stop: RideStop) -> RideStop:
+        # Serialize passenger/driver additions so they cannot choose the same
+        # sequence. Recheck state after waiting for the ride lock.
+        result = await self._session.execute(
+            select(orm.RideModel.status).where(orm.RideModel.id == stop.ride_id).with_for_update(),
+        )
+        status = result.scalar_one_or_none()
+        if status not in {RideStatus.IN_PROGRESS.value, RideStatus.WAITING.value}:
+            raise ApiError(409, "RIDE_NOT_ACTIVE", "Action possible uniquement pendant la course.")
+        result = await self._session.execute(
+            select(func.max(orm.RideStopModel.sequence)).where(orm.RideStopModel.ride_id == stop.ride_id),
+        )
+        previous = result.scalar_one_or_none()
+        stop.sequence = 0 if previous is None else previous + 1
         row = orm.RideStopModel(
             id=stop.id,
             ride_id=stop.ride_id,
@@ -286,6 +300,18 @@ class SqlAlchemyRideRepository:
         self._session.add(row)
         await self._session.flush()
         return stop
+
+    async def list_stops(self, ride_id: UUID) -> list[RideStop]:
+        result = await self._session.execute(
+            select(orm.RideStopModel).where(orm.RideStopModel.ride_id == ride_id).order_by(
+                orm.RideStopModel.sequence, orm.RideStopModel.created_at, orm.RideStopModel.id,
+            ),
+        )
+        return [RideStop(
+            id=row.id, ride_id=row.ride_id, sequence=row.sequence,
+            latitude=float(row.latitude), longitude=float(row.longitude),
+            address=row.address, note=row.note, created_at=row.created_at,
+        ) for row in result.scalars().all()]
 
     async def count_stops(self, ride_id: UUID) -> int:
         result = await self._session.execute(

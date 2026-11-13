@@ -35,6 +35,20 @@ Un JWT valide ne suffit pas à autoriser l'accès à une course. Un refus d'iden
 
 ## Parcours HTTP public
 
+### Corrections QA du 13 novembre 2026
+
+- `POST /v1/rides/{ride_id}/stops` accepte le passager propriétaire et le chauffeur
+  affecté (ou admin), en `in_progress` / `waiting`. Réponse 201 typée ; commit avant
+  `ride.stop_added` aux abonnés. Aucun recalcul de prix automatique et pas de rejeu
+  idempotent du POST. Les détails sont dans le [guide passager](../guides/passenger-ride-flow.md#escales).
+- Le détail et la récupération de course active renvoient `stops` ordonné, y compris
+  une liste vide. Relire HTTP après reconnexion ou réception du signal WebSocket.
+- `GET /v1/rides` expose une réponse typée avec `pickup`, `dropoff`, `currency`,
+  `planned_distance_km`, `actual_distance_km` et `trace_analysis_status`, en conservant
+  les champs historiques. `null` signifie indisponible ; aucun prix n'est recalculé.
+- D9 : invalidation ciblée des jetons FCM et traces d'envoi par appareil ; voir
+  [le guide chauffeur](../guides/driver-ride-flow.md#notifications-doffres-d9).
+
 Les erreurs indiquées sont les principales erreurs connues, pas une liste exhaustive. Les schémas et exemples disponibles sont référencés par opération dans OpenAPI.
 
 | Opération | Acteur / précondition | Résultat ou changement | Rejeu et reprise |
@@ -560,7 +574,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 | POST | `/v1/rides/{ride_id}/share-link` | Create Share Link | 200, 422 |
 | POST | `/v1/rides/{ride_id}/start` | Start Ride | 200, 422 |
 | PATCH | `/v1/rides/{ride_id}/status` | Update Status | 200, 422 |
-| POST | `/v1/rides/{ride_id}/stops` | Add Ride Stop | 201, 422 |
+| POST | `/v1/rides/{ride_id}/stops` | Add Ride Stop | 201, 403, 404, 409, 422, 503 |
 | POST | `/v1/rides/{ride_id}/supplements` | Add Ride Supplement | 201, 422 |
 | GET | `/v1/rides/{ride_id}/supplements` | List Ride Supplements | 200, 422 |
 | POST | `/v1/rides/{ride_id}/supplements/{supplement_id}/decision` | Decide Ride Supplement | 200, 422 |

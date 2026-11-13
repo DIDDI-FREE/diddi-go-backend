@@ -171,6 +171,20 @@ Ces parcours sont la référence produit utilisée pour organiser les epics, tic
 
 ## 8. Hors de ce gel
 
+### Corrections QA autorisées le 13 novembre 2026
+
+- Les jetons de notification définitivement invalides sont désactivés et les
+  tentatives d'envoi sont traçables par appareil et course.
+- Le passager propriétaire et le chauffeur affecté peuvent ajouter des escales
+  pendant `in_progress` / `waiting`. Elles sont restituées aux deux participants
+  et signalées par WebSocket après persistance.
+- Cette activation opérationnelle ne change pas la tarification : ajout d'escale
+  sans recalcul automatique, devis figé + attentes comptabilisées + suppléments
+  acceptés selon les règles existantes. Un futur tarif d'escale nécessite une
+  décision produit distincte ; C13 reste différé.
+- L'historique expose séparément distance prévue et distance mesurée, et les
+  adresses disponibles sans inventer les libellés manquants.
+
 ### Extension C3 autorisée le 13 novembre 2026
 
 Le passager connecté peut consulter les chauffeurs disponibles autour du départ,

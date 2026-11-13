@@ -104,12 +104,81 @@ ligne libre ajoutee par le chauffeur.
 
 ## Escales
 
-Une escale est un waypoint qui modifie l'itineraire complet, et non une pause
-facturee automatiquement. Le chauffeur peut actuellement ajouter le point via
-`POST /v1/rides/{ride_id}/stops`. La tarification d'une escale doit donc venir
-d'un nouveau devis ou d'un ajustement explicite valide par le passager ; elle
-ne doit pas etre calculee comme une attente. Les horodatages operationnels par
-escale ne sont pas encore exposes et ne doivent pas etre affiches comme acquis.
+Depuis la correction D16/C14 du 13 novembre, le passager propriétaire ou le
+chauffeur affecté peut ajouter une escale pendant `in_progress` ou `waiting`.
+Un administrateur conserve cet accès. Les autres utilisateurs reçoivent
+`403 RIDE_NOT_OWNED_BY_USER` ; hors course active : `409 RIDE_NOT_ACTIVE`.
+
+```http
+POST /v1/rides/{ride_id}/stops
+```
+
+```json
+{"latitude": 5.36, "longitude": -4.01, "address": "Pharmacie du Plateau", "note": "Récupérer un colis"}
+```
+
+Latitude et longitude sont obligatoires. Le frontend doit géocoder l'adresse
+sélectionnée via la recherche de lieux ; le backend ne transforme pas le texte
+libre d'une escale en coordonnées. `address` et `note` sont facultatifs.
+
+La réponse 201 contient `id`, `ride_id`, `sequence` (à partir de zéro),
+`latitude`, `longitude`, `address`, `note`, `created_at`. Les ajouts concurrents
+passager/chauffeur sont sérialisés pour attribuer une séquence distincte.
+Un POST répété crée une autre escale : ne pas rejouer automatiquement après un
+timeout ; relire d'abord la course pour vérifier l'ajout.
+
+Le détail `GET /v1/rides/{ride_id}` et la reprise
+`GET /v1/rides/active/current` contiennent toujours `stops`, une liste ordonnée,
+vide lorsqu'il n'y a aucune escale. `created_at` indique l'ajout, pas l'arrivée
+à l'escale. Aucun état opérationnel d'arrivée/départ d'escale n'est exposé.
+
+Après commit, le serveur émet `ride.stop_added` avec `ride_id`, `stop` et `at`
+aux connexions WebSocket abonnées à cette course. Les deux applications doivent
+faire `ride.subscribe`, relire le détail à réception et recalculer leur itinéraire
+avec les escales dans l'ordre. Cet événement suit la diffusion existante en mémoire
+du processus, sans replay ni garantie push en arrière-plan. Après reconnexion,
+relire le HTTP ; un événement manqué ne fait pas perdre l'escale enregistrée.
+
+**Prix actuel : ajouter une escale ne modifie ni le devis, ni la distance prévue,
+ni le montant facturé automatiquement.** La fin normale reste au prix figé,
+augmenté des attentes effectivement comptabilisées et des suppléments acceptés
+selon les règles existantes. Une escale n'est pas automatiquement une attente
+payante. Aucun nouveau tarif d'escale n'est introduit par cette correction ; un
+recalcul nécessitera une règle produit explicite et un prix validé par le passager.
+
+## Historique : adresses et distances
+
+`GET /v1/rides` conserve son enveloppe `data` + `pagination` et les champs
+existants. Chaque ligne expose également les données suivantes :
+
+| Champ | Signification |
+|---|---|
+| `pickup`, `dropoff` | Objets `{lat, lng, address}` ; coordonnées et libellé peuvent être absents. |
+| `pickup_address`, `dropoff_address` | Libellés historiques conservés pour compatibilité, identiques aux adresses imbriquées. |
+| `planned_distance_km` | Distance prévue au devis initial, en kilomètres. |
+| `actual_distance_km` | Distance mesurée par analyse de trace GPS, en kilomètres ; `null` si indisponible. |
+| `trace_analysis_status` | État de l'analyse existante, éventuellement `null`, pour diagnostiquer une mesure absente. |
+| `currency`, `final_fare` | Devise et montant final serveur ; ne pas recalculer le prix depuis une distance affichée. |
+
+Exemple : `planned_distance_km: 7` et `actual_distance_km: 0.1` peuvent coexister.
+Afficher « distance prévue : 7 km » et, si utile, « distance mesurée : 0,1 km ».
+Ne pas remplacer une mesure absente par zéro ni présenter la mesure comme distance
+facturée. La facturation normale reste liée au devis ; l'arrêt anticipé a sa règle
+de prix propre. Dans le détail, les équivalents historiques sont `distance_km` et
+`pricing.actual_distance_km` ; ces champs ne changent pas de sens.
+
+Diagnostic des adresses : le devis accepte `pickup.address` / `dropoff.address`
+facultatifs, puis les copie sur la course. Aucun géocodage inverse automatique
+n'est exécuté. Une sélection GPS sans libellé peut donc produire une adresse
+manquante. Les espaces seuls sont désormais normalisés en `null` à l'écriture
+du devis et à la lecture des anciens enregistrements. Aucun libellé fictif n'est
+créé et les anciennes données ne sont pas modifiées en masse.
+
+Le frontend doit transmettre les libellés choisis lors du devis et afficher
+« Adresse non renseignée » si le champ est `null`. Le log `ride.quote.addresses`
+indique, par `quote_id`, si chaque libellé a été reçu, sans journaliser l'adresse.
+Pour le cas QA précis « Position GPS » / « 0,1 km », comparer les réponses liste,
+détail et devis de la même course : sa cause n'est pas démontrée sans cet exemple.
 
 ## Étude C13 : changer la destination pendant la course
 

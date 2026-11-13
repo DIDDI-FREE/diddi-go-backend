@@ -11,6 +11,7 @@ import jwt
 
 from app_base.core.observability import log_event
 from app_base.core.settings import settings
+from app_base.modules.notification.domain import PushDeliveryError
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -46,16 +47,17 @@ class FcmPushGateway:
                 headers={"Authorization": f"Bearer {access_token}"},
             )
         if response.status_code >= 400:
-            logger.error("push_fcm_failed status=%s body=%s", response.status_code, response.text[:500])
+            error = _delivery_error(response)
             log_event(
                 "push.fcm.failed",
                 level="error",
                 project_id=project_id,
                 token_suffix=token[-8:],
                 status_code=response.status_code,
-                response_body=response.text[:500],
+                provider_code=error.code,
+                invalid_token=error.invalid_token,
             )
-            response.raise_for_status()
+            raise error
         logger.info("push_fcm_sent project_id=%s token_suffix=%s", project_id, token[-8:])
         log_event("push.fcm.sent", project_id=project_id, token_suffix=token[-8:])
 
@@ -103,6 +105,40 @@ class DisabledPushGateway:
             title=title,
             data=data,
         )
+        raise PushDeliveryError("PUSH_DISABLED")
+
+
+def _delivery_error(response: httpx.Response) -> PushDeliveryError:
+    """Only explicit token failures justify disabling a device.
+
+    A generic 400/404 or INVALID_ARGUMENT may concern the payload/project.
+    See https://firebase.google.com/docs/cloud-messaging/error-codes.
+    """
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+    error = body.get("error", {}) if isinstance(body, dict) else {}
+    if not isinstance(error, dict):
+        error = {}
+    details = error.get("details", [])
+    details = details if isinstance(details, list) else []
+    fcm_code = next((
+        detail.get("errorCode") for detail in details
+        if isinstance(detail, dict)
+        and detail.get("@type") == "type.googleapis.com/google.firebase.fcm.v1.FcmError"
+    ), None)
+    token_invalid = fcm_code == "UNREGISTERED"
+    # INVALID_ARGUMENT alone is ambiguous. Require the documented token-specific
+    # diagnostic as well, without ever persisting its potentially sensitive text.
+    if fcm_code == "INVALID_ARGUMENT" and error.get("message") == (
+        "The registration token is not a valid FCM registration token"
+    ):
+        token_invalid = True
+    code = fcm_code or error.get("status")
+    if not isinstance(code, str) or not code.isupper() or len(code) > 64:
+        code = "FCM_HTTP_ERROR"
+    return PushDeliveryError(code, status_code=response.status_code, invalid_token=token_invalid)
 
 
 def build_push_gateway():

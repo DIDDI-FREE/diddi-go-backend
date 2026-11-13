@@ -25,6 +25,9 @@ RIDE_ID = uuid4()
 
 
 class FakeRideRepo:
+    async def list_stops(self, ride_id):
+        return []
+
     def __init__(self, ride: Ride) -> None:
         self.ride = ride
         self.last_list_filters: dict | None = None

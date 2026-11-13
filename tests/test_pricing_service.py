@@ -74,6 +74,9 @@ class FakeRideRepo:
 
 
 class CompletedRideRepo:
+    async def list_stops(self, ride_id):
+        return []
+
     def __init__(self, ride, points=None):
         self.ride = ride
         self.points = points or []

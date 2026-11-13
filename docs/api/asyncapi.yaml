@@ -29,6 +29,8 @@ channels:
         $ref: '#/components/messages/RideNewRequest'
       RideWaitingChanged:
         $ref: '#/components/messages/RideWaitingChanged'
+      RideStopAdded:
+        $ref: '#/components/messages/RideStopAdded'
       RideSupplementChanged:
         $ref: '#/components/messages/RideSupplementChanged'
       Ack:
@@ -110,6 +112,13 @@ operations:
     messages:
     - $ref: '#/channels/session/messages/RideWaitingChanged'
     summary: État et montants d'attente en course.
+  RideStopAdded:
+    action: send
+    channel:
+      $ref: '#/channels/session'
+    messages:
+    - $ref: '#/channels/session/messages/RideStopAdded'
+    summary: Escale persistée ; aucun changement automatique du prix.
   RideSupplementChanged:
     action: send
     channel:
@@ -326,6 +335,35 @@ components:
         roles: Sockets abonnés à la course.
         trigger: Début/fin d'attente via HTTP ou arrêt automatique sur mouvement.
         recovery: GET /v1/rides/{ride_id} ; montant serveur faisant foi.
+        delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
+        ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
+        errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
+    RideStopAdded:
+      name: RideStopAdded
+      title: ride.stop_added
+      contentType: application/json
+      description: Escale persistée ; aucun changement automatique du prix.
+      payload:
+        $ref: '#/components/schemas/RideStopAdded'
+      examples:
+      - name: exemple
+        payload:
+          event: ride.stop_added
+          ride_id: 11111111-1111-4111-8111-111111111111
+          stop:
+            id: 11111111-1111-4111-8111-111111111111
+            ride_id: 11111111-1111-4111-8111-111111111111
+            sequence: 0
+            latitude: 5.36
+            longitude: -4.01
+            address: Plateau
+            note: null
+            created_at: '2026-10-15T10:00:00Z'
+          at: '2026-10-15T10:00:00Z'
+      x-contract:
+        roles: Passager, chauffeur et admin abonnés à la course.
+        trigger: Après commit de POST /v1/rides/{ride_id}/stops.
+        recovery: 'GET /v1/rides/{ride_id} ou GET /v1/rides/active/current : liste stops ordonnée.'
         delivery: Best effort, sans replay, rétention ni accusé de réception métier serveur→client.
         ordering: Pas de séquence globale ; ne pas déduire un ordre métier de at.
         errors: Messages Error ; aucun ACK d'une notification serveur n'est attendu.
@@ -610,6 +648,41 @@ components:
       - ride_id
       - status
       - waiting
+      - at
+    RideStopAdded:
+      type: object
+      properties:
+        event:
+          type: string
+          const: ride.stop_added
+        ride_id: *id001
+        stop:
+          type: object
+          properties:
+            id: *id001
+            ride_id: *id001
+            sequence: *id006
+            latitude:
+              type: number
+            longitude:
+              type: number
+            address: *id004
+            note: *id004
+            created_at: *id007
+          required:
+          - id
+          - ride_id
+          - sequence
+          - latitude
+          - longitude
+          - address
+          - note
+          - created_at
+        at: *id003
+      required:
+      - event
+      - ride_id
+      - stop
       - at
     RideSupplementChanged:
       type: object

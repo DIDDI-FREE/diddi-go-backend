@@ -162,9 +162,9 @@ class RideService:
             id=RideQuote.new_id(),
             passenger_user_id=passenger_user_id,
             pickup_location=pickup,
-            pickup_address=pickup_address,
+            pickup_address=_clean_address(pickup_address),
             dropoff_location=dropoff,
-            dropoff_address=dropoff_address,
+            dropoff_address=_clean_address(dropoff_address),
             vehicle_category=category,
             comfort_level=comfort,
             estimated_fare=Decimal(estimate["estimated_fare"]),
@@ -183,6 +183,11 @@ class RideService:
             created_at=now,
         )
         await self.quote_repo.save(quote)
+        log_event(
+            "ride.quote.addresses", quote_id=quote.id,
+            pickup_address_present=bool(quote.pickup_address),
+            dropoff_address_present=bool(quote.dropoff_address),
+        )
         return {
             **estimate,
             "quote_id": str(quote.id),
@@ -285,7 +290,12 @@ class RideService:
             )
             raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Cette course ne vous appartient pas.")
         viewer_role = "admin" if is_admin else "driver" if is_assigned_driver else "passenger"
-        return _ride_detail_payload(ride, driver=await self._driver_payload(ride), viewer_role=viewer_role)
+        return await self._detail_payload(ride, driver=await self._driver_payload(ride), viewer_role=viewer_role)
+
+    async def _detail_payload(self, ride: Ride, driver: dict | None, *, viewer_role: str) -> dict:
+        payload = _ride_detail_payload(ride, driver, viewer_role=viewer_role)
+        payload["stops"] = [_stop_payload(stop) for stop in await self.ride_repo.list_stops(ride.id)]
+        return payload
 
     async def _driver_payload(self, ride: Ride) -> dict | None:
         if ride.driver_id is None or self.driver_repo is None:
@@ -379,7 +389,7 @@ class RideService:
         if ride is None:
             raise ApiError(404, "ACTIVE_RIDE_NOT_FOUND", "Aucune course active pour cet utilisateur.")
         driver = await self._driver_payload(ride)
-        return _ride_detail_payload(ride, driver=driver, viewer_role=viewer_role)
+        return await self._detail_payload(ride, driver=driver, viewer_role=viewer_role)
 
     def get_supplement_catalog(self) -> dict:
         """Expose pricing rules so mobile clients never hard-code fare add-ons."""
@@ -409,7 +419,7 @@ class RideService:
                 actor_role=actor_role,
             )
             viewer_role = "admin" if actor_role == "admin" else "driver"
-            return _ride_detail_payload(ride, driver=None, viewer_role=viewer_role)
+            return await self._detail_payload(ride, driver=None, viewer_role=viewer_role)
         if ride.status is RideStatus.WAITING and new_status is RideStatus.IN_PROGRESS:
             raise ApiError(
                 409,
@@ -474,7 +484,7 @@ class RideService:
             status=ride.status.value,
         )
         viewer_role = "admin" if actor_role == "admin" else "driver"
-        return _ride_detail_payload(ride, driver=None, viewer_role=viewer_role)
+        return await self._detail_payload(ride, driver=None, viewer_role=viewer_role)
 
     async def request_early_stop(self, ride_id: UUID, *, passenger_user_id: UUID) -> dict:
         ride = await self.load_ride(ride_id)
@@ -652,7 +662,7 @@ class RideService:
         log_event(
             "ride.started", ride_id=ride.id, pre_ride_wait_seconds=elapsed, pre_ride_wait_fee=ride.pre_ride_wait_fee
         )
-        return _ride_detail_payload(ride, driver=None, viewer_role="driver")
+        return await self._detail_payload(ride, driver=None, viewer_role="driver")
 
     async def mark_passenger_no_show(
         self,
@@ -691,7 +701,7 @@ class RideService:
             passenger_user_id=ride.passenger_user_id,
             waiting_seconds=elapsed,
         )
-        return _ride_detail_payload(ride, driver=None, viewer_role="driver")
+        return await self._detail_payload(ride, driver=None, viewer_role="driver")
 
     async def start_waiting(
         self,
@@ -792,25 +802,28 @@ class RideService:
         address: str | None = None,
         note: str | None = None,
     ) -> dict:
-        ride = await self._require_active_ride_for_driver(
-            ride_id,
-            actor_user_id=actor_user_id,
-            actor_role=actor_role,
-            action="ajouter un arret",
-        )
-        sequence = await self.ride_repo.count_stops(ride.id)
+        ride = await self.load_ride(ride_id)
+        if (
+            actor_role != "admin"
+            and ride.passenger_user_id != actor_user_id
+            and not await self._is_assigned_driver(ride, actor_user_id)
+        ):
+            raise ApiError(403, "RIDE_NOT_OWNED_BY_USER", "Cette course ne vous appartient pas.")
+        if ride.status not in {RideStatus.IN_PROGRESS, RideStatus.WAITING}:
+            raise ApiError(409, "RIDE_NOT_ACTIVE", "Action possible uniquement pendant la course.")
         stop = RideStop(
             id=uuid4(),
             ride_id=ride.id,
-            sequence=sequence,
+            sequence=0,  # assigned atomically by the repository
             latitude=latitude,
             longitude=longitude,
-            address=address,
+            address=_clean_address(address),
             note=note,
             created_at=datetime.now(UTC),
         )
-        await self.ride_repo.add_stop(stop)
-        log_event("ride.stop.added", ride_id=ride.id, actor_user_id=actor_user_id, sequence=sequence)
+        stop = await self.ride_repo.add_stop(stop)
+        await self.ride_repo.commit()
+        log_event("ride.stop.added", ride_id=ride.id, actor_user_id=actor_user_id, sequence=stop.sequence)
         return _stop_payload(stop)
 
     async def add_supplement(
@@ -1309,8 +1322,13 @@ def _ride_summary_payload(ride: Ride) -> dict:
         "completion_reason": ride.completion_reason,
         "final_fare": int(ride.final_fare) if ride.final_fare is not None else None,
         "completed_at": iso_utc(ride.completed_at),
-        "pickup_address": ride.pickup_address,
-        "dropoff_address": ride.dropoff_address,
+        "pickup_address": _clean_address(ride.pickup_address),
+        "dropoff_address": _clean_address(ride.dropoff_address),
+        "pickup": _point_payload(ride.pickup_location, ride.pickup_address),
+        "currency": ride.currency,
+        "planned_distance_km": float(ride.distance_km) if ride.distance_km is not None else None,
+        "actual_distance_km": float(ride.actual_distance_km) if ride.actual_distance_km is not None else None,
+        "trace_analysis_status": ride.trace_analysis_status,
         "dropoff": _point_payload(ride.dropoff_location, ride.dropoff_address),
     }
 
@@ -1444,7 +1462,7 @@ def _stop_payload(stop: RideStop) -> dict:
         "sequence": stop.sequence,
         "latitude": float(stop.latitude),
         "longitude": float(stop.longitude),
-        "address": stop.address,
+        "address": _clean_address(stop.address),
         "note": stop.note,
         "created_at": iso_utc(stop.created_at) if stop.created_at else None,
     }
@@ -1523,11 +1541,15 @@ def _waiting_payload(ride: Ride) -> dict:
     }
 
 
+def _clean_address(address: str | None) -> str | None:
+    return (address.strip() or None) if address is not None else None
+
+
 def _point_payload(point: GeoPoint | None, address: str | None) -> dict:
     return {
         "lat": point.lat if point else None,
         "lng": point.lng if point else None,
-        "address": address,
+        "address": _clean_address(address),
     }
 
 
