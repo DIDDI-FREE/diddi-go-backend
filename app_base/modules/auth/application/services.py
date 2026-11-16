@@ -110,11 +110,18 @@ class AuthService:
         # the instant they receive it, and `verify_otp` runs on a different
         # session that must be able to see this row.
         await self.otp_repo.commit()
-        # TODO: replace with real SMS delivery. In dev, the OTP is logged.
-        import logging
-        logging.getLogger(__name__).warning(
-            "OTP stub — in dev, code for phone=%s is %s. SMS integration pending.", phone, code,
-        )
+        # TODO: replace with real SMS delivery. This temporary exception is
+        # disabled by OTP_PLAINTEXT_LOGGING_ENABLED=false before central log
+        # collection is enabled. It must never be used for other secrets.
+        if settings.otp_plaintext_logging_enabled:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "OTP stub — scope=%s, code for phone=%s is %s. SMS integration pending.",
+                settings.otp_plaintext_logging_scope,
+                phone,
+                code,
+            )
         return {
             "expires_in_seconds": settings.otp_code_lifetime_seconds,
             "retry_after_seconds": settings.otp_rate_limit_seconds,

@@ -10,10 +10,12 @@ from contextvars import ContextVar, Token
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from enum import Enum
+from logging.handlers import RotatingFileHandler
 from typing import Any
 from uuid import UUID
 
 from app_base.core.metrics import record_business_event
+from app_base.core.settings import settings
 from app_base.core.telemetry import current_trace_ids, resource_attributes
 
 _request_id: ContextVar[str | None] = ContextVar("diddigo_request_id", default=None)
@@ -58,6 +60,17 @@ def configure_observability(*, log_level: str = "INFO") -> None:
     else:
         for handler in root.handlers:
             handler.setFormatter(formatter)
+    if settings.observability_log_file and not any(
+        isinstance(handler, RotatingFileHandler) for handler in root.handlers
+    ):
+        file_handler = RotatingFileHandler(
+            settings.observability_log_file,
+            maxBytes=settings.observability_log_max_bytes,
+            backupCount=settings.observability_log_backup_count,
+            encoding="utf-8",
+        )
+        file_handler.setFormatter(formatter)
+        root.addHandler(file_handler)
 
 
 def bind_request_id(request_id: str | None) -> Token[str | None]:

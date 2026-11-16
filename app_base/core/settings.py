@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     cors_origin_regex: str | None = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
     log_level: str = "INFO"
     log_format: str = "json"
+    observability_log_file: str | None = Field(default=None, validation_alias=AliasChoices("OBSERVABILITY_LOG_FILE"))
+    observability_log_max_bytes: int = Field(default=50 * 1024 * 1024, ge=1_048_576, le=1_073_741_824)
+    observability_log_backup_count: int = Field(default=5, ge=1, le=30)
 
     # DIDDI Observability v1. Values are intentionally unset where the
     # central platform must provide an address or secret.
@@ -64,6 +67,14 @@ class Settings(BaseSettings):
 
     otp_rate_limit_seconds: int = 60
     otp_code_lifetime_seconds: int = 300
+    otp_plaintext_logging_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("OTP_PLAINTEXT_LOGGING_ENABLED"),
+    )
+    otp_plaintext_logging_scope: str = Field(
+        default="local_only",
+        validation_alias=AliasChoices("OTP_PLAINTEXT_LOGGING_SCOPE"),
+    )
 
     diddimap_base_url: str = "http://localhost:4000"
     diddimap_access_token: str | None = None
