@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     otp_rate_limit_seconds: int = 60
     otp_code_lifetime_seconds: int = 300
     otp_plaintext_logging_enabled: bool = Field(
-        default=True,
+        default=False,
         validation_alias=AliasChoices("OTP_PLAINTEXT_LOGGING_ENABLED"),
     )
     otp_plaintext_logging_scope: str = Field(
