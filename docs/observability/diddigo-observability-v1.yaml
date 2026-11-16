@@ -17,7 +17,7 @@ components:
     readiness: /ready
     metrics: /internal/metrics
     metrics_auth: Bearer OBSERVABILITY_METRICS_TOKEN
-    signals: [json_logs_stdout, http_metrics, otlp_traces]
+    signals: [json_logs_stdout, json_log_file_rotation_optional, http_metrics, otlp_traces]
   workers:
     names: [payment-reconciliation, capability-projection]
     heartbeat_metric: diddi_worker_heartbeat_timestamp_seconds
@@ -36,13 +36,19 @@ configuration:
     - OTEL_EXPORTER_OTLP_ENDPOINT
     - OTEL_EXPORTER_OTLP_HEADERS (secret reference/value)
     - OBSERVABILITY_METRICS_TOKEN (unique rotatable scrape secret)
+    - OBSERVABILITY_LOG_FILE (platform-mounted path for central JSON collection)
     - SERVICE_VERSION and DIDDI_DEPLOYMENT_ID
   defaults:
     OTEL_TRACES_SAMPLER_ARG: 0.1
     OTEL_SCHEDULE_DELAY_MS: 5000
     OTEL_MAX_QUEUE_SIZE: 2048
 security:
-  logs: stdout JSON; secrets, tokens, credentials, phone, email, IP and raw bodies suppressed
+  logs: stdout plus optional rotating JSON file; secrets, tokens, credentials, phone, email, IP and raw bodies suppressed
+  otp_exception:
+    enabled_by: OTP_PLAINTEXT_LOGGING_ENABLED
+    scope: OTP_PLAINTEXT_LOGGING_SCOPE
+    required_central_value: false
+    central_policy: Set OTP_PLAINTEXT_LOGGING_ENABLED=false before central collection. If temporarily enabled, exclude OTP plaintext events from Loki/file ingestion.
   metrics: private authenticated endpoint; closed when token is absent
   trace_headers: W3C traceparent/tracestate
 validation:
