@@ -113,7 +113,7 @@ class AuthService:
         # TODO: replace with real SMS delivery. This temporary exception is
         # disabled by OTP_PLAINTEXT_LOGGING_ENABLED=false before central log
         # collection is enabled. It must never be used for other secrets.
-        if settings.otp_plaintext_logging_enabled:
+        if settings.otp_plaintext_logging_enabled or settings.environment == "development":
             import logging
 
             logging.getLogger(__name__).warning(
