@@ -27,7 +27,7 @@ from fastapi import FastAPI
 from app_base.core.database import ping_db
 from app_base.core.redis import create_redis_pool
 from app_base.core.settings import settings
-from app_base.core.telemetry import register_worker
+from app_base.core.telemetry import register_worker, shutdown_telemetry
 from app_base.modules.notification.infra.sms import build_sms_provider
 from app_base.modules.payment.application.reconciliation import reconciliation_loop
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
@@ -133,4 +133,5 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         diddifiles: DiddiFilesClient = app.state.diddifiles  # type: ignore[assignment]
         await diddifiles.close()
         await app.state.redis.aclose()
+        shutdown_telemetry()
         logger.info("lifespan shutdown complete")
