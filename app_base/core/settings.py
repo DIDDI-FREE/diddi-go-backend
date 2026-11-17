@@ -38,16 +38,33 @@ class Settings(BaseSettings):
     # central platform must provide an address or secret.
     service_version: str = Field(default="0.1.0", validation_alias=AliasChoices("SERVICE_VERSION", "GIT_SHA"))
     service_instance_id: str | None = Field(default=None, validation_alias=AliasChoices("SERVICE_INSTANCE_ID"))
-    diddi_deployment_id: str = Field(default="diddigo-local", validation_alias=AliasChoices("DIDDI_DEPLOYMENT_ID"))
+    diddi_deployment_id: str = Field(
+        default="diddigo-local",
+        validation_alias=AliasChoices("DEPLOYMENT_ID", "DIDDI_DEPLOYMENT_ID"),
+    )
     diddi_component: str = Field(default="api", validation_alias=AliasChoices("DIDDI_COMPONENT"))
     observability_metrics_token: str | None = Field(
-        default=None, validation_alias=AliasChoices("OBSERVABILITY_METRICS_TOKEN")
+        default=None,
+        validation_alias=AliasChoices("METRICS_BEARER_TOKEN", "OBSERVABILITY_METRICS_TOKEN"),
     )
     otel_exporter_otlp_endpoint: str | None = Field(
         default=None, validation_alias=AliasChoices("OTEL_EXPORTER_OTLP_ENDPOINT")
     )
+    otel_exporter_otlp_logs_endpoint: str | None = Field(
+        default=None, validation_alias=AliasChoices("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT")
+    )
+    otel_logs_enabled: bool = Field(default=False, validation_alias=AliasChoices("OTEL_LOGS_ENABLED"))
     otel_exporter_otlp_headers: str | None = Field(
         default=None, validation_alias=AliasChoices("OTEL_EXPORTER_OTLP_HEADERS")
+    )
+    otel_exporter_otlp_ca_file: str | None = Field(
+        default=None, validation_alias=AliasChoices("OTEL_EXPORTER_OTLP_CA_FILE")
+    )
+    otel_exporter_otlp_client_certificate_file: str | None = Field(
+        default=None, validation_alias=AliasChoices("OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE_FILE")
+    )
+    otel_exporter_otlp_client_key_file: str | None = Field(
+        default=None, validation_alias=AliasChoices("OTEL_EXPORTER_OTLP_CLIENT_KEY_FILE")
     )
     otel_traces_sampler_arg: float = Field(
         default=0.1, ge=0, le=1, validation_alias=AliasChoices("OTEL_TRACES_SAMPLER_ARG")

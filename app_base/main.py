@@ -132,7 +132,7 @@ async def readiness(request: Request) -> Response:
 
 def _metrics_response(request: Request) -> Response:
     if not settings.observability_metrics_token:
-        return Response("metrics disabled\n", status_code=404, media_type="text/plain")
+        return Response("metrics not configured\n", status_code=503, media_type="text/plain")
     authorization = request.headers.get("authorization", "")
     supplied = authorization.removeprefix("Bearer ").strip()
     if not secrets.compare_digest(supplied, settings.observability_metrics_token):

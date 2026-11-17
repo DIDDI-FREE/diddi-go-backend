@@ -101,6 +101,18 @@ def test_metrics_endpoint_exposes_prometheus_text(monkeypatch) -> None:
     )
 
 
+def test_metrics_endpoint_requires_dedicated_bearer_token(monkeypatch) -> None:
+    monkeypatch.setattr("app_base.main.settings.observability_metrics_token", "test-token")
+    client = TestClient(app)
+    assert client.get("/metrics").status_code == 401
+    assert client.get("/metrics", headers={"Authorization": "Bearer wrong"}).status_code == 401
+
+
+def test_metrics_endpoint_is_closed_when_token_is_not_configured(monkeypatch) -> None:
+    monkeypatch.setattr("app_base.main.settings.observability_metrics_token", None)
+    assert TestClient(app).get("/metrics").status_code == 503
+
+
 def test_metrics_normalize_uuid_path_labels() -> None:
     assert normalize_path("/v1/rides/17dd4635-02fb-4775-8bf1-d3686a959f39") == "/v1/rides/:uuid"
 
