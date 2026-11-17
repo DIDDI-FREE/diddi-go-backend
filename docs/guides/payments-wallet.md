@@ -21,6 +21,28 @@ change pas la règle de paiement.
 
 ## Confirmation de retrait
 
+### Diagnostic D27 (17 novembre 2026)
+
+Un refus de schéma sur les routes de retrait produit le log structuré
+`withdrawal.request.validation_failed` : `request_id`, chemin, statut 422,
+utilisateur si déjà authentifié, champs concernés et types d'erreur.
+Exemple : `body.verification_id` / `missing` désigne un identifiant OTP absent.
+Les noms inconnus sont masqués ; ni valeurs saisies, ni OTP, ni numéro Mobile
+Money, ni corps complet, ni message de validateur personnalisé ne sont journalisés.
+La liste des violations journalisées est limitée à 20, avec leur nombre total.
+
+Les refus métier sont distingués par `withdrawal.request.rejected` et leur
+`error_code`. Le message `INVALID_WITHDRAWAL_AMOUNT` indique désormais aussi le
+minimum configuré en XOF ; `error.details.minimum_amount` reste la valeur structurée
+à afficher. Le seuil, le parcours OTP et le contrat de création ne changent pas.
+
+Avant de modifier le fonctionnement du retrait, refaire l'essai depuis le frontend
+et corréler la réponse complète avec son `request_id` et l'heure. Vérifier les cinq
+champs requis (`quote_id`, `beneficiary_reference`, `beneficiary_destination`,
+`verification_id`, `verification_code`) ainsi que le numéro au format international.
+Ne pas transmettre d'OTP, jeton d'accès ou numéro complet dans un compte rendu QA.
+Le code d'erreur de validation ne prouve pas une panne de DiddiPay.
+
 Le chauffeur peut choisir un numero Mobile Money de destination. Ce numero ne
 remplace pas le numero connu de son compte : DiddiGo envoie le code de
 confirmation au telephone du profil authentifie.

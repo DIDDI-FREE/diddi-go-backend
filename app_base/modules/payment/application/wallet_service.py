@@ -231,7 +231,7 @@ class DriverWalletService:
             raise ApiError(
                 422,
                 "INVALID_WITHDRAWAL_AMOUNT",
-                "Le montant doit etre un entier XOF superieur ou egal au minimum.",
+                f"Le montant doit etre un entier XOF superieur ou egal au minimum de {int(minimum)} XOF.",
                 {"minimum_amount": int(minimum), "currency": "XOF"},
             )
         if amount <= fees:
