@@ -114,11 +114,32 @@ def _configure_log_exporter(headers: dict[str, str]) -> None:
                 export_timeout_millis=int(settings.otel_export_timeout_seconds * 1000),
             )
         )
-        root = logging.getLogger()
-        if not any(isinstance(handler, OTelLogHandler) for handler in root.handlers):
-            root.addHandler(OTelLogHandler(_log_provider))
+        _install_otel_log_handler(_log_provider)
     except Exception:
         _log_provider = None
+
+
+def _install_otel_log_handler(provider) -> None:
+    """Route Uvicorn error records to OTLP exactly once.
+
+    Uvicorn's real logging configuration routes ``uvicorn.error`` through its
+    own logger hierarchy instead of the root logger. Installing on the root
+    logger therefore misses records in deployments using that configuration.
+    The marker also makes repeated startup/configuration calls idempotent.
+    """
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        if getattr(handler, "_diddigo_otel_handler", False):
+            root.removeHandler(handler)
+
+    uvicorn_error = logging.getLogger("uvicorn.error")
+    for handler in list(uvicorn_error.handlers):
+        if getattr(handler, "_diddigo_otel_handler", False):
+            uvicorn_error.removeHandler(handler)
+
+    handler = OTelLogHandler(provider)
+    handler._diddigo_otel_handler = True
+    uvicorn_error.addHandler(handler)
 
 
 class OTelLogHandler(logging.Handler):
