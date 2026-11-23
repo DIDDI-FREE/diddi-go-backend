@@ -70,6 +70,15 @@ Référence vérifiée : `http://diddi-rewards-staging.diddifree.com/openapi.jso
   comme différée.
 - Migration ajoutée : `c3d4e5f6a7b8`.
 
+### 2026-11-23 — Lot 5
+
+- Ajout d’une reprise administrative idempotente :
+  `POST /v1/admin/payments/rides/{ride_id}/reconcile-rewards`.
+- Cette route rejoue une confirmation ou une correction différée puis appelle
+  le rapprochement Rewards si une consommation existe.
+- L’outbox Redis/Streams reste à brancher pour publier les événements métier
+  durables (`ride.payment_confirmed`, `ride.refunded`, `ride.cancelled`).
+
 ## Décision de sécurité financière
 
 Le tarif DiddiGo original n’est pas encore remplacé par le montant réduit dans

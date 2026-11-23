@@ -561,6 +561,29 @@ class PaymentService:
         await self._reconcile_transaction(payment, report)
         return report
 
+    async def reconcile_rewards(self, ride_id: UUID) -> dict:
+        """Retry the Rewards confirmation/correction and report its state."""
+        ride = await self.ride_repo.find_by_id(ride_id)
+        payment = await self.payment_repo.find_by_ride_id(ride_id)
+        if ride is None or payment is None:
+            raise ApiError(404, ErrorCode.RIDE_NOT_FOUND, "Course ou paiement introuvable.")
+        await self._confirm_rewards_if_needed(ride, payment)
+        await self._correct_rewards_if_needed(ride, payment)
+        ride = await self.ride_repo.find_by_id(ride_id)
+        if ride is None:
+            raise ApiError(404, ErrorCode.RIDE_NOT_FOUND, "Course introuvable.")
+        if self.diddirewards is not None and ride.rewards_consumption_id is not None:
+            result = await self.diddirewards.reconciliation(
+                consumption_id=ride.rewards_consumption_id,
+                confirmed_discount_minor=int(ride.rewards_discount_amount or 0),
+                external_reference=str(ride.id),
+                details={"payment_status": payment.status.value, "payment_amount": int(payment.amount)},
+                idempotency_key=f"diddigo:ride:{ride.id}:rewards-reconciliation:v1",
+                request_id=str(ride.id),
+            )
+            return {"ride_id": str(ride.id), "rewards_status": ride.rewards_status, "reconciliation": result}
+        return {"ride_id": str(ride.id), "rewards_status": ride.rewards_status, "reconciliation": None}
+
     async def reconcile_topup(self, topup_id: UUID) -> ReconciliationReport:
         """Reconcile a single driver topup on demand (admin repair path)."""
         report = ReconciliationReport()

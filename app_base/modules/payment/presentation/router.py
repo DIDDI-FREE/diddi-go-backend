@@ -380,6 +380,18 @@ async def reconcile_ride_payment(
     return report.as_dict()
 
 
+@admin_payment_router.post("/rides/{ride_id}/reconcile-rewards")
+async def reconcile_ride_rewards(
+    ride_id: UUID,
+    service: PaymentService = Depends(payment_service),
+    session: AsyncSession = Depends(session_dep),
+    _current_user: UserModel = Depends(require_role("admin")),
+) -> dict:
+    result = await service.reconcile_rewards(ride_id)
+    await session.commit()
+    return result
+
+
 @admin_payment_router.post("/topups/{topup_id}/reconcile")
 async def reconcile_driver_topup(
     topup_id: UUID,
