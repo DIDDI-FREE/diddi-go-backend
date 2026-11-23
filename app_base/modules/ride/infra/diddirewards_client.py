@@ -1,0 +1,136 @@
+"""DiddiRewards adapter for the explicit DiddiGo integration contract."""
+
+from __future__ import annotations
+
+import asyncio
+import time
+from dataclasses import dataclass, field
+from typing import Any
+from uuid import UUID
+
+import httpx
+
+from app_base.core.error_codes import ErrorCode
+from app_base.core.errors import ApiError
+from app_base.core.settings import settings
+
+
+@dataclass
+class DiddiRewardsClient:
+    base_url: str | None = settings.diddi_rewards_base_url
+    client_id: str = settings.diddi_rewards_client_id
+    service_token: str | None = settings.diddi_rewards_service_token
+    client_secret: str | None = settings.diddi_rewards_service_client_secret
+    identity_base_url: str | None = settings.identity_base_url
+    timeout_seconds: float = settings.diddi_rewards_timeout_seconds
+    transport: httpx.AsyncBaseTransport | None = None
+    _token: tuple[str, float] | None = field(default=None, init=False, repr=False)
+    _token_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.base_url and (self.service_token or (self.identity_base_url and self.client_secret)))
+
+    async def quote(
+        self, *, consumer_id: UUID, campaign_id: str, amount_initial_minor: int, request_id: str
+    ) -> dict[str, Any]:
+        return await self._post(
+            "/internal/v1/rewards/integrations/diddigo/benefits/quote",
+            {
+                "consumer_id": str(consumer_id),
+                "campaign_id": campaign_id,
+                "service_code": "go",
+                "amount_initial_minor": amount_initial_minor,
+                "currency": "XOF",
+            },
+            request_id=request_id,
+        )
+
+    async def reserve(
+        self,
+        *,
+        consumer_id: UUID,
+        entitlement_id: UUID,
+        ride_id: UUID,
+        requested_amount_minor: int,
+        idempotency_key: str,
+        request_id: str,
+        expires_at: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "consumer_id": str(consumer_id),
+            "entitlement_id": str(entitlement_id),
+            "ride_id": str(ride_id),
+            "requested_amount_minor": requested_amount_minor,
+        }
+        if expires_at:
+            payload["expires_at"] = expires_at
+        return await self._post(
+            "/internal/v1/rewards/integrations/diddigo/benefits/reserve",
+            payload,
+            request_id=request_id,
+            idempotency_key=idempotency_key,
+        )
+
+    async def _post(
+        self,
+        path: str,
+        payload: dict[str, Any],
+        *,
+        request_id: str,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        if not self.configured:
+            raise ApiError(503, ErrorCode.PAYMENT_CONFIGURATION_MISSING, "DiddiRewards n'est pas configure.")
+        headers = await self._headers()
+        headers.update({"X-Request-ID": request_id, "Content-Type": "application/json"})
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout_seconds, transport=self.transport) as client:
+                response = await client.post(f"{self.base_url.rstrip('/')}{path}", json=payload, headers=headers)
+        except httpx.HTTPError as exc:
+            raise ApiError(503, "REWARDS_UNAVAILABLE", "DiddiRewards est indisponible.") from exc
+        if response.status_code >= 400:
+            try:
+                body = response.json()
+            except ValueError:
+                body = {"raw": response.text[:500]}
+            raise ApiError(response.status_code, "REWARDS_OPERATION_FAILED", "DiddiRewards a refuse l'operation.", body)
+        return response.json()
+
+    async def _headers(self) -> dict[str, str]:
+        token = self.service_token
+        if not token and self.identity_base_url and self.client_secret:
+            now = time.monotonic()
+            if self._token and now < self._token[1]:
+                token = self._token[0]
+            else:
+                async with self._token_lock:
+                    now = time.monotonic()
+                    if self._token and now < self._token[1]:
+                        token = self._token[0]
+                    else:
+                        async with httpx.AsyncClient(
+                            base_url=self.identity_base_url.rstrip("/"),
+                            timeout=self.timeout_seconds,
+                            transport=self.transport,
+                        ) as client:
+                            response = await client.post(
+                                "/identity/v1/auth/service/token",
+                                headers={"X-Client-ID": self.client_id},
+                                data={
+                                    "grant_type": "client_credentials",
+                                    "client_id": self.client_id,
+                                    "client_secret": self.client_secret,
+                                    "audience": "diddirewards",
+                                    "scope": "diddirewards:benefits:write",
+                                },
+                            )
+                            response.raise_for_status()
+                            data = response.json()
+                        token = str(data["access_token"])
+                        self._token = (token, time.monotonic() + max(int(data.get("expires_in", 600)) - 30, 1))
+        if not token:
+            raise ApiError(503, ErrorCode.PAYMENT_CONFIGURATION_MISSING, "Identifiants DiddiRewards absents.")
+        return {"Authorization": f"Bearer {token}", "X-Client-ID": self.client_id}

@@ -68,6 +68,7 @@ from app_base.modules.ride.infra.capability_projection_repository import (
     SqlAlchemyDriverCapabilityProjectionRepository,
 )
 from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
+from app_base.modules.ride.infra.diddirewards_client import DiddiRewardsClient
 from app_base.modules.ride.infra.dispatch_config_store import SqlAlchemyDispatchConfigStore
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.infra.identity_capability_client import IdentityCapabilityClient
@@ -141,6 +142,14 @@ def get_diddifiles(request: Request) -> DiddiFilesClient:
     client: DiddiFilesClient | None = getattr(request.app.state, "diddifiles", None)
     if client is None:
         raise RuntimeError("DiddiFiles client not initialized — lifespan may not have run.")
+    return client
+
+
+def get_diddirewards(request: Request) -> DiddiRewardsClient:
+    """FastAPI dependency for the optional DiddiRewards adapter."""
+    client: DiddiRewardsClient | None = getattr(request.app.state, "diddirewards", None)
+    if client is None:
+        raise RuntimeError("DiddiRewards client not initialized — lifespan may not have run.")
     return client
 
 
@@ -324,6 +333,7 @@ async def ride_service(
     priority_ledger_repo_dep: SqlAlchemyPriorityLedgerRepository = Depends(priority_ledger_repo),
     config_store: SqlAlchemyDispatchConfigStore = Depends(dispatch_config_store),
     payment_repo_dep: SqlAlchemyPaymentRepository = Depends(payment_repo),
+    diddirewards: DiddiRewardsClient = Depends(get_diddirewards),
 ) -> RideService:
     return RideService(
         ride_repo=ride_repo_dep,
@@ -339,6 +349,7 @@ async def ride_service(
         diddifiles=diddifiles,
         priority_ledger=PriorityLedger(priority_ledger_repo_dep, await config_store.load()),
         payment_repo=payment_repo_dep,
+        diddirewards=diddirewards,
     )
 
 

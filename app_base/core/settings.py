@@ -175,6 +175,20 @@ class Settings(BaseSettings):
     diddipay_service_client_secret: str | None = None
     diddipay_callback_secret: str | None = None
     diddipay_http_timeout_seconds: float = 15.0
+    # DiddiRewards adapter. The central team supplies the URL and S2S secret.
+    diddi_rewards_base_url: str | None = Field(default=None, validation_alias=AliasChoices("DIDDI_REWARDS_BASE_URL"))
+    diddi_rewards_client_id: str = Field(default="diddigo", validation_alias=AliasChoices("DIDDI_REWARDS_CLIENT_ID"))
+    diddi_rewards_service_token: str | None = Field(
+        default=None, validation_alias=AliasChoices("DIDDI_REWARDS_SERVICE_TOKEN")
+    )
+    diddi_rewards_service_client_secret: str | None = Field(
+        default=None, validation_alias=AliasChoices("DIDDI_REWARDS_SERVICE_CLIENT_SECRET")
+    )
+    diddi_rewards_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
+    diddi_rewards_enabled: bool = Field(default=False, validation_alias=AliasChoices("DIDDI_REWARDS_ENABLED"))
+    diddi_rewards_campaign_id: str | None = Field(
+        default=None, validation_alias=AliasChoices("DIDDI_REWARDS_CAMPAIGN_ID")
+    )
     diddigo_payment_callback_url: str | None = None
     diddigo_consumer_return_url: str | None = None
     diddigo_pro_return_url: str | None = None

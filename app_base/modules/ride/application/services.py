@@ -45,6 +45,7 @@ from app_base.modules.ride.domain.interfaces import (
     VehicleRepository,
 )
 from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
+from app_base.modules.ride.infra.diddirewards_client import DiddiRewardsClient
 from app_base.shared_kernel.contracts.routing import MapProvider, TraceProvider
 from app_base.shared_kernel.types import GeoPoint
 
@@ -101,6 +102,7 @@ class RideService:
     diddifiles: DiddiFilesClient | None = None
     priority_ledger: PriorityLedger | None = None
     payment_repo: PaymentRepository | None = None
+    diddirewards: DiddiRewardsClient | None = None
 
     async def _record_priority_outcome(self, ride: Ride) -> None:
         """Append the terminal-ride priority fact (SCRUM-63). No-op unless a
@@ -151,6 +153,8 @@ class RideService:
         dropoff_address: str | None,
         vehicle_category: str,
         comfort_level: str,
+        campaign_id: str | None = None,
+        request_id: str | None = None,
     ) -> dict:
         if self.quote_repo is None:
             raise ApiError(503, "QUOTE_STORE_UNAVAILABLE", "Le service de devis est indisponible.")
@@ -188,12 +192,21 @@ class RideService:
             pickup_address_present=bool(quote.pickup_address),
             dropoff_address_present=bool(quote.dropoff_address),
         )
-        return {
+        response = {
             **estimate,
             "quote_id": str(quote.id),
             "tariff_version": quote.tariff_version,
             "expires_at": iso_utc(quote.expires_at),
         }
+        if campaign_id and settings.diddi_rewards_enabled and self.diddirewards is not None:
+            rewards_quote = await self.diddirewards.quote(
+                consumer_id=passenger_user_id,
+                campaign_id=campaign_id,
+                amount_initial_minor=int(quote.estimated_fare),
+                request_id=request_id or str(quote.id),
+            )
+            response["rewards"] = rewards_quote
+        return response
 
     async def request_ride(
         self,

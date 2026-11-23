@@ -32,6 +32,7 @@ class PricingEstimateRequest(BaseModel):
     dropoff: PointPayload
     vehicle_category: str = Field(default="standard")
     comfort_level: str = Field(default="standard")
+    campaign_id: str | None = Field(default=None, min_length=1, max_length=120)
 
 
 class RideCreateRequest(BaseModel):

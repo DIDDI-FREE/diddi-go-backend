@@ -17,7 +17,7 @@ import asyncio
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 
 from app_base.core.auth_deps import get_current_user, require_business_driver
 from app_base.core.database import async_session_factory
@@ -175,6 +175,7 @@ async def estimate_pricing(
     payload: PricingEstimateRequest,
     service: RideService = Depends(ride_service),
     current_user: UserModel = Depends(get_current_user),
+    request_id: str | None = Header(default=None, alias="X-Request-ID"),
 ) -> dict:
     pickup = GeoPoint(lat=payload.pickup.lat, lng=payload.pickup.lng)
     dropoff = GeoPoint(lat=payload.dropoff.lat, lng=payload.dropoff.lng)
@@ -186,6 +187,8 @@ async def estimate_pricing(
         dropoff_address=payload.dropoff.address,
         vehicle_category=payload.vehicle_category,
         comfort_level=payload.comfort_level,
+        campaign_id=payload.campaign_id,
+        request_id=request_id,
     )
 
 
