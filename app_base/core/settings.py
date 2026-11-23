@@ -189,6 +189,16 @@ class Settings(BaseSettings):
     diddi_rewards_campaign_id: str | None = Field(
         default=None, validation_alias=AliasChoices("DIDDI_REWARDS_CAMPAIGN_ID")
     )
+    diddi_rewards_events_redis_url: str | None = Field(
+        default=None, validation_alias=AliasChoices("DIDDI_REWARDS_EVENTS_REDIS_URL")
+    )
+    diddi_rewards_events_stream: str = Field(
+        default="diddigo.events.v1", validation_alias=AliasChoices("DIDDI_REWARDS_EVENTS_STREAM")
+    )
+    diddi_rewards_events_delivery_interval_seconds: int = Field(default=5, ge=1, le=300)
+    diddi_rewards_events_batch_size: int = Field(default=100, ge=1, le=500)
+    diddi_rewards_events_retry_base_seconds: int = Field(default=5, ge=1, le=300)
+    diddi_rewards_events_retry_max_seconds: int = Field(default=300, ge=5, le=86400)
     diddigo_payment_callback_url: str | None = None
     diddigo_consumer_return_url: str | None = None
     diddigo_pro_return_url: str | None = None

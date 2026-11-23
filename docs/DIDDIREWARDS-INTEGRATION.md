@@ -26,6 +26,8 @@ DIDDI_REWARDS_SERVICE_CLIENT_SECRET=
 DIDDI_REWARDS_TIMEOUT_SECONDS=5
 DIDDI_REWARDS_ENABLED=false
 DIDDI_REWARDS_CAMPAIGN_ID=
+DIDDI_REWARDS_EVENTS_REDIS_URL=
+DIDDI_REWARDS_EVENTS_STREAM=diddigo.events.v1
 ```
 
 Le token direct est prioritaire. À défaut, le client peut obtenir un token
@@ -41,3 +43,12 @@ S2S via DiddiFreeID avec `DIDDI_REWARDS_SERVICE_CLIENT_SECRET`.
 
 La création et la gestion des campagnes restent de la responsabilité de
 DiddiAdmin. DiddiGo ne lit pas la base DiddiRewards.
+
+## Événements
+
+DiddiGo écrit d’abord les faits dans une outbox SQL transactionnelle, puis le
+worker `rewards-events` les publie dans Redis Streams. Les événements sont
+dédupliqués par `event_id` et réessayés avec un backoff borné.
+
+L’équipe centrale doit fournir `DIDDI_REWARDS_EVENTS_REDIS_URL` si le stream
+Rewards n’est pas sur le Redis applicatif DiddiGo.

@@ -30,6 +30,7 @@ from app_base.core.settings import settings
 from app_base.core.telemetry import register_worker, shutdown_telemetry
 from app_base.modules.notification.infra.sms import build_sms_provider
 from app_base.modules.payment.application.reconciliation import reconciliation_loop
+from app_base.modules.payment.application.rewards_events import rewards_events_loop
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.ride.application.capability_projection_worker import capability_projection_loop
 from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
@@ -99,6 +100,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             name="payment-reconciliation",
         )
 
+    app.state.rewards_events_task = asyncio.create_task(
+        rewards_events_loop(app.state.redis),
+        name="rewards-events",
+    )
+    register_worker("rewards-events", True)
+
     app.state.capability_projection_task = None
     register_worker("capability-projection", settings.capability_projection_enabled)
     if settings.capability_projection_enabled:
@@ -117,6 +124,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        rewards_task: asyncio.Task | None = app.state.rewards_events_task
+        if rewards_task is not None:
+            rewards_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await rewards_task
         capability_task: asyncio.Task | None = app.state.capability_projection_task
         if capability_task is not None:
             capability_task.cancel()

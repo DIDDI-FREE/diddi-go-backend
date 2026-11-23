@@ -326,6 +326,40 @@ class SqlAlchemyPaymentRepository:
         await self._session.flush()
         return event_id
 
+    async def list_due_rewards_events(self, *, now: datetime, limit: int) -> list[orm.RewardsEventOutboxModel]:
+        result = await self._session.execute(
+            select(orm.RewardsEventOutboxModel)
+            .where(
+                orm.RewardsEventOutboxModel.status.in_(["pending", "retry"]),
+                orm.RewardsEventOutboxModel.next_attempt_at <= now,
+            )
+            .order_by(orm.RewardsEventOutboxModel.next_attempt_at)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        return list(result.scalars().all())
+
+    async def mark_rewards_event_delivered(self, event: orm.RewardsEventOutboxModel, *, now: datetime) -> None:
+        event.status = "delivered"
+        event.attempts += 1
+        event.delivered_at = now
+        event.last_error = None
+        await self._session.flush()
+
+    async def mark_rewards_event_retry(
+        self,
+        event: orm.RewardsEventOutboxModel,
+        *,
+        now: datetime,
+        next_attempt_at: datetime,
+        error: str,
+    ) -> None:
+        event.status = "retry"
+        event.attempts += 1
+        event.next_attempt_at = next_attempt_at
+        event.last_error = error[:2000]
+        await self._session.flush()
+
     async def get_or_create_wallet(self, driver_id: UUID, *, currency: str = "XOF") -> DriverWallet:
         result = await self._session.execute(
             select(orm.DriverWalletModel).where(orm.DriverWalletModel.driver_id == driver_id),

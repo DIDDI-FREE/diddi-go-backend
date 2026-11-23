@@ -25,7 +25,7 @@ Référence vérifiée : `http://diddi-rewards-staging.diddifree.com/openapi.jso
 | 2 | Persistance de l’entitlement et réservation liée à `ride_id` | Terminé dans ce lot |
 | 3 | Calcul du montant client réduit et cohérence DiddiPay | Terminé dans ce lot |
 | 4 | Confirmation Rewards après paiement confirmé | Terminé dans ce lot |
-| 5 | Outbox `ride.payment_confirmed`, `ride.refunded`, `ride.cancelled` | Outbox SQL terminée, livraison Streams à faire |
+| 5 | Outbox `ride.payment_confirmed`, `ride.refunded`, `ride.cancelled` | Terminé |
 | 6 | Corrections de remboursement et rapprochement | Correction HTTP implémentée, rapprochement à faire |
 | 7 | Tests staging et validation DiddiRewards/Loki/Tempo | À faire |
 
@@ -88,6 +88,16 @@ Référence vérifiée : `http://diddi-rewards-staging.diddifree.com/openapi.jso
   `ride.cancelled`.
 - La livraison vers Redis Streams reste découplée et pourra être reprise sans
   rejouer le paiement.
+
+### 2026-11-23 — Lot 7
+
+- Ajout du worker `rewards-events`.
+- Livraison vers le stream configurable `diddigo.events.v1`.
+- Backoff borné et reprise des événements `pending`/`retry`.
+- Marquage `delivered` après écriture Redis réussie.
+- Le worker est lancé et arrêté proprement par le lifespan DiddiGo.
+- La plateforme centrale doit encore confirmer que l’URL Redis configurée est
+  bien celle attendue par DiddiRewards.
 
 ## Décision de sécurité financière
 
