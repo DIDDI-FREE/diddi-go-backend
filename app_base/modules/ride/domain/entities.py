@@ -204,6 +204,12 @@ class Ride:
     trace_usable_points_count: int | None = None
     payment_method: PaymentMethod = PaymentMethod.CASH
     quote_id: UUID | None = None
+    rewards_campaign_id: str | None = None
+    rewards_entitlement_id: UUID | None = None
+    rewards_campaign_version_id: UUID | None = None
+    rewards_discount_amount: Decimal | None = None
+    rewards_reservation_id: UUID | None = None
+    rewards_status: str | None = None
     start_code_hash: str | None = None
     start_code_attempts: int = 0
     start_code_blocked_at: datetime | None = None
@@ -429,6 +435,12 @@ class RideQuote:
     dropoff_address: str | None = None
     consumed_at: datetime | None = None
     ride_id: UUID | None = None
+    rewards_campaign_id: str | None = None
+    rewards_entitlement_id: UUID | None = None
+    rewards_campaign_version_id: UUID | None = None
+    rewards_discount_amount: Decimal | None = None
+    rewards_final_amount: Decimal | None = None
+    rewards_reason: str | None = None
     created_at: datetime | None = None
 
     @staticmethod

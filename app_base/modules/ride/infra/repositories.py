@@ -667,6 +667,12 @@ class SqlAlchemyRideRepository:
         row.trace_usable_points_count = ride.trace_usable_points_count
         row.payment_method = ride.payment_method.value
         row.quote_id = ride.quote_id
+        row.rewards_campaign_id = ride.rewards_campaign_id
+        row.rewards_entitlement_id = ride.rewards_entitlement_id
+        row.rewards_campaign_version_id = ride.rewards_campaign_version_id
+        row.rewards_discount_amount = ride.rewards_discount_amount
+        row.rewards_reservation_id = ride.rewards_reservation_id
+        row.rewards_status = ride.rewards_status
         row.start_code_hash = ride.start_code_hash
         row.start_code_attempts = ride.start_code_attempts
         row.start_code_blocked_at = ride.start_code_blocked_at
@@ -745,6 +751,14 @@ class SqlAlchemyRideRepository:
             trace_usable_points_count=row.trace_usable_points_count,
             payment_method=PaymentMethod(row.payment_method),
             quote_id=row.quote_id,
+            rewards_campaign_id=row.rewards_campaign_id,
+            rewards_entitlement_id=row.rewards_entitlement_id,
+            rewards_campaign_version_id=row.rewards_campaign_version_id,
+            rewards_discount_amount=Decimal(str(row.rewards_discount_amount))
+            if row.rewards_discount_amount is not None
+            else None,
+            rewards_reservation_id=row.rewards_reservation_id,
+            rewards_status=row.rewards_status,
             start_code_hash=row.start_code_hash,
             start_code_attempts=row.start_code_attempts,
             start_code_blocked_at=row.start_code_blocked_at,
@@ -793,6 +807,12 @@ class SqlAlchemyRideQuoteRepository:
             expires_at=quote.expires_at,
             consumed_at=quote.consumed_at,
             ride_id=quote.ride_id,
+            rewards_campaign_id=quote.rewards_campaign_id,
+            rewards_entitlement_id=quote.rewards_entitlement_id,
+            rewards_campaign_version_id=quote.rewards_campaign_version_id,
+            rewards_discount_amount=quote.rewards_discount_amount,
+            rewards_final_amount=quote.rewards_final_amount,
+            rewards_reason=quote.rewards_reason,
         )
         self._session.add(row)
         await self._session.flush()
@@ -855,6 +875,16 @@ class SqlAlchemyRideQuoteRepository:
             expires_at=row.expires_at,
             consumed_at=row.consumed_at,
             ride_id=row.ride_id,
+            rewards_campaign_id=row.rewards_campaign_id,
+            rewards_entitlement_id=row.rewards_entitlement_id,
+            rewards_campaign_version_id=row.rewards_campaign_version_id,
+            rewards_discount_amount=Decimal(str(row.rewards_discount_amount))
+            if row.rewards_discount_amount is not None
+            else None,
+            rewards_final_amount=Decimal(str(row.rewards_final_amount))
+            if row.rewards_final_amount is not None
+            else None,
+            rewards_reason=row.rewards_reason,
             created_at=row.created_at,
         )
 

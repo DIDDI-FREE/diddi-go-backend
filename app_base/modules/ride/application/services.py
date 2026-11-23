@@ -186,6 +186,19 @@ class RideService:
             expires_at=now + timedelta(seconds=settings.ride_quote_ttl_seconds),
             created_at=now,
         )
+        if campaign_id and settings.diddi_rewards_enabled and self.diddirewards is not None:
+            rewards_quote = await self.diddirewards.quote(
+                consumer_id=passenger_user_id,
+                campaign_id=campaign_id,
+                amount_initial_minor=int(quote.estimated_fare),
+                request_id=request_id or str(quote.id),
+            )
+            quote.rewards_campaign_id = campaign_id
+            quote.rewards_entitlement_id = _required_uuid(rewards_quote, "entitlement_id")
+            quote.rewards_campaign_version_id = _optional_uuid(rewards_quote, "campaign_version_id")
+            quote.rewards_discount_amount = _money_value(rewards_quote, "discount_amount_minor")
+            quote.rewards_final_amount = _money_value(rewards_quote, "final_amount_minor")
+            quote.rewards_reason = str(rewards_quote.get("reason") or "") or None
         await self.quote_repo.save(quote)
         log_event(
             "ride.quote.addresses", quote_id=quote.id,
@@ -198,14 +211,18 @@ class RideService:
             "tariff_version": quote.tariff_version,
             "expires_at": iso_utc(quote.expires_at),
         }
-        if campaign_id and settings.diddi_rewards_enabled and self.diddirewards is not None:
-            rewards_quote = await self.diddirewards.quote(
-                consumer_id=passenger_user_id,
-                campaign_id=campaign_id,
-                amount_initial_minor=int(quote.estimated_fare),
-                request_id=request_id or str(quote.id),
-            )
-            response["rewards"] = rewards_quote
+        if quote.rewards_entitlement_id is not None:
+            response["rewards"] = {
+                "eligible": quote.rewards_discount_amount is not None and quote.rewards_discount_amount > 0,
+                "entitlement_id": str(quote.rewards_entitlement_id),
+                "campaign_version_id": str(quote.rewards_campaign_version_id)
+                if quote.rewards_campaign_version_id
+                else None,
+                "discount_amount_minor": int(quote.rewards_discount_amount or 0),
+                "final_amount_minor": int(quote.rewards_final_amount or quote.estimated_fare),
+                "currency": "XOF",
+                "reason": quote.rewards_reason,
+            }
         return response
 
     async def request_ride(
@@ -261,10 +278,33 @@ class RideService:
             driver_payout_estimate=quote.driver_payout_estimate,
             payment_method=method,
             quote_id=quote.id,
+            rewards_campaign_id=quote.rewards_campaign_id,
+            rewards_entitlement_id=quote.rewards_entitlement_id,
+            rewards_campaign_version_id=quote.rewards_campaign_version_id,
+            rewards_discount_amount=quote.rewards_discount_amount,
+            rewards_status="quoted" if quote.rewards_entitlement_id else None,
             requested_at=now,
         )
         await self.ride_repo.save(ride)
         await self.quote_repo.consume(quote, ride_id=ride.id, consumed_at=now)
+        if (
+            self.diddirewards is not None
+            and settings.diddi_rewards_enabled
+            and ride.rewards_entitlement_id is not None
+            and ride.rewards_discount_amount is not None
+            and ride.rewards_discount_amount > 0
+        ):
+            reservation = await self.diddirewards.reserve(
+                consumer_id=passenger_user_id,
+                entitlement_id=ride.rewards_entitlement_id,
+                ride_id=ride.id,
+                requested_amount_minor=int(ride.rewards_discount_amount),
+                idempotency_key=f"diddigo:ride:{ride.id}:rewards-reserve:v1",
+                request_id=str(ride.id),
+            )
+            ride.rewards_reservation_id = _required_uuid(reservation, "reservation_id")
+            ride.rewards_status = "reserved"
+            await self.ride_repo.save(ride)
         for transition in ride.status_history:
             await self.ride_repo.record_status_transition(transition)
         log_event(
@@ -1556,6 +1596,37 @@ def _waiting_payload(ride: Ride) -> dict:
 
 def _clean_address(address: str | None) -> str | None:
     return (address.strip() or None) if address is not None else None
+
+
+def _required_uuid(payload: dict, field: str) -> UUID:
+    value = payload.get(field)
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError) as exc:
+        raise ApiError(502, "REWARDS_INVALID_RESPONSE", f"DiddiRewards n'a pas fourni {field}.") from exc
+
+
+def _optional_uuid(payload: dict, field: str) -> UUID | None:
+    value = payload.get(field)
+    if value is None:
+        return None
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError) as exc:
+        raise ApiError(502, "REWARDS_INVALID_RESPONSE", f"DiddiRewards a fourni {field} invalide.") from exc
+
+
+def _money_value(payload: dict, field: str) -> Decimal | None:
+    value = payload.get(field)
+    if value is None:
+        return None
+    try:
+        amount = Decimal(str(value))
+    except Exception as exc:
+        raise ApiError(502, "REWARDS_INVALID_RESPONSE", f"DiddiRewards a fourni {field} invalide.") from exc
+    if amount < 0:
+        raise ApiError(502, "REWARDS_INVALID_RESPONSE", f"DiddiRewards a fourni {field} negatif.")
+    return amount
 
 
 def _point_payload(point: GeoPoint | None, address: str | None) -> dict:
