@@ -209,6 +209,7 @@ class Ride:
     rewards_campaign_version_id: UUID | None = None
     rewards_discount_amount: Decimal | None = None
     rewards_reservation_id: UUID | None = None
+    rewards_consumption_id: UUID | None = None
     rewards_status: str | None = None
     start_code_hash: str | None = None
     start_code_attempts: int = 0

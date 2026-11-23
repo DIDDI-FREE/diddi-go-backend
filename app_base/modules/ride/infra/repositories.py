@@ -672,6 +672,7 @@ class SqlAlchemyRideRepository:
         row.rewards_campaign_version_id = ride.rewards_campaign_version_id
         row.rewards_discount_amount = ride.rewards_discount_amount
         row.rewards_reservation_id = ride.rewards_reservation_id
+        row.rewards_consumption_id = ride.rewards_consumption_id
         row.rewards_status = ride.rewards_status
         row.start_code_hash = ride.start_code_hash
         row.start_code_attempts = ride.start_code_attempts
@@ -758,6 +759,7 @@ class SqlAlchemyRideRepository:
             if row.rewards_discount_amount is not None
             else None,
             rewards_reservation_id=row.rewards_reservation_id,
+            rewards_consumption_id=row.rewards_consumption_id,
             rewards_status=row.rewards_status,
             start_code_hash=row.start_code_hash,
             start_code_attempts=row.start_code_attempts,

@@ -786,6 +786,7 @@ class PaymentService:
         if ride is not None:
             await self._record_ride_settlement(ride, payment.status)
             await self._confirm_rewards_if_needed(ride, payment)
+            await self._correct_rewards_if_needed(ride, payment)
         return payment
 
     async def _confirm_rewards_if_needed(self, ride, payment) -> None:
@@ -816,7 +817,37 @@ class PaymentService:
         if not result.get("consumption_id"):
             log_event("rewards.confirmation.deferred", level="error", ride_id=ride.id, reason="missing_consumption_id")
             return
+        ride.rewards_consumption_id = UUID(str(result["consumption_id"]))
         ride.rewards_status = "confirmed"
+        await self.ride_repo.save(ride)
+
+    async def _correct_rewards_if_needed(self, ride, payment) -> None:
+        if (
+            self.diddirewards is None
+            or ride.rewards_status not in {"confirmed", "correction_deferred"}
+            or ride.rewards_consumption_id is None
+            or payment.status not in {PaymentStatus.REFUNDED, PaymentStatus.PARTIALLY_REFUNDED, PaymentStatus.CANCELLED}
+        ):
+            return
+        try:
+            result = await self.diddirewards.correct(
+                consumption_id=ride.rewards_consumption_id,
+                amount_minor=int(ride.rewards_discount_amount or 0),
+                reason=payment.status.value,
+                payment_reference=str(payment.payment_intent_id or payment.business_reference or payment.id),
+                idempotency_key=f"diddigo:ride:{ride.id}:rewards-correct:v1",
+                request_id=str(ride.id),
+            )
+        except Exception:
+            logger.exception("rewards correction deferred ride_id=%s", ride.id)
+            ride.rewards_status = "correction_deferred"
+            await self.ride_repo.save(ride)
+            log_event("rewards.correction.deferred", level="error", ride_id=ride.id)
+            return
+        if not result.get("correction_id"):
+            log_event("rewards.correction.deferred", level="error", ride_id=ride.id, reason="missing_correction_id")
+            return
+        ride.rewards_status = "corrected"
         await self.ride_repo.save(ride)
 
     async def _apply_topup_status(

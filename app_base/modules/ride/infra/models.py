@@ -266,6 +266,7 @@ class RideModel(Base):
     rewards_campaign_version_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     rewards_discount_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     rewards_reservation_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    rewards_consumption_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     rewards_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
     start_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     start_code_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

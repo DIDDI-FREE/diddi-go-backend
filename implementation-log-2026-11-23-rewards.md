@@ -26,7 +26,7 @@ Référence vérifiée : `http://diddi-rewards-staging.diddifree.com/openapi.jso
 | 3 | Calcul du montant client réduit et cohérence DiddiPay | Terminé dans ce lot |
 | 4 | Confirmation Rewards après paiement confirmé | Terminé dans ce lot |
 | 5 | Outbox `ride.payment_confirmed`, `ride.refunded`, `ride.cancelled` | À faire |
-| 6 | Corrections de remboursement et rapprochement | À faire |
+| 6 | Corrections de remboursement et rapprochement | Correction HTTP implémentée, rapprochement à faire |
 | 7 | Tests staging et validation DiddiRewards/Loki/Tempo | À faire |
 
 ## Journal des changements
@@ -60,6 +60,15 @@ Référence vérifiée : `http://diddi-rewards-staging.diddifree.com/openapi.jso
 - La confirmation est idempotente et le statut local passe à `confirmed`.
 - Une panne Rewards ne bloque pas le paiement : la confirmation est journalisée
   comme différée et reste à reprendre par le worker de rapprochement.
+
+### 2026-11-23 — Lot 4
+
+- Ajout des appels Rewards `correct` et `reconciliation` dans le client S2S.
+- Persistance de `consumption_id` sur la course.
+- Après un remboursement DiddiPay, DiddiGo tente une correction append-only.
+- Une panne Rewards laisse le remboursement local intact et marque la correction
+  comme différée.
+- Migration ajoutée : `c3d4e5f6a7b8`.
 
 ## Décision de sécurité financière
 

@@ -100,6 +100,50 @@ class DiddiRewardsClient:
             idempotency_key=idempotency_key,
         )
 
+    async def correct(
+        self,
+        *,
+        consumption_id: UUID,
+        amount_minor: int,
+        reason: str,
+        payment_reference: str | None,
+        idempotency_key: str,
+        request_id: str,
+    ) -> dict[str, Any]:
+        return await self._post(
+            "/internal/v1/rewards/integrations/diddigo/benefits/correct",
+            {
+                "consumption_id": str(consumption_id),
+                "amount_minor": amount_minor,
+                "reason": reason,
+                "payment_reference": payment_reference,
+            },
+            request_id=request_id,
+            idempotency_key=idempotency_key,
+        )
+
+    async def reconciliation(
+        self,
+        *,
+        consumption_id: UUID,
+        confirmed_discount_minor: int,
+        external_reference: str | None,
+        details: dict[str, Any] | None,
+        idempotency_key: str,
+        request_id: str,
+    ) -> dict[str, Any]:
+        return await self._post(
+            "/internal/v1/rewards/integrations/diddigo/reconciliation",
+            {
+                "consumption_id": str(consumption_id),
+                "confirmed_discount_minor": confirmed_discount_minor,
+                "external_reference": external_reference,
+                "details": details or {},
+            },
+            request_id=request_id,
+            idempotency_key=idempotency_key,
+        )
+
     async def _post(
         self,
         path: str,
