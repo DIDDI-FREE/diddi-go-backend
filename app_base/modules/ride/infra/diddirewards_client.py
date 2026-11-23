@@ -72,6 +72,34 @@ class DiddiRewardsClient:
             idempotency_key=idempotency_key,
         )
 
+    async def confirm(
+        self,
+        *,
+        reservation_id: UUID,
+        ride_id: UUID,
+        applied_discount_minor: int,
+        client_paid_minor: int,
+        driver_payout_minor: int,
+        diddi_contribution_minor: int,
+        payment_reference: str | None,
+        idempotency_key: str,
+        request_id: str,
+    ) -> dict[str, Any]:
+        return await self._post(
+            "/internal/v1/rewards/integrations/diddigo/benefits/confirm",
+            {
+                "reservation_id": str(reservation_id),
+                "ride_id": str(ride_id),
+                "applied_discount_minor": applied_discount_minor,
+                "client_paid_minor": client_paid_minor,
+                "driver_payout_minor": driver_payout_minor,
+                "diddi_contribution_minor": diddi_contribution_minor,
+                "payment_reference": payment_reference,
+            },
+            request_id=request_id,
+            idempotency_key=idempotency_key,
+        )
+
     async def _post(
         self,
         path: str,

@@ -40,6 +40,7 @@ from app_base.modules.payment.domain.interfaces import PaymentRepository
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.ride.domain.entities import RideStatus
 from app_base.modules.ride.domain.interfaces import RideRepository
+from app_base.modules.ride.infra.diddirewards_client import DiddiRewardsClient
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,12 @@ def _fallback_customer_email(phone: str | None) -> str:
     return f"{normalized}@diddifree.com"
 
 
+def _client_payable_amount(ride) -> Decimal:
+    gross = ride.final_fare or ride.estimated_fare or Decimal("0")
+    discount = ride.rewards_discount_amount or Decimal("0")
+    return max(Decimal("0"), gross - discount)
+
+
 def _passenger_debt_payload(debt: PassengerDebt | None) -> dict:
     if debt is None:  # Defensive: the caller has just persisted a debt.
         raise RuntimeError("Passenger debt unexpectedly missing")
@@ -108,6 +115,7 @@ class PaymentService:
     ride_repo: RideRepository
     diddipay: DiddiPayClient | None = None
     return_contexts: PaymentReturnContextStore | None = None
+    diddirewards: DiddiRewardsClient | None = None
 
     async def list_passenger_debts(self, passenger_user_id: UUID, *, page: int, page_size: int) -> dict:
         debts, total = await self.payment_repo.list_debts_for_passenger(
@@ -216,7 +224,7 @@ class PaymentService:
         if ride.status != RideStatus.COMPLETED:
             raise ApiError(409, ErrorCode.RIDE_NOT_COMPLETED, "Impossible de confirmer un paiement avant la fin.")
 
-        expected = ride.final_fare
+        expected = _client_payable_amount(ride)
         if expected is not None:
             tolerance = max(_ABSOLUTE_TOLERANCE, expected * _RELATIVE_TOLERANCE)
             if abs(amount_collected - expected) > tolerance:
@@ -243,6 +251,7 @@ class PaymentService:
             collected_at=now,
         )
         await self._record_ride_settlement(ride, payment.status)
+        await self._confirm_rewards_if_needed(ride, payment)
         log_event(
             "payment.cash.confirmed",
             ride_id=ride_id,
@@ -776,7 +785,33 @@ class PaymentService:
         ride = await self.ride_repo.find_by_id(payment.ride_id)
         if ride is not None:
             await self._record_ride_settlement(ride, payment.status)
+            await self._confirm_rewards_if_needed(ride, payment)
         return payment
+
+    async def _confirm_rewards_if_needed(self, ride, payment) -> None:
+        if (
+            self.diddirewards is None
+            or ride.rewards_status == "confirmed"
+            or ride.rewards_reservation_id is None
+            or ride.rewards_discount_amount is None
+            or payment.status not in {PaymentStatus.COLLECTED, PaymentStatus.SUCCEEDED}
+        ):
+            return
+        result = await self.diddirewards.confirm(
+            reservation_id=ride.rewards_reservation_id,
+            ride_id=ride.id,
+            applied_discount_minor=int(ride.rewards_discount_amount),
+            client_paid_minor=int(payment.amount),
+            driver_payout_minor=int(ride.driver_payout_estimate or 0),
+            diddi_contribution_minor=int(ride.rewards_discount_amount),
+            payment_reference=str(payment.payment_intent_id or payment.business_reference or payment.id),
+            idempotency_key=f"diddigo:ride:{ride.id}:rewards-confirm:v1",
+            request_id=str(ride.id),
+        )
+        if not result.get("consumption_id"):
+            raise ApiError(502, "REWARDS_INVALID_RESPONSE", "DiddiRewards n'a pas fourni consumption_id.")
+        ride.rewards_status = "confirmed"
+        await self.ride_repo.save(ride)
 
     async def _apply_topup_status(
         self,
@@ -807,7 +842,7 @@ class PaymentService:
             payment = Transaction(
                 id=Transaction.new_id(),
                 ride_id=ride_id,
-                amount=ride.final_fare or ride.estimated_fare or Decimal("0"),
+                amount=_client_payable_amount(ride),
                 currency=ride.currency,
                 method=PaymentMethod.CASH,
                 status=PaymentStatus.PENDING,
@@ -845,7 +880,7 @@ class PaymentService:
         ride = await self.ride_repo.find_by_id(ride_id)
         if ride is None:
             raise ApiError(404, ErrorCode.RIDE_NOT_FOUND, "Aucune course trouvee avec cet identifiant.")
-        amount = ride.final_fare or ride.estimated_fare
+        amount = _client_payable_amount(ride)
         if amount is None or amount <= 0:
             raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Montant de course indisponible.")
 

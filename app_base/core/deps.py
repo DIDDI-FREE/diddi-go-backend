@@ -358,11 +358,13 @@ async def payment_service(
     ride_repo_dep: SqlAlchemyRideRepository = Depends(ride_repo),
     redis: Redis = Depends(get_redis),
     diddipay: DiddiPayClient = Depends(get_diddipay),
+    diddirewards: DiddiRewardsClient = Depends(get_diddirewards),
 ) -> PaymentService:
     return PaymentService(
         payment_repo=payment_repo_dep,
         ride_repo=ride_repo_dep,
         diddipay=diddipay,
+        diddirewards=diddirewards,
         return_contexts=PaymentReturnContextStore(
             redis,
             ttl_seconds=settings.payment_return_context_ttl_seconds,

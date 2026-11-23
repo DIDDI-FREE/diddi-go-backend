@@ -23,8 +23,8 @@ Référence vérifiée : `http://diddi-rewards-staging.diddifree.com/openapi.jso
 |---|---|---|
 | 1 | Client S2S, configuration, devis Rewards | Terminé |
 | 2 | Persistance de l’entitlement et réservation liée à `ride_id` | Terminé dans ce lot |
-| 3 | Calcul du montant client réduit et cohérence DiddiPay | À faire |
-| 4 | Confirmation Rewards après paiement confirmé | À faire |
+| 3 | Calcul du montant client réduit et cohérence DiddiPay | Terminé dans ce lot |
+| 4 | Confirmation Rewards après paiement confirmé | Terminé dans ce lot |
 | 5 | Outbox `ride.payment_confirmed`, `ride.refunded`, `ride.cancelled` | À faire |
 | 6 | Corrections de remboursement et rapprochement | À faire |
 | 7 | Tests staging et validation DiddiRewards/Loki/Tempo | À faire |
@@ -49,6 +49,15 @@ Référence vérifiée : `http://diddi-rewards-staging.diddifree.com/openapi.jso
 - Réservation après création de la course avec :
   `ride_id`, `Idempotency-Key` et `X-Request-ID`.
 - Statut local de l’avantage : `quoted`, puis `reserved`.
+
+### 2026-11-23 — Lot 3
+
+- `client_paid_minor` est calculé comme `final_fare - rewards_discount_amount`.
+- Le montant brut reste disponible dans `ride.final_fare`.
+- Le paiement cash vérifie le montant net attendu.
+- Le PaymentIntent DiddiPay reçoit le montant net client.
+- Après `collected` ou `succeeded`, DiddiGo appelle `benefits/confirm`.
+- La confirmation est idempotente et le statut local passe à `confirmed`.
 
 ## Décision de sécurité financière
 
