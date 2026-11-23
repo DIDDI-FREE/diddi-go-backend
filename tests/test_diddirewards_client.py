@@ -71,3 +71,58 @@ async def test_reserve_sends_idempotency_key() -> None:
     )
 
     assert result["reservation_id"] == "33333333-3333-3333-3333-333333333333"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_confirm_correct_and_reconciliation_use_contract_routes() -> None:
+    paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        assert request.headers["Idempotency-Key"].startswith("diddigo:")
+        if request.url.path.endswith("/confirm"):
+            return httpx.Response(200, json={"consumption_id": "55555555-5555-5555-5555-555555555555"})
+        if request.url.path.endswith("/correct"):
+            return httpx.Response(200, json={"correction_id": "66666666-6666-6666-6666-666666666666"})
+        return httpx.Response(200, json={"status": "matched"})
+
+    client = DiddiRewardsClient(
+        base_url="http://rewards.test",
+        service_token="secret-token",
+        transport=httpx.MockTransport(handler),
+    )
+    ride_id = UUID("44444444-4444-4444-4444-444444444444")
+    consumption_id = UUID("55555555-5555-5555-5555-555555555555")
+    assert (await client.confirm(
+        reservation_id=UUID("33333333-3333-3333-3333-333333333333"),
+        ride_id=ride_id,
+        applied_discount_minor=1000,
+        client_paid_minor=4000,
+        driver_payout_minor=3500,
+        diddi_contribution_minor=1000,
+        payment_reference="pay-1",
+        idempotency_key="diddigo:confirm:1",
+        request_id="r-1",
+    ))["consumption_id"] == str(consumption_id)
+    assert (await client.correct(
+        consumption_id=consumption_id,
+        amount_minor=1000,
+        reason="refunded",
+        payment_reference="pay-1",
+        idempotency_key="diddigo:correct:1",
+        request_id="r-2",
+    ))["correction_id"]
+    assert (await client.reconciliation(
+        consumption_id=consumption_id,
+        confirmed_discount_minor=1000,
+        external_reference=str(ride_id),
+        details={"status": "succeeded"},
+        idempotency_key="diddigo:reconciliation:1",
+        request_id="r-3",
+    ))["status"] == "matched"
+    assert paths == [
+        "/internal/v1/rewards/integrations/diddigo/benefits/confirm",
+        "/internal/v1/rewards/integrations/diddigo/benefits/correct",
+        "/internal/v1/rewards/integrations/diddigo/reconciliation",
+    ]

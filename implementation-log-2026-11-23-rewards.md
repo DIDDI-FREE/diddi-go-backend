@@ -99,6 +99,13 @@ Référence vérifiée : `http://diddi-rewards-staging.diddifree.com/openapi.jso
 - La plateforme centrale doit encore confirmer que l’URL Redis configurée est
   bien celle attendue par DiddiRewards.
 
+### 2026-11-23 — Lot 8
+
+- Vérification des champs événementiels : réduction, paiement client, revenu
+  chauffeur, contribution Diddi, référence paiement et remboursement.
+- Tests ajoutés pour les routes `confirm`, `correct` et `reconciliation`.
+- Tests ciblés : `20 passed`.
+
 ## Décision de sécurité financière
 
 Le tarif DiddiGo original n’est pas encore remplacé par le montant réduit dans

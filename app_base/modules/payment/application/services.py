@@ -901,6 +901,12 @@ class PaymentService:
                 "consumption_id": str(ride.rewards_consumption_id) if ride.rewards_consumption_id else None,
                 "applied_discount_minor": int(ride.rewards_discount_amount or 0),
                 "client_paid_minor": int(payment.amount),
+                "driver_payout_minor": int(ride.driver_payout_estimate or 0),
+                "diddi_contribution_minor": int(ride.rewards_discount_amount or 0),
+                "refund_amount_minor": int(payment.amount)
+                if event_type == "ride.refunded"
+                else None,
+                "reason": payment.status.value,
                 "payment_reference": str(payment.payment_intent_id or payment.business_reference or payment.id),
             },
         )
