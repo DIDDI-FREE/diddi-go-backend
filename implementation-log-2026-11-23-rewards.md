@@ -58,6 +58,8 @@ Référence vérifiée : `http://diddi-rewards-staging.diddifree.com/openapi.jso
 - Le PaymentIntent DiddiPay reçoit le montant net client.
 - Après `collected` ou `succeeded`, DiddiGo appelle `benefits/confirm`.
 - La confirmation est idempotente et le statut local passe à `confirmed`.
+- Une panne Rewards ne bloque pas le paiement : la confirmation est journalisée
+  comme différée et reste à reprendre par le worker de rapprochement.
 
 ## Décision de sécurité financière
 

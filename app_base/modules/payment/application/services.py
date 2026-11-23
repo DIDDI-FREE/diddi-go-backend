@@ -797,19 +797,25 @@ class PaymentService:
             or payment.status not in {PaymentStatus.COLLECTED, PaymentStatus.SUCCEEDED}
         ):
             return
-        result = await self.diddirewards.confirm(
-            reservation_id=ride.rewards_reservation_id,
-            ride_id=ride.id,
-            applied_discount_minor=int(ride.rewards_discount_amount),
-            client_paid_minor=int(payment.amount),
-            driver_payout_minor=int(ride.driver_payout_estimate or 0),
-            diddi_contribution_minor=int(ride.rewards_discount_amount),
-            payment_reference=str(payment.payment_intent_id or payment.business_reference or payment.id),
-            idempotency_key=f"diddigo:ride:{ride.id}:rewards-confirm:v1",
-            request_id=str(ride.id),
-        )
+        try:
+            result = await self.diddirewards.confirm(
+                reservation_id=ride.rewards_reservation_id,
+                ride_id=ride.id,
+                applied_discount_minor=int(ride.rewards_discount_amount),
+                client_paid_minor=int(payment.amount),
+                driver_payout_minor=int(ride.driver_payout_estimate or 0),
+                diddi_contribution_minor=int(ride.rewards_discount_amount),
+                payment_reference=str(payment.payment_intent_id or payment.business_reference or payment.id),
+                idempotency_key=f"diddigo:ride:{ride.id}:rewards-confirm:v1",
+                request_id=str(ride.id),
+            )
+        except Exception:
+            logger.exception("rewards confirmation deferred ride_id=%s", ride.id)
+            log_event("rewards.confirmation.deferred", level="error", ride_id=ride.id)
+            return
         if not result.get("consumption_id"):
-            raise ApiError(502, "REWARDS_INVALID_RESPONSE", "DiddiRewards n'a pas fourni consumption_id.")
+            log_event("rewards.confirmation.deferred", level="error", ride_id=ride.id, reason="missing_consumption_id")
+            return
         ride.rewards_status = "confirmed"
         await self.ride_repo.save(ride)
 
