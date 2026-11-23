@@ -91,6 +91,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # constructed per-request, so the S2S token cache (SCRUM-504) actually caches across requests.
     app.state.diddipay = DiddiPayClient()
     app.state.diddirewards = DiddiRewardsClient()
+    app.state.rewards_events_redis = app.state.redis
+    if settings.diddi_rewards_events_redis_url and settings.diddi_rewards_events_redis_url != settings.redis_url:
+        app.state.rewards_events_redis = create_redis_pool(settings.diddi_rewards_events_redis_url)
 
     app.state.payment_reconciliation_task = None
     register_worker("payment-reconciliation", settings.payment_reconciliation_enabled)
@@ -101,7 +104,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
     app.state.rewards_events_task = asyncio.create_task(
-        rewards_events_loop(app.state.redis),
+        rewards_events_loop(app.state.rewards_events_redis),
         name="rewards-events",
     )
     register_worker("rewards-events", True)
@@ -129,6 +132,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             rewards_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await rewards_task
+        if app.state.rewards_events_redis is not app.state.redis:
+            await app.state.rewards_events_redis.aclose()
         capability_task: asyncio.Task | None = app.state.capability_projection_task
         if capability_task is not None:
             capability_task.cancel()

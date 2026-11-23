@@ -106,6 +106,12 @@ Référence vérifiée : `http://diddi-rewards-staging.diddifree.com/openapi.jso
 - Tests ajoutés pour les routes `confirm`, `correct` et `reconciliation`.
 - Tests ciblés : `20 passed`.
 
+### 2026-11-23 — Lot 9
+
+- Le worker utilise le Redis applicatif si aucune URL dédiée n’est fournie.
+- Si `DIDDI_REWARDS_EVENTS_REDIS_URL` est différent, DiddiGo ouvre une seconde
+  connexion Redis dédiée aux événements Rewards et la ferme proprement à l’arrêt.
+
 ## Décision de sécurité financière
 
 Le tarif DiddiGo original n’est pas encore remplacé par le montant réduit dans
