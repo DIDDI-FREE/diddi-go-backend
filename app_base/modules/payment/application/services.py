@@ -252,6 +252,7 @@ class PaymentService:
         )
         await self._record_ride_settlement(ride, payment.status)
         await self._confirm_rewards_if_needed(ride, payment)
+        await self._enqueue_rewards_event(ride, payment)
         log_event(
             "payment.cash.confirmed",
             ride_id=ride_id,
@@ -810,6 +811,7 @@ class PaymentService:
             await self._record_ride_settlement(ride, payment.status)
             await self._confirm_rewards_if_needed(ride, payment)
             await self._correct_rewards_if_needed(ride, payment)
+            await self._enqueue_rewards_event(ride, payment)
         return payment
 
     async def _confirm_rewards_if_needed(self, ride, payment) -> None:
@@ -872,6 +874,36 @@ class PaymentService:
             return
         ride.rewards_status = "corrected"
         await self.ride_repo.save(ride)
+
+    async def _enqueue_rewards_event(self, ride, payment) -> None:
+        if ride.rewards_reservation_id is None:
+            return
+        event_type = None
+        if payment.status in {PaymentStatus.COLLECTED, PaymentStatus.SUCCEEDED}:
+            event_type = "ride.payment_confirmed"
+        elif payment.status in {PaymentStatus.REFUNDED, PaymentStatus.PARTIALLY_REFUNDED}:
+            event_type = "ride.refunded"
+        elif payment.status is PaymentStatus.CANCELLED:
+            event_type = "ride.cancelled"
+        if event_type is None:
+            return
+        enqueue = getattr(self.payment_repo, "enqueue_rewards_event", None)
+        if enqueue is None:
+            return
+        await enqueue(
+            event_type=event_type,
+            ride_id=ride.id,
+            payload={
+                "event_id": f"diddigo:{event_type}:{ride.id}",
+                "event_type": event_type,
+                "ride_id": str(ride.id),
+                "reservation_id": str(ride.rewards_reservation_id),
+                "consumption_id": str(ride.rewards_consumption_id) if ride.rewards_consumption_id else None,
+                "applied_discount_minor": int(ride.rewards_discount_amount or 0),
+                "client_paid_minor": int(payment.amount),
+                "payment_reference": str(payment.payment_intent_id or payment.business_reference or payment.id),
+            },
+        )
 
     async def _apply_topup_status(
         self,

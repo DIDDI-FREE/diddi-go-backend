@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import case, func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -307,6 +307,24 @@ class SqlAlchemyPaymentRepository:
         )
         result = await self._session.execute(stmt)
         return bool(result.rowcount)
+
+    async def enqueue_rewards_event(self, *, event_type: str, ride_id: UUID, payload: dict) -> str:
+        now = datetime.now(UTC)
+        event_id = f"diddigo:{event_type}:{ride_id}"
+        stmt = insert(orm.RewardsEventOutboxModel).values(
+                id=uuid4(),
+                event_id=event_id,
+                event_type=event_type,
+                ride_id=ride_id,
+                payload=payload,
+                status="pending",
+                attempts=0,
+                next_attempt_at=now,
+                created_at=now,
+            ).on_conflict_do_nothing(index_elements=[orm.RewardsEventOutboxModel.event_id])
+        await self._session.execute(stmt)
+        await self._session.flush()
+        return event_id
 
     async def get_or_create_wallet(self, driver_id: UUID, *, currency: str = "XOF") -> DriverWallet:
         result = await self._session.execute(

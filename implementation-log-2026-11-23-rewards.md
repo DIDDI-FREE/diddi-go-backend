@@ -25,7 +25,7 @@ Référence vérifiée : `http://diddi-rewards-staging.diddifree.com/openapi.jso
 | 2 | Persistance de l’entitlement et réservation liée à `ride_id` | Terminé dans ce lot |
 | 3 | Calcul du montant client réduit et cohérence DiddiPay | Terminé dans ce lot |
 | 4 | Confirmation Rewards après paiement confirmé | Terminé dans ce lot |
-| 5 | Outbox `ride.payment_confirmed`, `ride.refunded`, `ride.cancelled` | À faire |
+| 5 | Outbox `ride.payment_confirmed`, `ride.refunded`, `ride.cancelled` | Outbox SQL terminée, livraison Streams à faire |
 | 6 | Corrections de remboursement et rapprochement | Correction HTTP implémentée, rapprochement à faire |
 | 7 | Tests staging et validation DiddiRewards/Loki/Tempo | À faire |
 
@@ -78,6 +78,16 @@ Référence vérifiée : `http://diddi-rewards-staging.diddifree.com/openapi.jso
   le rapprochement Rewards si une consommation existe.
 - L’outbox Redis/Streams reste à brancher pour publier les événements métier
   durables (`ride.payment_confirmed`, `ride.refunded`, `ride.cancelled`).
+
+### 2026-11-23 — Lot 6
+
+- Ajout de `payment.rewards_event_outbox`.
+- Les événements sont écrits dans la transaction du paiement.
+- Déduplication par `event_id`.
+- Événements couverts : `ride.payment_confirmed`, `ride.refunded`,
+  `ride.cancelled`.
+- La livraison vers Redis Streams reste découplée et pourra être reprise sans
+  rejouer le paiement.
 
 ## Décision de sécurité financière
 

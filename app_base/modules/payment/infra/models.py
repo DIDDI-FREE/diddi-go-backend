@@ -109,6 +109,26 @@ class PaymentWebhookEventModel(Base):
     )
 
 
+class RewardsEventOutboxModel(Base):
+    __tablename__ = "rewards_event_outbox"
+    __table_args__ = (
+        Index("idx_payment_rewards_outbox_due", "status", "next_attempt_at"),
+        {"schema": "payment"},
+    )
+
+    id: Mapped[UUID] = mapped_column(_PG_UUID, primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    ride_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False, index=True)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    attempts: Mapped[int] = mapped_column(default=0, nullable=False)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class DriverWalletModel(Base):
     __tablename__ = "driver_wallets"
     __table_args__ = (
