@@ -185,6 +185,15 @@ class Settings(BaseSettings):
         default=None, validation_alias=AliasChoices("DIDDI_REWARDS_SERVICE_CLIENT_SECRET")
     )
     diddi_rewards_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
+    # Scopes reellement exiges par les routes Rewards (quote, reserve, consume, correct, reconciliation).
+    # Le client DiddiFreeID `diddigo-staging-rewards` doit les autoriser tous.
+    diddi_rewards_service_scopes: str = Field(
+        default=(
+            "diddirewards:benefits:quote diddirewards:benefits:reserve diddirewards:benefits:consume "
+            "diddirewards:benefits:correct diddirewards:reconcile"
+        ),
+        validation_alias=AliasChoices("DIDDI_REWARDS_SERVICE_SCOPES"),
+    )
     diddi_rewards_enabled: bool = Field(default=False, validation_alias=AliasChoices("DIDDI_REWARDS_ENABLED"))
     diddi_rewards_campaign_id: str | None = Field(
         default=None, validation_alias=AliasChoices("DIDDI_REWARDS_CAMPAIGN_ID")

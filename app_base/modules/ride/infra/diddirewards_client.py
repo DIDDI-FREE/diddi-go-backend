@@ -23,6 +23,7 @@ class DiddiRewardsClient:
     client_secret: str | None = settings.diddi_rewards_service_client_secret
     identity_base_url: str | None = settings.identity_base_url
     timeout_seconds: float = settings.diddi_rewards_timeout_seconds
+    service_scopes: str = settings.diddi_rewards_service_scopes
     transport: httpx.AsyncBaseTransport | None = None
     _token: tuple[str, float] | None = field(default=None, init=False, repr=False)
     _token_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
@@ -183,24 +184,45 @@ class DiddiRewardsClient:
                     if self._token and now < self._token[1]:
                         token = self._token[0]
                     else:
-                        async with httpx.AsyncClient(
-                            base_url=self.identity_base_url.rstrip("/"),
-                            timeout=self.timeout_seconds,
-                            transport=self.transport,
-                        ) as client:
-                            response = await client.post(
-                                "/identity/v1/auth/service/token",
-                                headers={"X-Client-ID": self.client_id},
-                                data={
-                                    "grant_type": "client_credentials",
-                                    "client_id": self.client_id,
-                                    "client_secret": self.client_secret,
-                                    "audience": "diddirewards",
-                                    "scope": "diddirewards:benefits:write",
+                        try:
+                            async with httpx.AsyncClient(
+                                base_url=self.identity_base_url.rstrip("/"),
+                                timeout=self.timeout_seconds,
+                                transport=self.transport,
+                            ) as client:
+                                response = await client.post(
+                                    "/identity/v1/auth/service/token",
+                                    headers={"X-Client-ID": self.client_id},
+                                    data={
+                                        "grant_type": "client_credentials",
+                                        "client_id": self.client_id,
+                                        "client_secret": self.client_secret,
+                                        "audience": "diddirewards",
+                                        "scope": self.service_scopes,
+                                    },
+                                )
+                        except httpx.HTTPError as exc:
+                            raise ApiError(
+                                503, "REWARDS_UNAVAILABLE", "DiddiFreeID est injoignable pour le jeton DiddiRewards."
+                            ) from exc
+                        if response.status_code >= 400:
+                            # 401 = identifiants ; 403 = audience ou scopes non autorises pour ce client
+                            # (a corriger cote DiddiFreeID, pas ici).
+                            try:
+                                body = response.json()
+                            except ValueError:
+                                body = {"raw": response.text[:300]}
+                            raise ApiError(
+                                503,
+                                "REWARDS_UNAVAILABLE",
+                                "DiddiFreeID a refuse le jeton DiddiRewards (client, audience ou scopes).",
+                                {
+                                    "identity_status": response.status_code,
+                                    "identity_error": body,
+                                    "scope": self.service_scopes,
                                 },
                             )
-                            response.raise_for_status()
-                            data = response.json()
+                        data = response.json()
                         token = str(data["access_token"])
                         self._token = (token, time.monotonic() + max(int(data.get("expires_in", 600)) - 30, 1))
         if not token:
