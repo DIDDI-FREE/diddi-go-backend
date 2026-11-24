@@ -46,10 +46,13 @@ def test_withdrawal_validation_identifies_fields_without_logging_values(caplog):
     assert response.json()["error"]["request_id"] == "qa-withdrawal-1"
     assert response.headers["X-Request-ID"] == "qa-withdrawal-1"
     event = next(json.loads(r.message) for r in caplog.records if "withdrawal.request.validation_failed" in r.message)
-    assert event["user_id"] == "qa-user"
+    assert event["attributes"]["user_id"] == "qa-user"
     assert event["request_id"] == "qa-withdrawal-1"
-    assert {"loc": ["body", "verification_id"], "type": "missing"} in event["violations"]
-    assert {"loc": ["body", "verification_code"], "type": "string_pattern_mismatch"} in event["violations"]
+    assert {"loc": ["body", "verification_id"], "type": "missing"} in event["attributes"]["violations"]
+    assert {
+        "loc": ["body", "verification_code"],
+        "type": "string_pattern_mismatch",
+    } in event["attributes"]["violations"]
     for secret in ["private-beneficiary", "+2250700000111", "987654", "secret-extra-field", "private-extra-value"]:
         assert secret not in caplog.text
 

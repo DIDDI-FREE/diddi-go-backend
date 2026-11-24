@@ -17,6 +17,8 @@ import pytest
 
 from app_base.core.errors import ApiError
 from app_base.modules.ride.application import services as ride_services
+from app_base.modules.ride.application.services import _ride_detail_payload
+from app_base.modules.ride.domain.entities import ComfortLevel, Ride, RideStatus, VehicleCategory
 from app_base.modules.ride.infra.diddirewards_client import DiddiRewardsClient
 from app_base.shared_kernel.types import GeoPoint
 from tests.test_ride_quote_service import service_with_repositories
@@ -26,6 +28,7 @@ pytestmark = pytest.mark.unit
 REQUIRED_SCOPES = {
     "diddirewards:benefits:quote",
     "diddirewards:benefits:reserve",
+    "diddirewards:benefits:release",
     "diddirewards:benefits:consume",
     "diddirewards:benefits:correct",
     "diddirewards:reconcile",
@@ -172,3 +175,29 @@ async def test_eligible_consumer_sees_discount(monkeypatch: pytest.MonkeyPatch) 
     assert result["rewards"]["discount_amount_minor"] == fare * 20 // 100
     assert result["rewards"]["final_amount_minor"] == fare - fare * 20 // 100
     assert str(quote.rewards_entitlement_id) == rewards.entitlement_id
+
+
+@pytest.mark.parametrize("viewer_role", ["passenger", "driver"])
+def test_ride_detail_exposes_gross_discount_and_payable_amount(viewer_role: str) -> None:
+    ride = Ride(
+        id=uuid4(),
+        passenger_user_id=uuid4(),
+        status=RideStatus.IN_PROGRESS,
+        vehicle_category=VehicleCategory.STANDARD,
+        comfort_level=ComfortLevel.STANDARD,
+        estimated_fare=Decimal("1234"),
+        final_fare=Decimal("1234"),
+        rewards_campaign_id="campaign-1",
+        rewards_discount_amount=Decimal("246"),
+        rewards_status="reserved",
+    )
+
+    payload = _ride_detail_payload(ride, None, viewer_role=viewer_role)
+
+    assert payload["final_fare"] == 1234
+    assert payload["rewards"] == {
+        "campaign_id": "campaign-1",
+        "discount_amount_minor": 246,
+        "client_payable_amount": 988,
+        "status": "reserved",
+    }

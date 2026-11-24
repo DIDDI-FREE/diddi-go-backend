@@ -840,20 +840,31 @@ paths:
       - ride
       summary: Estimate Pricing
       operationId: estimate_pricing_v1_rides_pricing_estimate_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: X-Request-ID
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Request-Id
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PricingEstimateRequest'
-        required: true
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
+                additionalProperties: true
                 title: Response Estimate Pricing V1 Rides Pricing Estimate Post
         '422':
           description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
@@ -875,8 +886,6 @@ paths:
                           - q
                           msg: Field required
                           type: missing
-      security:
-      - OAuth2PasswordBearer: []
       x-contract:
         source: app.openapi() ; opération estimate_pricing_v1_rides_pricing_estimate_post
         purpose: Estimate Pricing
@@ -8698,6 +8707,62 @@ paths:
         retry: UNKNOWN — ne pas supposer une idempotence métier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
         dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /v1/admin/payments/rides/{ride_id}/reconcile-rewards:
+    post:
+      tags:
+      - admin-payment
+      summary: Reconcile Ride Rewards
+      operationId: reconcile_ride_rewards_v1_admin_payments_rides__ride_id__reconcile_rewards_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: ride_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Ride Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Reconcile Ride Rewards V1 Admin Payments Rides  Ride Id  Reconcile Rewards Post
+        '422':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+              examples:
+                validation:
+                  summary: Exemple synthétique de validation locale
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La requête est invalide.
+                      details:
+                        violations:
+                        - loc:
+                          - query
+                          - q
+                          msg: Field required
+                          type: missing
+      x-contract:
+        source: app.openapi() ; opération reconcile_ride_rewards_v1_admin_payments_rides__ride_id__reconcile_rewards_post
+        purpose: Reconcile Ride Rewards
+        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
+        state-before-after: UNKNOWN — vérifier la précondition et la transition de cette opération.
+        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
+        response: UNKNOWN — champs de succès non spécifiés.
+        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
+        retry: UNKNOWN — ne pas supposer une idempotence métier.
+        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
+        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
   /v1/admin/payments/topups/{topup_id}/reconcile:
     post:
       tags:
@@ -10314,7 +10379,7 @@ paths:
                 type: object
                 title: Response Health Health Get
       x-contract:
-        source: app_base/main.py:98
+        source: app_base/main.py:103
         purpose: Health
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
@@ -10335,7 +10400,7 @@ paths:
             application/json:
               schema: {}
       x-contract:
-        source: app_base/main.py:103
+        source: app_base/main.py:108
         purpose: Readiness
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
@@ -12997,6 +13062,13 @@ components:
           type: string
           title: Comfort Level
           default: standard
+        campaign_id:
+          anyOf:
+          - type: string
+            maxLength: 120
+            minLength: 1
+          - type: 'null'
+          title: Campaign Id
       type: object
       required:
       - pickup
@@ -13243,6 +13315,8 @@ components:
           - type: integer
           - type: 'null'
           title: Final Fare
+        rewards:
+          $ref: '#/components/schemas/RideRewardsResponse'
         currency:
           type: string
           title: Currency
@@ -13311,6 +13385,7 @@ components:
       - dropoff
       - vehicle_category
       - comfort_level
+      - rewards
       - currency
       - pricing
       - trace_analysis
@@ -13775,6 +13850,29 @@ components:
       - rating
       - rater_role
       title: RideRatingResponse
+    RideRewardsResponse:
+      properties:
+        campaign_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Campaign Id
+        discount_amount_minor:
+          type: integer
+          title: Discount Amount Minor
+          default: 0
+        client_payable_amount:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Client Payable Amount
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      type: object
+      title: RideRewardsResponse
     RideScoreMetricsResponse:
       properties:
         ride_status:

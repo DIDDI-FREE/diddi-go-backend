@@ -318,6 +318,7 @@ class RideService:
                 requested_amount_minor=int(ride.rewards_discount_amount),
                 idempotency_key=f"diddigo:ride:{ride.id}:rewards-reserve:v1",
                 request_id=str(ride.id),
+                expires_at=iso_utc(quote.expires_at),
             )
             ride.rewards_reservation_id = _required_uuid(reservation, "reservation_id")
             ride.rewards_status = "reserved"
@@ -1027,6 +1028,7 @@ class RideService:
         ride.transition(new_status, metadata={"reason": reason})
         ride.cancellation_reason = reason
         await self.ride_repo.save(ride)
+        await self._release_rewards_if_needed(ride, reason=reason)
         await self._record_priority_outcome(ride)
         log_event(
             "ride.cancelled",
@@ -1037,6 +1039,31 @@ class RideService:
             status=ride.status.value,
         )
         return {"id": str(ride.id), "status": ride.status.value, "cancelled_at": iso_utc(ride.cancelled_at)}
+
+    async def _release_rewards_if_needed(self, ride: Ride, *, reason: str) -> None:
+        if (
+            self.diddirewards is None
+            or ride.rewards_reservation_id is None
+            or ride.rewards_status in {"confirmed", "corrected", "released"}
+        ):
+            return
+        try:
+            await self.diddirewards.release(
+                reservation_id=ride.rewards_reservation_id,
+                ride_id=ride.id,
+                reason=reason,
+                idempotency_key=f"diddigo:ride:{ride.id}:rewards-release:v1",
+                request_id=str(ride.id),
+            )
+        except Exception:
+            ride.rewards_status = "release_deferred"
+            await self.ride_repo.save(ride)
+            logger.exception("rewards release deferred ride_id=%s", ride.id)
+            log_event("rewards.release.deferred", level="error", ride_id=ride.id, reason=reason)
+            return
+        ride.rewards_status = "released"
+        await self.ride_repo.save(ride)
+        log_event("rewards.release.completed", ride_id=ride.id, reason=reason)
 
     async def rate(
         self,
@@ -1424,6 +1451,9 @@ def _json_default(value: object) -> str:
 def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -> dict:
     money_visible = _money_visible(ride, viewer_role)
     analytics_visible = viewer_role == "admin"
+    gross_amount = ride.final_fare or ride.estimated_fare
+    discount_amount = int(ride.rewards_discount_amount or 0) if money_visible else 0
+    client_payable_amount = max(int(gross_amount or 0) - discount_amount, 0) if money_visible else None
     return {
         "id": str(ride.id),
         "status": ride.status.value,
@@ -1436,6 +1466,12 @@ def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -
         "comfort_level": ride.comfort_level.value,
         "estimated_fare": int(ride.estimated_fare) if money_visible and ride.estimated_fare is not None else None,
         "final_fare": int(ride.final_fare) if money_visible and ride.final_fare is not None else None,
+        "rewards": {
+            "campaign_id": ride.rewards_campaign_id,
+            "discount_amount_minor": discount_amount,
+            "client_payable_amount": client_payable_amount,
+            "status": ride.rewards_status,
+        },
         "currency": ride.currency,
         "distance_km": float(ride.distance_km) if ride.distance_km is not None else None,
         "duration_seconds": ride.duration_seconds,

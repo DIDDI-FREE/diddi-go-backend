@@ -133,6 +133,7 @@ async def _advance_offer_wave_after_timeout(app, ride_id: UUID) -> None:
                 partner_service=partner_service,
                 locations=app.state.driver_locations,
                 offers=RedisOfferStore(redis=app.state.redis),
+                diddirewards=getattr(app.state, "diddirewards", None),
             )
             push_notifications = PushNotificationService(devices=device_repo, gateway=build_push_gateway())
             dispatch = await matching.advance_expired_offer(ride_id)

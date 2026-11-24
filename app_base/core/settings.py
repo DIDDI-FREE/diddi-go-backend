@@ -189,7 +189,8 @@ class Settings(BaseSettings):
     # Le client DiddiFreeID `diddigo-staging-rewards` doit les autoriser tous.
     diddi_rewards_service_scopes: str = Field(
         default=(
-            "diddirewards:benefits:quote diddirewards:benefits:reserve diddirewards:benefits:consume "
+            "diddirewards:benefits:quote diddirewards:benefits:reserve diddirewards:benefits:release "
+            "diddirewards:benefits:consume "
             "diddirewards:benefits:correct diddirewards:reconcile"
         ),
         validation_alias=AliasChoices("DIDDI_REWARDS_SERVICE_SCOPES"),

@@ -177,6 +177,7 @@ Les champs détaillés sont dans x-contract de openapi.yaml. Une correction du c
 | `GET /v1/admin/drivers/{driver_id}/wallet/withdrawals` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `POST /v1/admin/payments/reconcile` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/admin/payments/rides/{ride_id}/reconcile` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
+| `POST /v1/admin/payments/rides/{ride_id}/reconcile-rewards` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/admin/payments/topups/{topup_id}/reconcile` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `POST /v1/admin/payments/withdrawals/{withdrawal_id}/reconcile` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `GET /v1/admin/payments/withdrawals/{withdrawal_id}` | roles, state-before-after, request, errors, side-effects, dependency-failure |

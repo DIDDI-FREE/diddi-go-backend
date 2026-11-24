@@ -46,6 +46,7 @@ from app_base.modules.ride.domain.interfaces import (
     VehicleRepository,
 )
 from app_base.modules.ride.domain.priority import DEFAULT_ZONE_ID, DispatchConfig
+from app_base.modules.ride.infra.diddirewards_client import DiddiRewardsClient
 from app_base.shared_kernel.contracts.routing import MapProvider
 
 # Uvicorn wires this logger to the Docker console.
@@ -77,6 +78,7 @@ class MatchingService:
     routing: MapProvider | None = None
     priority: PriorityProvider | None = None
     config: DispatchConfig | None = None
+    diddirewards: DiddiRewardsClient | None = None
 
     @property
     def _cfg(self) -> DispatchConfig:
@@ -600,8 +602,34 @@ class MatchingService:
         for transition in ride.status_history:
             await self.ride_repo.record_status_transition(transition)
         await self.offers.clear(ride.id)
+        await self._release_rewards_if_needed(ride, reason="no_driver_found")
         logger.info("matching_no_driver_found ride_id=%s", ride.id)
         log_event("ride.matching.no_driver_found", ride_id=ride.id)
+
+    async def _release_rewards_if_needed(self, ride: Ride, *, reason: str) -> None:
+        if (
+            self.diddirewards is None
+            or ride.rewards_reservation_id is None
+            or ride.rewards_status in {"confirmed", "corrected", "released"}
+        ):
+            return
+        try:
+            await self.diddirewards.release(
+                reservation_id=ride.rewards_reservation_id,
+                ride_id=ride.id,
+                reason=reason,
+                idempotency_key=f"diddigo:ride:{ride.id}:rewards-release:v1",
+                request_id=str(ride.id),
+            )
+        except Exception:
+            ride.rewards_status = "release_deferred"
+            await self.ride_repo.save(ride)
+            logger.exception("rewards release deferred ride_id=%s", ride.id)
+            log_event("rewards.release.deferred", level="error", ride_id=ride.id, reason=reason)
+            return
+        ride.rewards_status = "released"
+        await self.ride_repo.save(ride)
+        log_event("rewards.release.completed", ride_id=ride.id, reason=reason)
 
     async def _load_active_ride(self, ride_id: UUID) -> Ride:
         ride = await self.ride_repo.find_by_id(ride_id)

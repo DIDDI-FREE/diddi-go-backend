@@ -310,7 +310,7 @@ class SqlAlchemyPaymentRepository:
 
     async def enqueue_rewards_event(self, *, event_type: str, ride_id: UUID, payload: dict) -> str:
         now = datetime.now(UTC)
-        event_id = f"diddigo:{event_type}:{ride_id}"
+        event_id = str(payload.get("event_id") or f"diddigo:{event_type}:{ride_id}")
         stmt = insert(orm.RewardsEventOutboxModel).values(
                 id=uuid4(),
                 event_id=event_id,

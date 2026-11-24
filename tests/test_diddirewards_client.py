@@ -68,9 +68,38 @@ async def test_reserve_sends_idempotency_key() -> None:
         requested_amount_minor=1000,
         idempotency_key="diddigo:ride:reserve:1",
         request_id="request-2",
+        expires_at="2026-11-24T15:00:00Z",
     )
 
     assert result["reservation_id"] == "33333333-3333-3333-3333-333333333333"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_release_uses_idempotent_contract_and_accepts_no_content() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["request"] = request
+        return httpx.Response(204)
+
+    client = DiddiRewardsClient(
+        base_url="http://rewards.test",
+        service_token="secret-token",
+        transport=httpx.MockTransport(handler),
+    )
+    result = await client.release(
+        reservation_id=UUID("33333333-3333-3333-3333-333333333333"),
+        ride_id=UUID("44444444-4444-4444-4444-444444444444"),
+        reason="no_driver_found",
+        idempotency_key="diddigo:ride:release:1",
+        request_id="request-release-1",
+    )
+
+    assert result == {}
+    assert seen["request"].url.path.endswith("/benefits/release")
+    assert seen["request"].headers["Idempotency-Key"] == "diddigo:ride:release:1"
+    assert b'"reason":"no_driver_found"' in seen["request"].content
 
 
 @pytest.mark.unit
