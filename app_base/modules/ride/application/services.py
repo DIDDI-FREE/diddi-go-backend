@@ -187,18 +187,32 @@ class RideService:
             created_at=now,
         )
         if campaign_id and settings.diddi_rewards_enabled and self.diddirewards is not None:
-            rewards_quote = await self.diddirewards.quote(
-                consumer_id=passenger_user_id,
-                campaign_id=campaign_id,
-                amount_initial_minor=int(quote.estimated_fare),
-                request_id=request_id or str(quote.id),
-            )
             quote.rewards_campaign_id = campaign_id
-            quote.rewards_entitlement_id = _required_uuid(rewards_quote, "entitlement_id")
-            quote.rewards_campaign_version_id = _optional_uuid(rewards_quote, "campaign_version_id")
-            quote.rewards_discount_amount = _money_value(rewards_quote, "discount_amount_minor")
-            quote.rewards_final_amount = _money_value(rewards_quote, "final_amount_minor")
-            quote.rewards_reason = str(rewards_quote.get("reason") or "") or None
+            try:
+                rewards_quote = await self.diddirewards.quote(
+                    consumer_id=passenger_user_id,
+                    campaign_id=campaign_id,
+                    amount_initial_minor=int(quote.estimated_fare),
+                    request_id=request_id or str(quote.id),
+                )
+            except ApiError as exc:
+                # Une promotion indisponible ne doit jamais empecher un devis : plein tarif, raison explicite.
+                log_event(
+                    "ride.quote.rewards_unavailable", quote_id=quote.id, campaign_id=campaign_id,
+                    error_code=exc.code, status_code=exc.status_code,
+                )
+                quote.rewards_reason = "rewards_unavailable"
+            else:
+                # Non eligible : Rewards renvoie eligible=false sans entitlement_id ; ce n'est pas une erreur.
+                quote.rewards_entitlement_id = _optional_uuid(rewards_quote, "entitlement_id")
+                quote.rewards_campaign_version_id = _optional_uuid(rewards_quote, "campaign_version_id")
+                quote.rewards_discount_amount = _money_value(rewards_quote, "discount_amount_minor")
+                quote.rewards_final_amount = _money_value(rewards_quote, "final_amount_minor")
+                quote.rewards_reason = str(rewards_quote.get("reason") or "") or None
+                if not rewards_quote.get("eligible", quote.rewards_entitlement_id is not None):
+                    quote.rewards_entitlement_id = None
+                    quote.rewards_discount_amount = Decimal("0")
+                    quote.rewards_final_amount = quote.estimated_fare
         await self.quote_repo.save(quote)
         log_event(
             "ride.quote.addresses", quote_id=quote.id,
@@ -211,10 +225,13 @@ class RideService:
             "tariff_version": quote.tariff_version,
             "expires_at": iso_utc(quote.expires_at),
         }
-        if quote.rewards_entitlement_id is not None:
+        if quote.rewards_campaign_id is not None:
             response["rewards"] = {
-                "eligible": quote.rewards_discount_amount is not None and quote.rewards_discount_amount > 0,
-                "entitlement_id": str(quote.rewards_entitlement_id),
+                "campaign_id": quote.rewards_campaign_id,
+                "eligible": quote.rewards_entitlement_id is not None
+                and quote.rewards_discount_amount is not None
+                and quote.rewards_discount_amount > 0,
+                "entitlement_id": str(quote.rewards_entitlement_id) if quote.rewards_entitlement_id else None,
                 "campaign_version_id": str(quote.rewards_campaign_version_id)
                 if quote.rewards_campaign_version_id
                 else None,
