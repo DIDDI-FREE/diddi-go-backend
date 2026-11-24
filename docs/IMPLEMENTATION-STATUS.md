@@ -6,7 +6,9 @@ Plan : `IMPLEMENTATION_PLAN-diddigo-rewards-improvements.24-11-2026.md` à la ra
 
 ## État global
 
-Les phases d’implémentation P0 à P3 sont terminées. P4 est terminée pour les vérifications locales et reste en attente pour les validations de déploiement et d’intégration externes.
+Les phases d’implémentation P0 à P3 sont terminées. Les compléments de recette
+Rewards du 24/11 sont implémentés et vérifiés localement. P4 reste en attente
+pour les validations de déploiement et d’intégration externes.
 
 ## Vérifications du projet
 
@@ -42,6 +44,11 @@ Les migrations seront vérifiées avec Alembic dans la phase concernée, en fonc
 - Aucun redéploiement n’est effectué par ce run.
 - Vérifier après déploiement que DiddiRewards expose le endpoint release convenu.
 - Vérifier que le stream Redis configuré reçoit les événements et que le consumer Rewards les traite.
+- Vérifier dans Rewards qu’une consommation confirmée produit une entrée de
+  réconciliation automatique, puis tester un paiement remboursé.
+- Avec `DIDDI_REWARDS_ENABLED=true`, vérifier dans les logs de démarrage que
+  le contrôle S2S obtient les scopes configurés ; avec un scope absent, le
+  démarrage doit être refusé explicitement.
 - Exécuter une course promotionnelle non destructive et vérifier devis, réservation, paiement, release/correction et montant payable.
 - Faire confirmer par DiddiObserve la réception corrélée dans Loki et Tempo.
 - Exécuter la suite non-unitaire dans un environnement PostgreSQL/Redis disponible ; elle n’a pas pu terminer localement.

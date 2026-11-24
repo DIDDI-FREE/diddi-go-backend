@@ -90,6 +90,20 @@ async def test_identity_refusal_becomes_explicit_503() -> None:
     assert excinfo.value.details["identity_error"]["error"]["code"] == "INVALID_SCOPE"
 
 
+@pytest.mark.asyncio
+async def test_startup_scope_check_resolves_the_configured_s2s_token() -> None:
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(httpx.QueryParams(request.content.decode())))
+        return httpx.Response(200, json={"access_token": "tok", "expires_in": 600})
+
+    await _client(handler).validate_service_access()
+
+    assert seen["audience"] == "diddirewards"
+    assert set(seen["scope"].split()) == REQUIRED_SCOPES
+
+
 class RewardsDown:
     async def quote(self, **_: object) -> dict:
         raise ApiError(

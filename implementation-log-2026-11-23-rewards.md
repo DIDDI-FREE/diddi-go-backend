@@ -79,6 +79,21 @@ Référence vérifiée : `http://diddi-rewards-staging.diddifree.com/openapi.jso
 - L’outbox Redis/Streams reste à brancher pour publier les événements métier
   durables (`ride.payment_confirmed`, `ride.refunded`, `ride.cancelled`).
 
+### 2026-11-24 — Compléments après recette staging
+
+- Ajout de la réconciliation automatique après chaque transition de paiement
+  terminale lorsqu'une consommation Rewards existe, avec idempotence stable et
+  traitement best-effort si Rewards est indisponible.
+- Ajout du contrôle de provisioning S2S au démarrage lorsque Rewards est activé.
+  Le client demande les scopes de `DIDDI_REWARDS_SERVICE_SCOPES` via DiddiFreeID.
+- Ajout de la variable de scopes dans le Compose Portainer.
+- Documentation du matching : la recherche commence à la création, n'inclut
+  pas les chauffeurs devenus disponibles après cette création et s'arrête à
+  `matching_search_budget_seconds`.
+- Documentation de la désactivation explicite de l'export logs OTLP lorsque le
+  collecteur central est indisponible.
+- Tests ajoutés pour le contrôle des scopes et la réconciliation automatique.
+
 ### 2026-11-23 — Lot 6
 
 - Ajout de `payment.rewards_event_outbox`.

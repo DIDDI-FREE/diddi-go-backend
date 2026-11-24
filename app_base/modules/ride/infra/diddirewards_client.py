@@ -32,6 +32,12 @@ class DiddiRewardsClient:
     def configured(self) -> bool:
         return bool(self.base_url and (self.service_token or (self.identity_base_url and self.client_secret)))
 
+    async def validate_service_access(self) -> None:
+        """Resolve one S2S token so mis-provisioned scopes fail at startup."""
+        if not self.configured:
+            raise ApiError(503, ErrorCode.PAYMENT_CONFIGURATION_MISSING, "Identifiants DiddiRewards absents.")
+        await self._headers()
+
     async def quote(
         self, *, consumer_id: UUID, campaign_id: str, amount_initial_minor: int, request_id: str
     ) -> dict[str, Any]:

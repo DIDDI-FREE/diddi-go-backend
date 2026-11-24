@@ -91,6 +91,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # constructed per-request, so the S2S token cache (SCRUM-504) actually caches across requests.
     app.state.diddipay = DiddiPayClient()
     app.state.diddirewards = DiddiRewardsClient()
+    if settings.diddi_rewards_enabled:
+        await app.state.diddirewards.validate_service_access()
     app.state.rewards_events_redis = app.state.redis
     if settings.diddi_rewards_events_redis_url and settings.diddi_rewards_events_redis_url != settings.redis_url:
         app.state.rewards_events_redis = create_redis_pool(settings.diddi_rewards_events_redis_url)
