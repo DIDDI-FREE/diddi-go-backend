@@ -27,6 +27,7 @@ DIDDI_REWARDS_BASE_URL=
 DIDDI_REWARDS_CLIENT_ID=diddigo
 DIDDI_REWARDS_SERVICE_TOKEN=
 DIDDI_REWARDS_SERVICE_CLIENT_SECRET=
+DIDDI_REWARDS_SERVICE_SCOPES=diddirewards:benefits:quote diddirewards:benefits:reserve diddirewards:benefits:release diddirewards:benefits:consume diddirewards:benefits:correct diddirewards:reconcile
 DIDDI_REWARDS_TIMEOUT_SECONDS=5
 DIDDI_REWARDS_ENABLED=false
 DIDDI_REWARDS_CAMPAIGN_ID=
@@ -36,6 +37,11 @@ DIDDI_REWARDS_EVENTS_STREAM=diddigo.events.v1
 
 Le token direct est prioritaire. À défaut, le client peut obtenir un token
 S2S via DiddiFreeID avec `DIDDI_REWARDS_SERVICE_CLIENT_SECRET`.
+
+Lorsque Rewards est activé, le démarrage vérifie que le client S2S peut
+obtenir un jeton avec les scopes configurés. Un jeton statique ne permet pas
+de vérifier ses claims au démarrage ; son provisioning reste à contrôler côté
+DiddiFreeID.
 
 ## Contrat release proposé à DiddiRewards
 
@@ -64,13 +70,14 @@ si la réservation est déjà consommée et `404` si elle est inconnue. Le
 endpoint doit être implémenté et publié par DiddiRewards ; DiddiGo ne partage
 pas sa base avec Rewards.
 
-## Reste à implémenter
+## Flux automatique après paiement
 
-1. Persister l'entitlement et la réservation sur le devis et la course.
-2. Réserver après création de la course avec `ride_id` et idempotence.
-3. Appliquer le montant final autorisé avant la création du PaymentIntent DiddiPay.
-4. Confirmer après paiement avec `confirm` et publier les faits outbox.
-5. Ajouter corrections de remboursement et rapprochement.
+Après une transition de paiement `collected`, `succeeded`, `refunded`,
+`partially_refunded` ou `cancelled`, DiddiGo appelle automatiquement
+`POST /internal/v1/rewards/integrations/diddigo/reconciliation` lorsqu'une
+consommation existe. L'appel utilise une clé d'idempotence stable par course.
+Une indisponibilité Rewards ne bloque pas le paiement ; l'outbox Redis garde
+le fait pour la reprise asynchrone.
 
 La création et la gestion des campagnes restent de la responsabilité de
 DiddiAdmin. DiddiGo ne lit pas la base DiddiRewards.

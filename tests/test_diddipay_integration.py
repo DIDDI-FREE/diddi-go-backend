@@ -310,6 +310,15 @@ class FakeDiddiPay:
         }
 
 
+class FakeRewardsReconciliation:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def reconciliation(self, **kwargs):
+        self.calls.append(kwargs)
+        return {"status": "matched"}
+
+
 def make_completed_ride() -> Ride:
     return Ride(
         id=uuid4(),
@@ -349,6 +358,38 @@ async def test_rewards_event_id_distinguishes_payment_operations() -> None:
     assert event["event_type"] == "ride.payment_confirmed"
     assert event["payload"]["event_id"].endswith(f":{payment.id}")
     assert event["payload"]["client_paid_minor"] == 2854
+
+
+@pytest.mark.asyncio
+async def test_successful_payment_triggers_rewards_reconciliation() -> None:
+    ride = make_completed_ride()
+    ride.rewards_reservation_id = uuid4()
+    ride.rewards_consumption_id = uuid4()
+    ride.rewards_discount_amount = Decimal("246")
+    ride.rewards_status = "confirmed"
+    repo = FakePaymentRepo()
+    rewards = FakeRewardsReconciliation()
+    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddirewards=rewards)
+    payment = Transaction(
+        id=uuid4(),
+        ride_id=ride.id,
+        amount=Decimal("2854"),
+        currency="XOF",
+        method=PaymentDomainMethod.MOBILE_MONEY,
+        status=PaymentStatus.PROCESSING,
+    )
+    await repo.save(payment)
+
+    await service._apply_transaction_status(
+        payment,
+        status=PaymentStatus.SUCCEEDED,
+        provider_status="succeeded",
+        paid_at=datetime.now(UTC),
+    )
+
+    assert len(rewards.calls) == 1
+    assert rewards.calls[0]["consumption_id"] == ride.rewards_consumption_id
+    assert rewards.calls[0]["idempotency_key"] == f"diddigo:ride:{ride.id}:rewards-reconciliation:v1"
 
 
 @pytest.mark.asyncio

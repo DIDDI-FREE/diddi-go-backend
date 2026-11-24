@@ -81,6 +81,7 @@ services:
       DIDDI_REWARDS_CLIENT_ID: ${DIDDI_REWARDS_CLIENT_ID:-diddigo}
       DIDDI_REWARDS_SERVICE_TOKEN: ${DIDDI_REWARDS_SERVICE_TOKEN:-}
       DIDDI_REWARDS_SERVICE_CLIENT_SECRET: ${DIDDI_REWARDS_SERVICE_CLIENT_SECRET:-}
+      DIDDI_REWARDS_SERVICE_SCOPES: ${DIDDI_REWARDS_SERVICE_SCOPES:-diddirewards:benefits:quote diddirewards:benefits:reserve diddirewards:benefits:release diddirewards:benefits:consume diddirewards:benefits:correct diddirewards:reconcile}
       DIDDI_REWARDS_TIMEOUT_SECONDS: ${DIDDI_REWARDS_TIMEOUT_SECONDS:-5}
       DIDDI_REWARDS_ENABLED: ${DIDDI_REWARDS_ENABLED:-false}
       DIDDI_REWARDS_CAMPAIGN_ID: ${DIDDI_REWARDS_CAMPAIGN_ID:-}

@@ -814,6 +814,7 @@ class PaymentService:
             await self._record_ride_settlement(ride, payment.status)
             await self._confirm_rewards_if_needed(ride, payment)
             await self._correct_rewards_if_needed(ride, payment)
+            await self._reconcile_rewards_if_needed(ride, payment)
             await self._enqueue_rewards_event(ride, payment)
         return payment
 
@@ -877,6 +878,43 @@ class PaymentService:
             return
         ride.rewards_status = "corrected"
         await self.ride_repo.save(ride)
+
+    async def _reconcile_rewards_if_needed(self, ride, payment) -> None:
+        """Ask Rewards to reconcile after a payment transition.
+
+        The call is idempotent and deliberately best-effort: the durable
+        payment/rewards event remains available for a later retry when Rewards
+        is unavailable.
+        """
+        if (
+            self.diddirewards is None
+            or ride.rewards_consumption_id is None
+            or payment.status
+            not in {
+                PaymentStatus.COLLECTED,
+                PaymentStatus.SUCCEEDED,
+                PaymentStatus.REFUNDED,
+                PaymentStatus.PARTIALLY_REFUNDED,
+                PaymentStatus.CANCELLED,
+            }
+        ):
+            return
+        reconciliation = getattr(self.diddirewards, "reconciliation", None)
+        if reconciliation is None:
+            return
+        try:
+            await reconciliation(
+                consumption_id=ride.rewards_consumption_id,
+                confirmed_discount_minor=int(ride.rewards_discount_amount or 0),
+                external_reference=str(ride.id),
+                details={"payment_status": payment.status.value, "payment_amount": int(payment.amount)},
+                idempotency_key=f"diddigo:ride:{ride.id}:rewards-reconciliation:v1",
+                request_id=str(ride.id),
+            )
+            log_event("rewards.reconciliation.completed", ride_id=ride.id, payment_status=payment.status.value)
+        except Exception:
+            logger.exception("rewards reconciliation deferred ride_id=%s", ride.id)
+            log_event("rewards.reconciliation.deferred", level="error", ride_id=ride.id)
 
     async def _enqueue_rewards_event(self, ride, payment) -> None:
         if ride.rewards_reservation_id is None:

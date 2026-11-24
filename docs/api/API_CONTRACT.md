@@ -368,7 +368,7 @@ stateDiagram-v2
 |---|---|---|---|
 | Création | requested | Passager, devis valide | Contrôles de devis expiré/consommé |
 | requested | matched | Acceptation chauffeur via matching | Disponibilité/offre/affectation contrôlées serveur |
-| requested | no_driver_found | Matching sans chauffeur | Transition automatique |
+| requested | no_driver_found | Matching sans chauffeur après épuisement de `matching_search_budget_seconds` | Transition automatique |
 | matched | driver_en_route | Mise en route chauffeur affecté/admin | 403 si non participant |
 | driver_en_route | arrived | /arrive, chauffeur affecté/admin et position valide | ARRIVAL_INVALID_RIDE_STATUS, DRIVER_LOCATION_REQUIRED, DRIVER_TOO_FAR_FROM_PICKUP |
 | arrived | in_progress | /start, chauffeur affecté/admin, code passager | INVALID_RIDE_START_CODE, RIDE_START_CODE_BLOCKED ; PATCH ne remplace pas /start |
@@ -381,6 +381,11 @@ stateDiagram-v2
 Le mapping exhaustif code/détails par route reste [UNKNOWN](open-questions.md). Répéter PATCH /status vers completed possède une exception idempotente de service ; cela n'ajoute pas d'arête au graphe.
 
 matching et cancelled_by_admin ne sont pas dans l'enum. early_stop_requested est un signal WebSocket ; le statut persistant reste in_progress ou waiting jusqu'à confirmation.
+
+Le matching démarre à la création de la course. Les chauffeurs qui passent en ligne après
+cette création ne rejoignent pas la recherche en cours. La recherche s'arrête lorsque
+`matching_search_budget_seconds` est épuisé ; la course passe alors en `no_driver_found`
+et le passager doit demander une nouvelle recherche en créant une nouvelle course.
 
 ### Supplément
 
