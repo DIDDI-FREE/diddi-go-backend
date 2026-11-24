@@ -43,6 +43,7 @@ class FakePaymentRepo:
         self.wallets = {}
         self.topups = {}
         self.debts = {}
+        self.rewards_events = []
 
     async def find_open_debt_for_passenger(self, passenger_user_id):
         return next(
@@ -150,6 +151,10 @@ class FakePaymentRepo:
             return False
         self.events.add(event_id)
         return True
+
+    async def enqueue_rewards_event(self, *, event_type, ride_id, payload):
+        self.rewards_events.append({"event_type": event_type, "ride_id": ride_id, "payload": payload})
+        return payload["event_id"]
 
     async def get_or_create_wallet(self, driver_id, *, currency="XOF"):
         from app_base.modules.payment.domain.entities import DriverWallet
@@ -320,6 +325,30 @@ def make_completed_ride() -> Ride:
         platform_commission=Decimal("248"),
         driver_payout_estimate=Decimal("2852"),
     )
+
+
+@pytest.mark.asyncio
+async def test_rewards_event_id_distinguishes_payment_operations() -> None:
+    ride = make_completed_ride()
+    ride.rewards_reservation_id = uuid4()
+    ride.rewards_discount_amount = Decimal("246")
+    repo = FakePaymentRepo()
+    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride))
+    payment = Transaction(
+        id=uuid4(),
+        ride_id=ride.id,
+        amount=Decimal("2854"),
+        currency="XOF",
+        method=PaymentDomainMethod.MOBILE_MONEY,
+        status=PaymentStatus.SUCCEEDED,
+    )
+
+    await service._enqueue_rewards_event(ride, payment)
+
+    event = repo.rewards_events[0]
+    assert event["event_type"] == "ride.payment_confirmed"
+    assert event["payload"]["event_id"].endswith(f":{payment.id}")
+    assert event["payload"]["client_paid_minor"] == 2854
 
 
 @pytest.mark.asyncio

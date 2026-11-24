@@ -16,10 +16,10 @@ Référence : `IMPLEMENTATION_PLAN-diddigo-rewards-improvements.24-11-2026.md`
   - [x] P2-A — Contrat de réponse détail de course
   - [x] P2-B — Réponses paiement/cash
   - [x] P2-C — Tests de visibilité par rôle
-- [ ] P3 — Automatiser la réconciliation sans double comptage
-  - [ ] P3-A — Flux automatique de confirmation/correction
-  - [ ] P3-B — Déduplication, reprise et route admin
-  - [ ] P3-C — Tests de panne et reprise
+- [x] P3 — Automatiser la réconciliation sans double comptage
+  - [x] P3-A — Flux automatique de confirmation/correction
+  - [x] P3-B — Déduplication, reprise et route admin
+  - [x] P3-C — Tests de panne et reprise
 - [ ] P4 — Valider l’observabilité et la recette staging
   - [ ] P4-A — Vérifications locales
   - [ ] P4-B — Préparation de la recette staging

@@ -893,11 +893,12 @@ class PaymentService:
         enqueue = getattr(self.payment_repo, "enqueue_rewards_event", None)
         if enqueue is None:
             return
+        event_id = f"diddigo:{event_type}:{ride.id}:{payment.id}"
         await enqueue(
             event_type=event_type,
             ride_id=ride.id,
             payload={
-                "event_id": f"diddigo:{event_type}:{ride.id}",
+                "event_id": event_id,
                 "event_type": event_type,
                 "ride_id": str(ride.id),
                 "reservation_id": str(ride.rewards_reservation_id),

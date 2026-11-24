@@ -93,3 +93,12 @@
 - Alternatives écartées : réponse asynchrone `202` ; absence de contrat de statut.
 - Source : Agent, à valider ; utilisateur a demandé l’implémentation autonome le 2026-11-24.
 - Impact : client Rewards, contrat d’intégration, tests et traitement des erreurs.
+
+### D-11 — Identité des événements de paiement Rewards
+- Date : 2026-11-24
+- Phase / sous-lot : P3-B
+- Décision : l’identifiant d’un événement Rewards inclut le type d’événement, la course et la transaction de paiement ; l’outbox réutilise cet identifiant fourni dans le payload.
+- Pourquoi : permettre plusieurs opérations légitimes sur une même course, notamment un remboursement partiel puis total, sans accepter un doublon de la même transaction.
+- Alternatives écartées : un seul événement par type et course ; publication sans clé unique.
+- Source : Agent, à valider ; contrat Rewards v1 sur la déduplication par `event_id`.
+- Impact : `PaymentService`, outbox SQL et consommateur Redis.

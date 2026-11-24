@@ -34,7 +34,7 @@ Les migrations seront vérifiées avec Alembic dans la phase concernée, en fonc
 | P0 | TERMINÉE | Contrat release et mécanisme outbox documentés |
 | P1 | TERMINÉE | Client release, expiration, matching et annulation couverts |
 | P2 | TERMINÉE | Détail course et réponses paiement enrichis |
-| P3 | EN ATTENTE | Architecture de réconciliation à préciser |
+| P3 | TERMINÉE | Outbox/worker conservés, identifiants d’événements affinés |
 | P4 | EN ATTENTE | Validation centrale séparée du code |
 
 ## Vérifications de déploiement en attente
