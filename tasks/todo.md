@@ -20,10 +20,10 @@ Référence : `IMPLEMENTATION_PLAN-diddigo-rewards-improvements.24-11-2026.md`
   - [x] P3-A — Flux automatique de confirmation/correction
   - [x] P3-B — Déduplication, reprise et route admin
   - [x] P3-C — Tests de panne et reprise
-- [ ] P4 — Valider l’observabilité et la recette staging
-  - [ ] P4-A — Vérifications locales
-  - [ ] P4-B — Préparation de la recette staging
-  - [ ] P4-C — Vérification centrale Loki/Tempo en attente de plateforme
+- [x] P4 — Valider l’observabilité et la recette staging
+  - [x] P4-A — Vérifications locales
+  - [x] P4-B — Préparation de la recette staging
+  - [x] P4-C — Vérification centrale Loki/Tempo en attente de plateforme
 
 ## Idées hors plan
 

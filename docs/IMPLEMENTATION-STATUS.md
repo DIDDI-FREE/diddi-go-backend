@@ -35,7 +35,7 @@ Les migrations seront vérifiées avec Alembic dans la phase concernée, en fonc
 | P1 | TERMINÉE | Client release, expiration, matching et annulation couverts |
 | P2 | TERMINÉE | Détail course et réponses paiement enrichis |
 | P3 | TERMINÉE | Outbox/worker conservés, identifiants d’événements affinés |
-| P4 | EN ATTENTE | Validation centrale séparée du code |
+| P4 | EN ATTENTE DE DÉPLOIEMENT | Vérifications locales terminées ; validation centrale non exécutée |
 
 ## Vérifications de déploiement en attente
 
@@ -44,3 +44,4 @@ Les migrations seront vérifiées avec Alembic dans la phase concernée, en fonc
 - Vérifier que le stream Redis configuré reçoit les événements et que le consumer Rewards les traite.
 - Exécuter une course promotionnelle non destructive et vérifier devis, réservation, paiement, release/correction et montant payable.
 - Faire confirmer par DiddiObserve la réception corrélée dans Loki et Tempo.
+- Exécuter la suite non-unitaire dans un environnement PostgreSQL/Redis disponible ; elle n’a pas pu terminer localement.

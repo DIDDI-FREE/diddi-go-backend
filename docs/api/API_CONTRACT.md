@@ -422,7 +422,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 ## Inventaire HTTP
 
 <!-- generated:http-inventory:start -->
-142 chemins ; 156 opérations HTTP.
+143 chemins ; 157 opérations HTTP.
 
 | Méthode | Chemin | Opération | Réponses documentées |
 |---|---|---|---|
@@ -499,6 +499,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 | POST | `/v1/admin/partners/{partner_id}/vehicles/{vehicle_id}/unassign` | Unassign Vehicle | 200, 422 |
 | POST | `/v1/admin/payments/reconcile` | Reconcile Pending Payments | 200, 422 |
 | POST | `/v1/admin/payments/rides/{ride_id}/reconcile` | Reconcile Ride Payment | 200, 422 |
+| POST | `/v1/admin/payments/rides/{ride_id}/reconcile-rewards` | Reconcile Ride Rewards | 200, 422 |
 | POST | `/v1/admin/payments/topups/{topup_id}/reconcile` | Reconcile Driver Topup | 200, 422 |
 | GET | `/v1/admin/payments/withdrawals/{withdrawal_id}` | Admin Get Driver Withdrawal | 200, 422 |
 | POST | `/v1/admin/payments/withdrawals/{withdrawal_id}/reconcile` | Reconcile Driver Withdrawal | 200, 422 |
