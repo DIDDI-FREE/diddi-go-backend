@@ -272,10 +272,13 @@ class PaymentService:
 
     async def get_payment(self, ride_id: UUID) -> dict:
         payment = await self.payment_repo.find_by_ride_id(ride_id)
+        ride = await self.ride_repo.find_by_id(ride_id)
         if payment is None:
-            ride = await self.ride_repo.find_by_id(ride_id)
             method = ride.payment_method.value if ride is not None else "cash"
-            return {"ride_id": str(ride_id), "status": "pending", "method": method, "amount": None, "currency": "XOF"}
+            return _with_ride_amounts(
+                {"ride_id": str(ride_id), "status": "pending", "method": method, "amount": None, "currency": "XOF"},
+                ride,
+            )
         payload = {
             "ride_id": str(payment.ride_id),
             "status": payment.status.value,
@@ -293,7 +296,7 @@ class PaymentService:
                     "paid_at": _iso(payment.paid_at),
                 }
             )
-        return payload
+        return _with_ride_amounts(payload, ride)
 
     async def prepare_payment(
         self,
@@ -932,9 +935,9 @@ class PaymentService:
         return topup
 
     async def _prepare_cash(self, ride_id: UUID) -> dict:
+        ride = await self.ride_repo.find_by_id(ride_id)
         payment = await self.payment_repo.find_by_ride_id(ride_id)
         if payment is None:
-            ride = await self.ride_repo.find_by_id(ride_id)
             if ride is None:
                 raise ApiError(404, ErrorCode.RIDE_NOT_FOUND, "Aucune course trouvee avec cet identifiant.")
             payment = Transaction(
@@ -963,6 +966,9 @@ class PaymentService:
             "currency": payment.currency,
             "provider": "cash",
             "provider_status": "local",
+            "gross_amount": int(ride.final_fare or ride.estimated_fare or 0),
+            "discount_amount_minor": int(ride.rewards_discount_amount or 0),
+            "client_payable_amount": int(payment.amount),
         }
 
     async def _prepare_diddipay(
@@ -996,7 +1002,7 @@ class PaymentService:
                 payment_intent_id=existing.payment_intent_id,
                 status=existing.status.value,
             )
-            return _external_payment_payload(existing, next_action=existing.provider_next_action)
+            return _external_payment_payload(existing, next_action=existing.provider_next_action, ride=ride)
         if existing and not retrying_terminal_payment:
             raise ApiError(
                 409,
@@ -1088,7 +1094,7 @@ class PaymentService:
             provider_status=payment.provider_status,
             has_next_action=next_action is not None,
         )
-        return _external_payment_payload(payment, next_action=next_action)
+        return _external_payment_payload(payment, next_action=next_action, ride=ride)
 
     async def _record_ride_settlement(self, ride, payment_status: PaymentStatus) -> None:
         if ride.driver_id is None:
@@ -1175,19 +1181,37 @@ def _topup_status_from_payment_status(status: PaymentStatus) -> TopupStatus:
     return mapping.get(status, TopupStatus.FAILED)
 
 
-def _external_payment_payload(payment: Transaction, *, next_action: dict | None) -> dict:
-    return {
-        "ride_id": str(payment.ride_id),
-        "status": payment.status.value,
-        "method": payment.method.value,
-        "amount": int(payment.amount),
-        "currency": payment.currency,
-        "provider": "diddipay",
-        "provider_status": payment.provider_status,
-        "payment_intent_id": str(payment.payment_intent_id) if payment.payment_intent_id else None,
-        "business_reference": payment.business_reference,
-        "next_action": next_action,
-    }
+def _external_payment_payload(payment: Transaction, *, next_action: dict | None, ride=None) -> dict:
+    return _with_ride_amounts(
+        {
+            "ride_id": str(payment.ride_id),
+            "status": payment.status.value,
+            "method": payment.method.value,
+            "amount": int(payment.amount),
+            "currency": payment.currency,
+            "provider": "diddipay",
+            "provider_status": payment.provider_status,
+            "payment_intent_id": str(payment.payment_intent_id) if payment.payment_intent_id else None,
+            "business_reference": payment.business_reference,
+            "next_action": next_action,
+        },
+        ride,
+    )
+
+
+def _with_ride_amounts(payload: dict, ride) -> dict:
+    if ride is None:
+        return payload
+    gross_amount = ride.final_fare or ride.estimated_fare
+    discount_amount = ride.rewards_discount_amount or Decimal("0")
+    payload.update(
+        {
+            "gross_amount": int(gross_amount) if gross_amount is not None else None,
+            "discount_amount_minor": int(discount_amount),
+            "client_payable_amount": int(_client_payable_amount(ride)),
+        }
+    )
+    return payload
 
 
 def _intent_mismatch_reason(

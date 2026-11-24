@@ -1451,6 +1451,9 @@ def _json_default(value: object) -> str:
 def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -> dict:
     money_visible = _money_visible(ride, viewer_role)
     analytics_visible = viewer_role == "admin"
+    gross_amount = ride.final_fare or ride.estimated_fare
+    discount_amount = int(ride.rewards_discount_amount or 0) if money_visible else 0
+    client_payable_amount = max(int(gross_amount or 0) - discount_amount, 0) if money_visible else None
     return {
         "id": str(ride.id),
         "status": ride.status.value,
@@ -1463,6 +1466,12 @@ def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -
         "comfort_level": ride.comfort_level.value,
         "estimated_fare": int(ride.estimated_fare) if money_visible and ride.estimated_fare is not None else None,
         "final_fare": int(ride.final_fare) if money_visible and ride.final_fare is not None else None,
+        "rewards": {
+            "campaign_id": ride.rewards_campaign_id,
+            "discount_amount_minor": discount_amount,
+            "client_payable_amount": client_payable_amount,
+            "status": ride.rewards_status,
+        },
         "currency": ride.currency,
         "distance_km": float(ride.distance_km) if ride.distance_km is not None else None,
         "duration_seconds": ride.duration_seconds,

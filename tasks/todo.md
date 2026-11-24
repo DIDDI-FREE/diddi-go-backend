@@ -12,10 +12,10 @@ Référence : `IMPLEMENTATION_PLAN-diddigo-rewards-improvements.24-11-2026.md`
   - [x] P1-A — Client release et expiration
   - [x] P1-B — Intégration aux transitions d’annulation et de matching
   - [x] P1-C — Tests de résilience et d’idempotence
-- [ ] P2 — Rendre le montant payable visible
-  - [ ] P2-A — Contrat de réponse détail de course
-  - [ ] P2-B — Réponses paiement/cash
-  - [ ] P2-C — Tests de visibilité par rôle
+- [x] P2 — Rendre le montant payable visible
+  - [x] P2-A — Contrat de réponse détail de course
+  - [x] P2-B — Réponses paiement/cash
+  - [x] P2-C — Tests de visibilité par rôle
 - [ ] P3 — Automatiser la réconciliation sans double comptage
   - [ ] P3-A — Flux automatique de confirmation/correction
   - [ ] P3-B — Déduplication, reprise et route admin

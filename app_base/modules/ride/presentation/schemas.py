@@ -316,6 +316,13 @@ class RidePaymentResponse(BaseModel):
     ready: bool
 
 
+class RideRewardsResponse(BaseModel):
+    campaign_id: str | None = None
+    discount_amount_minor: int = 0
+    client_payable_amount: int | None = None
+    status: str | None = None
+
+
 class RideEarlyStopResponse(BaseModel):
     requested_at: datetime | None = None
     expires_at: datetime | None = None
@@ -350,6 +357,7 @@ class RideDetailResponse(BaseModel):
     comfort_level: str
     estimated_fare: int | None = None
     final_fare: int | None = None
+    rewards: RideRewardsResponse
     currency: str
     distance_km: float | None = None
     duration_seconds: int | None = None
