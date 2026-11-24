@@ -488,6 +488,7 @@ async def matching_service(
     maps: MapProvider = Depends(get_map_provider),
     priority_ledger_repo_dep: SqlAlchemyPriorityLedgerRepository = Depends(priority_ledger_repo),
     config_store: SqlAlchemyDispatchConfigStore = Depends(dispatch_config_store),
+    diddirewards: DiddiRewardsClient = Depends(get_diddirewards),
 ) -> MatchingService:
     config = await config_store.load()
     return MatchingService(
@@ -501,6 +502,7 @@ async def matching_service(
         routing=maps,
         priority=DriverPriorityService(priority_ledger_repo_dep, config),
         config=config,
+        diddirewards=diddirewards,
     )
 
 

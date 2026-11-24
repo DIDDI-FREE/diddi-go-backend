@@ -73,6 +73,22 @@ class DiddiRewardsClient:
             idempotency_key=idempotency_key,
         )
 
+    async def release(
+        self,
+        *,
+        reservation_id: UUID,
+        ride_id: UUID,
+        reason: str,
+        idempotency_key: str,
+        request_id: str,
+    ) -> dict[str, Any]:
+        return await self._post(
+            "/internal/v1/rewards/integrations/diddigo/benefits/release",
+            {"reservation_id": str(reservation_id), "ride_id": str(ride_id), "reason": reason},
+            request_id=request_id,
+            idempotency_key=idempotency_key,
+        )
+
     async def confirm(
         self,
         *,
@@ -170,6 +186,8 @@ class DiddiRewardsClient:
             except ValueError:
                 body = {"raw": response.text[:500]}
             raise ApiError(response.status_code, "REWARDS_OPERATION_FAILED", "DiddiRewards a refuse l'operation.", body)
+        if response.status_code == 204:
+            return {}
         return response.json()
 
     async def _headers(self) -> dict[str, str]:

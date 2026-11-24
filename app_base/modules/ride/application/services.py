@@ -318,6 +318,7 @@ class RideService:
                 requested_amount_minor=int(ride.rewards_discount_amount),
                 idempotency_key=f"diddigo:ride:{ride.id}:rewards-reserve:v1",
                 request_id=str(ride.id),
+                expires_at=iso_utc(quote.expires_at),
             )
             ride.rewards_reservation_id = _required_uuid(reservation, "reservation_id")
             ride.rewards_status = "reserved"
@@ -1027,6 +1028,7 @@ class RideService:
         ride.transition(new_status, metadata={"reason": reason})
         ride.cancellation_reason = reason
         await self.ride_repo.save(ride)
+        await self._release_rewards_if_needed(ride, reason=reason)
         await self._record_priority_outcome(ride)
         log_event(
             "ride.cancelled",
@@ -1037,6 +1039,31 @@ class RideService:
             status=ride.status.value,
         )
         return {"id": str(ride.id), "status": ride.status.value, "cancelled_at": iso_utc(ride.cancelled_at)}
+
+    async def _release_rewards_if_needed(self, ride: Ride, *, reason: str) -> None:
+        if (
+            self.diddirewards is None
+            or ride.rewards_reservation_id is None
+            or ride.rewards_status in {"confirmed", "corrected", "released"}
+        ):
+            return
+        try:
+            await self.diddirewards.release(
+                reservation_id=ride.rewards_reservation_id,
+                ride_id=ride.id,
+                reason=reason,
+                idempotency_key=f"diddigo:ride:{ride.id}:rewards-release:v1",
+                request_id=str(ride.id),
+            )
+        except Exception:
+            ride.rewards_status = "release_deferred"
+            await self.ride_repo.save(ride)
+            logger.exception("rewards release deferred ride_id=%s", ride.id)
+            log_event("rewards.release.deferred", level="error", ride_id=ride.id, reason=reason)
+            return
+        ride.rewards_status = "released"
+        await self.ride_repo.save(ride)
+        log_event("rewards.release.completed", ride_id=ride.id, reason=reason)
 
     async def rate(
         self,

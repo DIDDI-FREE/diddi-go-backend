@@ -5,13 +5,13 @@ Référence : `IMPLEMENTATION_PLAN-diddigo-rewards-improvements.24-11-2026.md`
 
 ## Phases
 
-- [ ] P0 — Figer les contrats externes
-  - [ ] P0-A — Contrat release DiddiRewards
-  - [ ] P0-B — Contrat de réconciliation et vérification de la configuration existante
-- [ ] P1 — Libérer les réservations non consommées
-  - [ ] P1-A — Client release et expiration
-  - [ ] P1-B — Intégration aux transitions d’annulation et de matching
-  - [ ] P1-C — Tests de résilience et d’idempotence
+- [x] P0 — Figer les contrats externes
+  - [x] P0-A — Contrat release DiddiRewards
+  - [x] P0-B — Contrat de réconciliation et vérification de la configuration existante
+- [x] P1 — Libérer les réservations non consommées
+  - [x] P1-A — Client release et expiration
+  - [x] P1-B — Intégration aux transitions d’annulation et de matching
+  - [x] P1-C — Tests de résilience et d’idempotence
 - [ ] P2 — Rendre le montant payable visible
   - [ ] P2-A — Contrat de réponse détail de course
   - [ ] P2-B — Réponses paiement/cash

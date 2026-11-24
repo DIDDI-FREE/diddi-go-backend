@@ -118,6 +118,18 @@ class FakePaymentRepo:
         return DriverWallet(id=uuid4(), driver_id=driver_id, balance=self.balances.get(driver_id, 0), currency=currency)
 
 
+class FakeRewards:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.calls: list[dict] = []
+        self.fail = fail
+
+    async def release(self, **payload):
+        self.calls.append(payload)
+        if self.fail:
+            raise RuntimeError("Rewards unavailable")
+        return {}
+
+
 def _wave_service(candidate_count: int = 6) -> tuple[MatchingService, Ride, list]:
     user_ids = [uuid4() for _ in range(candidate_count)]
     driver_ids = [uuid4() for _ in range(candidate_count)]
@@ -358,3 +370,34 @@ async def test_matching_gives_up_when_estimated_commission_exceeds_threshold(mon
 
     assert dispatch.no_driver_found is True
     assert ride.status is RideStatus.NO_DRIVER_FOUND
+
+
+@pytest.mark.asyncio
+async def test_matching_releases_rewards_reservation_when_no_driver_found() -> None:
+    service, ride, _user_ids = _wave_service(candidate_count=0)
+    ride.rewards_reservation_id = uuid4()
+    ride.rewards_status = "reserved"
+    rewards = FakeRewards()
+    service.diddirewards = rewards
+
+    dispatch = await service.try_match(ride)
+
+    assert dispatch.no_driver_found is True
+    assert ride.rewards_status == "released"
+    assert rewards.calls[0]["reservation_id"] == ride.rewards_reservation_id
+    assert rewards.calls[0]["reason"] == "no_driver_found"
+
+
+@pytest.mark.asyncio
+async def test_matching_keeps_ride_terminal_when_rewards_release_fails() -> None:
+    service, ride, _user_ids = _wave_service(candidate_count=0)
+    ride.rewards_reservation_id = uuid4()
+    ride.rewards_status = "reserved"
+    rewards = FakeRewards(fail=True)
+    service.diddirewards = rewards
+
+    dispatch = await service.try_match(ride)
+
+    assert dispatch.no_driver_found is True
+    assert ride.status is RideStatus.NO_DRIVER_FOUND
+    assert ride.rewards_status == "release_deferred"

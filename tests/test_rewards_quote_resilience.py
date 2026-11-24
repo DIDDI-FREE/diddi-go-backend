@@ -26,6 +26,7 @@ pytestmark = pytest.mark.unit
 REQUIRED_SCOPES = {
     "diddirewards:benefits:quote",
     "diddirewards:benefits:reserve",
+    "diddirewards:benefits:release",
     "diddirewards:benefits:consume",
     "diddirewards:benefits:correct",
     "diddirewards:reconcile",
