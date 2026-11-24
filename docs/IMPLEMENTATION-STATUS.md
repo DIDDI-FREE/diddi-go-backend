@@ -2,7 +2,7 @@
 
 Date de démarrage : 2026-11-24  
 Branche : `codex/diddigo-rewards-improvements-2026-11-24`  
-Plan : [IMPLEMENTATION_PLAN-diddigo-rewards-improvements.24-11-2026.md](../IMPLEMENTATION_PLAN-diddigo-rewards-improvements.24-11-2026.md)
+Plan : `IMPLEMENTATION_PLAN-diddigo-rewards-improvements.24-11-2026.md` à la racine du dépôt.
 
 ## État global
 
