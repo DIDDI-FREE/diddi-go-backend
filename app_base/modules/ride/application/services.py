@@ -322,7 +322,26 @@ class RideService:
             )
             ride.rewards_reservation_id = _required_uuid(reservation, "reservation_id")
             ride.rewards_status = "reserved"
+            # Rewards may reserve less than the quote (entitlement nearly used up, two rides at once).
+            # The ride discount must be what was really reserved, or the later confirm is refused.
+            quoted_amount = ride.rewards_discount_amount
+            reserved_amount = _money_value(reservation, "reserved_amount_minor")
+            if reserved_amount is None:
+                log_event(
+                    "rewards.reservation.amount_missing", level="warning", ride_id=ride.id, quoted=quoted_amount
+                )
+            elif reserved_amount < quoted_amount:
+                ride.rewards_discount_amount = reserved_amount
+                log_event(
+                    "rewards.reservation.partial",
+                    level="warning",
+                    ride_id=ride.id,
+                    quoted=quoted_amount,
+                    reserved=reserved_amount,
+                )
             await self.ride_repo.save(ride)
+            if ride.rewards_discount_amount <= 0:
+                await self._release_rewards_if_needed(ride, reason="nothing_reserved")
         for transition in ride.status_history:
             await self.ride_repo.record_status_transition(transition)
         log_event(

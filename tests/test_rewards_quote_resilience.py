@@ -201,3 +201,82 @@ def test_ride_detail_exposes_gross_discount_and_payable_amount(viewer_role: str)
         "client_payable_amount": 988,
         "status": "reserved",
     }
+
+
+class RewardsReserving(RewardsEligible):
+    """Rewards that reserves at most `available` (ticket 003: a short reservation is a normal case)."""
+
+    def __init__(self, available: int | None) -> None:
+        self.available = available
+        self.released: list[dict] = []
+
+    async def reserve(self, *, requested_amount_minor: int, **_: object) -> dict:
+        body: dict = {"reservation_id": str(uuid4()), "status": "pending", "duplicate": False}
+        if self.available is not None:
+            body["reserved_amount_minor"] = min(requested_amount_minor, self.available)
+        return body
+
+    async def release(self, **kwargs: object) -> dict:
+        self.released.append(kwargs)
+        return {}
+
+
+async def _ride_with(rewards, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(ride_services.settings, "diddi_rewards_enabled", True)
+    service, quotes, _ = service_with_repositories()
+    service.diddirewards = rewards
+    passenger_id = uuid4()
+    await service.create_quote(
+        passenger_user_id=passenger_id,
+        pickup=GeoPoint(lat=5.35, lng=-4.01),
+        pickup_address="Cocody",
+        dropoff=GeoPoint(lat=5.32, lng=-4.02),
+        dropoff_address="Plateau",
+        vehicle_category="standard",
+        comfort_level="standard",
+        campaign_id="11111111-1111-1111-1111-111111111111",
+    )
+    quote = next(iter(quotes.quotes.values()))
+    ride = await service.request_ride(
+        passenger_user_id=passenger_id, quote_id=quote.id, payment_method="cash", scheduled_at=None
+    )
+    return ride, quote
+
+
+@pytest.mark.asyncio
+async def test_full_reservation_keeps_quoted_discount(monkeypatch: pytest.MonkeyPatch) -> None:
+    ride, quote = await _ride_with(RewardsReserving(available=10_000), monkeypatch)
+    assert quote.rewards_discount_amount > 0
+    assert ride.rewards_discount_amount == quote.rewards_discount_amount
+    assert ride.rewards_status == "reserved"
+
+
+@pytest.mark.asyncio
+async def test_partial_reservation_lowers_ride_discount_to_reserved_amount(monkeypatch: pytest.MonkeyPatch) -> None:
+    rewards = RewardsReserving(available=32)
+    ride, quote = await _ride_with(rewards, monkeypatch)
+    assert quote.rewards_discount_amount > 32
+    assert ride.rewards_discount_amount == Decimal("32")
+    assert ride.rewards_status == "reserved"
+    assert rewards.released == []
+    payload = _ride_detail_payload(ride, None, viewer_role="passenger")
+    assert payload["rewards"]["discount_amount_minor"] == 32
+    assert payload["rewards"]["client_payable_amount"] == int(ride.estimated_fare) - 32
+
+
+@pytest.mark.asyncio
+async def test_empty_reservation_drops_discount_and_releases(monkeypatch: pytest.MonkeyPatch) -> None:
+    rewards = RewardsReserving(available=0)
+    ride, _ = await _ride_with(rewards, monkeypatch)
+    assert ride.rewards_discount_amount == Decimal("0")
+    assert ride.rewards_status == "released"
+    assert len(rewards.released) == 1
+    payload = _ride_detail_payload(ride, None, viewer_role="passenger")
+    assert payload["rewards"]["client_payable_amount"] == int(ride.estimated_fare)
+
+
+@pytest.mark.asyncio
+async def test_reservation_without_amount_keeps_quoted_discount(monkeypatch: pytest.MonkeyPatch) -> None:
+    ride, quote = await _ride_with(RewardsReserving(available=None), monkeypatch)
+    assert ride.rewards_discount_amount == quote.rewards_discount_amount
+    assert ride.rewards_status == "reserved"
