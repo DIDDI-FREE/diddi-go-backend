@@ -6,7 +6,7 @@ Plan : [IMPLEMENTATION_PLAN-diddigo-rewards-improvements.24-11-2026.md](../IMPLE
 
 ## État global
 
-Phase 0 — terminée. Le contrat DiddiGo du endpoint release est documenté comme contrat proposé à DiddiRewards ; l’implémentation serveur externe reste une vérification de déploiement.
+Les phases d’implémentation P0 à P3 sont terminées. P4 est terminée pour les vérifications locales et reste en attente pour les validations de déploiement et d’intégration externes.
 
 ## Vérifications du projet
 
