@@ -824,6 +824,8 @@ class PaymentService:
             or ride.rewards_status == "confirmed"
             or ride.rewards_reservation_id is None
             or ride.rewards_discount_amount is None
+            # Nothing was reserved (reservation already released at ride creation): nothing to confirm.
+            or ride.rewards_discount_amount <= 0
             or payment.status not in {PaymentStatus.COLLECTED, PaymentStatus.SUCCEEDED}
         ):
             return
