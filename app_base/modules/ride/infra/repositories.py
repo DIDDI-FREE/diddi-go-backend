@@ -182,6 +182,30 @@ class SqlAlchemyRideRepository:
         rides = [self._to_domain(r) for r in result.scalars().all()]
         return rides, int(total)
 
+    async def list_open_rewards_reservations(self, *, since: datetime, limit: int) -> list[Ride]:
+        """Ended rides whose Rewards reservation is neither confirmed nor released (ticket 014)."""
+        ended = [
+            RideStatus.COMPLETED.value,
+            RideStatus.CANCELLED_BY_PASSENGER.value,
+            RideStatus.CANCELLED_BY_DRIVER.value,
+            RideStatus.NO_DRIVER_FOUND.value,
+        ]
+        q = (
+            select(orm.RideModel)
+            .where(
+                orm.RideModel.rewards_reservation_id.is_not(None),
+                orm.RideModel.requested_at >= since,
+                or_(
+                    orm.RideModel.rewards_status == "release_deferred",
+                    (orm.RideModel.rewards_status == "reserved") & orm.RideModel.status.in_(ended),
+                ),
+            )
+            .order_by(orm.RideModel.requested_at)
+            .limit(limit)
+        )
+        result = await self._session.execute(q)
+        return [self._to_domain(row) for row in result.scalars().all()]
+
     async def has_active_ride(self, passenger_user_id: UUID) -> bool:
         statuses = [s.value for s in _ACTIVE_STATES]
         result = await self._session.execute(

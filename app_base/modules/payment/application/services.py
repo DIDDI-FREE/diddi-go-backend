@@ -38,6 +38,12 @@ from app_base.modules.payment.domain.entities import (
 )
 from app_base.modules.payment.domain.interfaces import PaymentRepository
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
+from app_base.modules.ride.application.rewards_release import (
+    CLOSED_STATUSES,
+    CONFIRMATION_REFUSED,
+    is_final_refusal,
+    release_reservation,
+)
 from app_base.modules.ride.domain.entities import RideStatus
 from app_base.modules.ride.domain.interfaces import RideRepository
 from app_base.modules.ride.infra.diddirewards_client import DiddiRewardsClient
@@ -818,10 +824,16 @@ class PaymentService:
             await self._enqueue_rewards_event(ride, payment)
         return payment
 
+    async def retry_rewards_confirmation(self, ride, payment) -> None:
+        """Retry a confirm that failed on the request path (rewards-reservations sweep)."""
+        await self._confirm_rewards_if_needed(ride, payment)
+
     async def _confirm_rewards_if_needed(self, ride, payment) -> None:
         if (
             self.diddirewards is None
-            or ride.rewards_status == "confirmed"
+            # Closed, or waiting for a release retry: never confirm (ticket 014).
+            or ride.rewards_status in CLOSED_STATUSES
+            or ride.rewards_status == "release_deferred"
             or ride.rewards_reservation_id is None
             or ride.rewards_discount_amount is None
             # Nothing was reserved (reservation already released at ride creation): nothing to confirm.
@@ -841,7 +853,20 @@ class PaymentService:
                 idempotency_key=f"diddigo:ride:{ride.id}:rewards-confirm:v1",
                 request_id=str(ride.id),
             )
-        except Exception:
+        except Exception as exc:
+            if is_final_refusal(exc):
+                # Rewards will never accept this confirm. The reservation must not stay open:
+                # release it. The passenger keeps the discount already applied to the payment.
+                logger.exception("rewards confirmation refused ride_id=%s", ride.id)
+                log_event(
+                    "rewards.confirmation.refused",
+                    level="error",
+                    ride_id=ride.id,
+                    status_code=exc.status_code,
+                    discount=int(ride.rewards_discount_amount),
+                )
+                await release_reservation(self.diddirewards, self.ride_repo, ride, reason=CONFIRMATION_REFUSED)
+                return
             logger.exception("rewards confirmation deferred ride_id=%s", ride.id)
             log_event("rewards.confirmation.deferred", level="error", ride_id=ride.id)
             return

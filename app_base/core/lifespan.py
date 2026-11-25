@@ -31,6 +31,8 @@ from app_base.core.telemetry import register_worker, shutdown_telemetry
 from app_base.modules.notification.infra.sms import build_sms_provider
 from app_base.modules.payment.application.reconciliation import reconciliation_loop
 from app_base.modules.payment.application.rewards_events import rewards_events_loop
+from app_base.modules.payment.application.rewards_reservations import WORKER_NAME as REWARDS_RESERVATIONS_WORKER
+from app_base.modules.payment.application.rewards_reservations import rewards_reservations_loop
 from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.ride.application.capability_projection_worker import capability_projection_loop
 from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
@@ -111,6 +113,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     register_worker("rewards-events", True)
 
+    # Closes Rewards reservations a failed confirm/release left open (ticket 014).
+    app.state.rewards_reservations_task = None
+    register_worker(REWARDS_RESERVATIONS_WORKER, settings.diddi_rewards_enabled)
+    if settings.diddi_rewards_enabled:
+        app.state.rewards_reservations_task = asyncio.create_task(
+            rewards_reservations_loop(app.state.diddirewards, app.state.redis),
+            name=REWARDS_RESERVATIONS_WORKER,
+        )
+
     app.state.capability_projection_task = None
     register_worker("capability-projection", settings.capability_projection_enabled)
     if settings.capability_projection_enabled:
@@ -136,6 +147,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await rewards_task
         if app.state.rewards_events_redis is not app.state.redis:
             await app.state.rewards_events_redis.aclose()
+        reservations_task: asyncio.Task | None = app.state.rewards_reservations_task
+        if reservations_task is not None:
+            reservations_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await reservations_task
         capability_task: asyncio.Task | None = app.state.capability_projection_task
         if capability_task is not None:
             capability_task.cancel()
