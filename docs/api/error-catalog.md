@@ -27,6 +27,9 @@ garanties dans cette enveloppe.
 | 404 | `RIDE_NOT_FOUND`, `ACTIVE_RIDE_NOT_FOUND` | Revenir a la liste ou a l'accueil. |
 | 409 | `ACTIVE_RIDE_ALREADY_EXISTS` | Restaurer la course active. |
 | 409 | `QUOTE_EXPIRED` | Demander un nouveau devis. |
+| 409 | `REWARDS_OFFER_ALREADY_USED` | L'offre a deja servi pour une autre commande. Course non creee, rien debite : redemander un devis et reafficher le prix. |
+| 404 | `REWARDS_OFFER_NOT_FOUND` | `GET /v1/me/offers/{offer_id}` : le client n'a pas cette offre. Revenir a la liste. |
+| 503 | `REWARDS_UNAVAILABLE` | Offres ou parrainage indisponibles. Reessayer plus tard ; pour la saisie d'un code, renvoyer la meme demande avec le meme `Idempotency-Key`. |
 | 409 | `RIDE_ALREADY_CANCELLED`, `RIDE_ALREADY_COMPLETED`, `RIDE_NOT_CANCELLABLE` | Relire la course. |
 | 409/423 | `RIDE_START_CODE_REQUIRED`, `INVALID_RIDE_START_CODE`, `RIDE_START_CODE_ALREADY_USED`, `RIDE_START_CODE_BLOCKED` | Afficher ou redemander le code de depart ; pour le verrouillage, contacter le support. |
 | 422 | `DRIVER_LOCATION_REQUIRED`, `DRIVER_TOO_FAR_FROM_PICKUP` | Publier une position chauffeur puis retenter l'arrivee. |

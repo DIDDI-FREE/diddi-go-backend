@@ -1,53 +1,56 @@
 # DiddiGo - Promotions et remises : spécification frontend
 
 Date : 2026-11-25
-Version : V1
+Version : V2 (ticket 040 : offres automatiques, prix garanti, bloc `offer`, routes « Mes offres » et parrainage)
 Pour : équipes Frontend et UI/UX (appli client, appli chauffeur)
 Source produit : « Promotions et bonus DIDDI — Note pour les équipes Frontend et UI/UX » (18 novembre 2026)
 
-Ce document dit ce que l'appli peut faire **aujourd'hui** avec l'API DiddiGo pour
-afficher une remise sur une course, et ce qui **n'existe pas encore**. Il a été
-écrit à partir du code déployé sur le staging le 25 novembre 2026 (`stage`,
-commit `2cbc24a`). Les schémas exacts restent dans `/openapi.json`.
+Ce document dit ce que l'appli peut faire avec l'API DiddiGo pour afficher une
+remise sur une course, et ce qui **n'existe pas encore**. La V1 décrivait le
+staging du 25 novembre (`stage`, commit `2cbc24a`). La V2 ajoute ce que livre le
+ticket 040 (branche `feat/040-promotions-api`) : ces parties sont marquées
+**(V2)** et ne marchent sur le staging qu'après son déploiement. Les schémas
+exacts restent dans `/openapi.json`.
 
 ## 1. En bref
 
 | Besoin de la note produit | État côté serveur |
 |---|---|
 | Voir la remise avant de commander (devis) | **Prêt** |
+| La remise s'applique seule, rien à saisir | **(V2) Prêt**, une fois le réglage serveur activé (section 3.1) |
+| Le prix affiché est le prix payé | **(V2) Prêt** : un devis valide garde sa remise ; une seule exception, refusée avant la création de la course (section 4) |
+| Nom de l'offre, pourcentage, plafond, rang (« 2e sur 3 »), date de fin, services | **(V2) Prêt** : bloc `rewards.offer` (section 3.1) |
 | Voir le prix initial, la remise et le montant à payer pendant et après la course | **Prêt** |
 | Le chauffeur voit le montant à encaisser | **Prêt** |
-| Savoir pourquoi une remise ne s'applique pas | **Partiel** : un texte libre, pas de code stable |
-| Être prévenu si la remise a changé entre le devis et la commande | **Partiel** : pas de signal, l'appli doit comparer (section 4) |
-| Liste des offres disponibles | **N'existe pas** |
-| Saisir un code promo ou un code de parrainage | **N'existe pas** |
-| Mon code de parrainage à partager | **N'existe pas** |
-| Progression (« 4 courses sur 10 »), date de fin, services où l'offre est valable | **N'existe pas** |
+| Liste de mes offres, avec historique | **(V2) Prêt** : `GET /v1/me/offers` (section 3.5) |
+| Saisir un code de parrainage | **(V2) Prêt** : `POST /v1/me/referral/code` (section 3.5) |
+| Mon code de parrainage à partager | **(V2) Prêt** : `GET /v1/me/referral` ; le lien de partage vaut `null` pour l'instant |
+| Savoir pourquoi une offre ne s'applique pas | **(V2) Partiel** : codes stables dans « Mes offres » (`state`, `reason`) ; au devis automatique, pas de message |
+| Code promo (autre que parrainage) | **N'existe pas** |
+| Progression d'une offre client (« 4 courses sur 10 ») | **N'existe pas** (`progress` vaut `null`) |
 | Bonus professionnel : bloqué, retirable, historique | **N'existe pas** |
 
-À retenir : aujourd'hui l'appli ne peut afficher une remise que si elle connaît
-déjà un identifiant de campagne (`campaign_id`). Aucune route ne lui donne cet
-identifiant. Tant que ce point n'est pas réglé (section 8), le parcours remise
-ne peut pas être branché de bout en bout. Les écrans, eux, peuvent être
-construits dès maintenant.
-
-Constat au 25 novembre : l'appli n'envoie jamais `campaign_id` et ne lit pas le
-bloc `rewards`.
+À retenir :
+- Avant la V2, l'appli ne pouvait afficher une remise que si elle connaissait un
+  identifiant de campagne (`campaign_id`). Avec la V2 elle n'a plus rien à
+  envoyer : DiddiGo demande la meilleure offre du client à chaque devis.
+- Constat au 25 novembre : l'appli n'envoie jamais `campaign_id` et ne lit pas
+  le bloc `rewards`. Avec la V2, il suffit de lire le bloc `rewards`.
 
 ## 2. Règles de la note produit, appliquées à DiddiGo
 
 1. **L'appli affiche, le serveur décide.** Ne jamais calculer une remise.
    Afficher les champs de la section 3 tels quels.
 2. **Aucun montant écrit en dur.** Pas de « −50 % », pas de « 1 000 F max » dans
-   le code de l'appli. DiddiGo renvoie des montants en francs, pas des
-   pourcentages ni des plafonds : n'affichez pas de pourcentage tant que le
-   serveur n'en fournit pas.
+   le code de l'appli. Le pourcentage et le plafond viennent du bloc
+   `rewards.offer` (V2) : affichez-les seulement quand il est présent.
 3. **Le prix affiché est le prix payé.** Vrai pour le devis tant qu'il n'est pas
    expiré, avec une exception à gérer : section 4.
 4. **Un seul appui, une seule action.** Section 6.
-5. **Des textes simples.** Les textes d'offre ne viennent pas encore du serveur.
-   Les libellés des écrans de prix (« Prix », « Remise », « À payer ») sont à
-   vous.
+5. **Des textes simples.** Le nom et la description de l'offre viennent du
+   serveur (`offer.name`, `offer.description`, V2). Les libellés des écrans de
+   prix (« Prix », « Remise », « À payer ») et les phrases construites à partir
+   des champs (« 2e course sur 3 ») sont à vous.
 
 Tous les montants sont des entiers en francs CFA (`XOF`). Le suffixe `_minor`
 dans certains noms de champs ne veut **pas** dire centimes : `246` = 246 F.
@@ -73,11 +76,12 @@ dans certains noms de champs ne veut **pas** dire centimes : `246` = 246 F.
 `DIDDI_REWARDS_AUTO_QUOTE_ENABLED` est actif, DiddiGo demande lui-même la
 meilleure offre du client à chaque devis. S'il y en a une, la réponse contient
 le bloc `rewards` ci-dessous ; sinon elle n'a pas de bloc `rewards` et le prix
-est le plein tarif, sans message à afficher. Ce réglage est **inactif** tant que
-le service de remises n'est pas à jour : d'ici là, aucune remise n'arrive sans
-`campaign_id`.
+est le plein tarif, sans message à afficher. Ce réglage est **inactif** sur le
+staging au 25 novembre : il sera activé après le déploiement de la V2 (le
+service de remises est prêt depuis le 25 novembre). D'ici là, aucune remise
+n'arrive sans `campaign_id`.
 
-Réponse avec remise (extrait) :
+Réponse avec remise (extrait, V2) :
 
 ```json
 {
@@ -91,10 +95,47 @@ Réponse avec remise (extrait) :
     "discount_amount_minor": 246,
     "final_amount_minor": 988,
     "currency": "XOF",
-    "reason": null
+    "reason": null,
+    "offer": {
+      "offer_id": "ce99efdd-3e7f-4efd-85d3-09f4260afc8d",
+      "name": "Bienvenue",
+      "description": "20 % sur tes 3 premières courses",
+      "value_type": "percent",
+      "rate_percent": 20,
+      "cap_per_order_minor": null,
+      "uses_total": 3,
+      "uses_used": 1,
+      "uses_left": 2,
+      "use_number": 2,
+      "progress": null,
+      "ends_at": "2026-12-31T23:59:59Z",
+      "services": ["go"],
+      "state": "usable",
+      "reason": null,
+      "history": []
+    }
   }
 }
 ```
+
+Exemple construit d'après le contrat du service de remises, pas copié du
+staging (non vérifié de bout en bout).
+
+Le bloc `offer` (V2) est relayé tel quel depuis le service de remises.
+`null` quand aucune offre ne s'applique. À afficher :
+
+| Élément de la maquette | Champ |
+|---|---|
+| Nom de l'offre (« Bienvenue ») | `offer.name` |
+| Texte de l'offre | `offer.description` (peut être `null`) |
+| Valeur (« −20 % ») | `offer.rate_percent` quand `offer.value_type` vaut `percent` (seule valeur aujourd'hui) |
+| Plafond (« 1 000 F max ») | `offer.cap_per_order_minor`, seulement s'il n'est pas `null` |
+| Rang (« 2e course sur 3 ») | `offer.use_number` sur `offer.uses_total` (`uses_total` `null` = sans limite) |
+| Date de fin | `offer.ends_at` (`null` = sans date) |
+| Services où l'offre vaut | `offer.services` (codes : `go`, `food`, `send`…) |
+
+`offer_id` est le même sur tous les services DIDDI : c'est l'identifiant à
+utiliser pour ouvrir le détail (`GET /v1/me/offers/{offer_id}`, section 3.5).
 
 Réponse sans remise (extrait) :
 
@@ -150,6 +191,11 @@ ne contient **pas** la remise :
 Il faut donc lire la course juste après (3.3) pour connaître la remise
 réellement appliquée.
 
+(V2) Erreur propre aux remises : `409 REWARDS_OFFER_ALREADY_USED`. L'offre a
+déjà servi pour une autre commande du client (par exemple deux commandes en
+même temps). La course **n'est pas créée**, rien n'est débité. Afficher un
+message simple, puis redemander un devis et réafficher le prix (section 4).
+
 ### 3.3 Pendant et après la course
 
 `GET /v1/rides/{ride_id}` (et `GET /v1/rides/active/current`) renvoie toujours un
@@ -163,10 +209,17 @@ bloc `rewards` :
     "campaign_id": "ce99efdd-3e7f-4efd-85d3-09f4260afc8d",
     "discount_amount_minor": 246,
     "client_payable_amount": 988,
-    "status": "reserved"
+    "status": "reserved",
+    "offer": {"offer_id": "ce99efdd-…", "name": "Bienvenue", "rate_percent": 20, "use_number": 2, "uses_total": 3}
   }
 }
 ```
+
+(V2) `rewards.offer` est l'offre **telle qu'elle était au moment de la
+commande** (figée sur la course), mêmes champs que dans le devis sauf
+`history`. Elle sert au reçu (« Bienvenue · −20 % · 2e course sur 3 »).
+Elle vaut `null` pour une course sans offre, pour une course commandée avant la
+V2, et toujours pour le chauffeur.
 
 À afficher (détail du prix demandé par la note produit) :
 
@@ -211,32 +264,95 @@ espèces) renvoient les trois montants :
   La présence des trois champs dans la réponse de `prepare` en Mobile Money
   n'est **pas vérifiée** : pour le détail du prix, lire `GET /v1/payments/{ride_id}`.
 - Reçu et historique : mêmes champs.
+- Le bloc `offer` n'est **pas** dans les réponses de paiement (le chauffeur
+  les lit aussi). Pour le nom de l'offre sur le reçu, lire la course (3.3).
+
+### 3.5 Mes offres et parrainage (V2)
+
+Quatre routes, toutes avec le jeton de l'utilisateur connecté. DiddiGo ne garde
+aucune donnée d'offre : il relaie la réponse du service de remises.
+
+| Route | Rôle |
+|---|---|
+| `GET /v1/me/offers` | Toutes mes offres valables sur DiddiGo, tous états, historique compris, les plus récentes d'abord. Réponse `{"offers": [ … ]}`, chaque élément a les champs du bloc `offer` (3.1). Un nouveau client y voit son offre de bienvenue avant sa première course. |
+| `GET /v1/me/offers/{offer_id}` | Une offre de la liste. `404 REWARDS_OFFER_NOT_FOUND` si le client ne l'a pas. |
+| `POST /v1/me/referral/code` | Saisir un code de parrainage. En-tête `Idempotency-Key` obligatoire (8 à 100 caractères, une nouvelle valeur par code saisi). Corps `{"code": "AB12CD34"}`. |
+| `GET /v1/me/referral` | Mon code à partager, le lien, ce que gagne le parrain, les limites, le nombre d'amis. Le code est créé à la première demande, puis toujours le même. |
+
+`state` d'une offre (liste fixe) : `available`, `in_progress`, `usable`,
+`used`, `expired`, `refused`, `given_back` (rendue après un remboursement).
+Aujourd'hui `available` et `in_progress` ne sont jamais renvoyés pour un client.
+
+`reason` d'une offre `refused` (liste fixe) : `expired`, `not_eligible`,
+`already_used`, `budget_exhausted`, `code_unknown`, `own_code`.
+
+`history` : une ligne par course remisée (`service_operation_id` = la course,
+`discount_amount_minor`, `state` = `used` ou `given_back`, `at`).
+
+**Saisie d'un code.** Réponse `200` dans les deux cas :
+
+```json
+{"status": "accepted", "reason": null, "offer_id": "…", "duplicate": false}
+{"status": "refused", "reason": "own_code", "offer_id": null, "duplicate": false}
+```
+
+`reason` d'un refus : `code_unknown` (code inconnu), `own_code` (c'est mon
+propre code), `already_used` (j'ai déjà un parrain), `not_eligible` (compte non
+éligible ou plafond de filleuls du parrain atteint), `expired` (pas de
+parrainage ouvert). `duplicate: true` = même demande reçue deux fois, même
+réponse. Un code tapé et un lien partagé donnent le même parrainage.
+
+**Mon code.** Réponse (exemple construit d'après le contrat) :
+
+```json
+{"code": "AB12CD34", "link": null, "offer_id": "…", "reward_amount_minor": 1000,
+ "reward_services": ["go"], "max_referrals": null, "ends_at": null,
+ "referred_count": 0, "pending_count": 1}
+```
+
+- `link` vaut `null` pour l'instant : le format décidé est
+  `diddifree.com/r/<code>`, construit hors du service de remises ; qui le
+  fabrique n'est pas encore décidé. En attendant, partager le code seul.
+- `referred_count` = amis qualifiés, `pending_count` = amis rattachés pas encore
+  qualifiés. Des nombres seulement, jamais de noms : l'écran « liste des
+  filleuls » de la maquette ne peut pas être nourri.
+- `max_referrals`, `ends_at` : afficher seulement s'ils ne sont pas `null`.
+
+**Erreurs de ces quatre routes.** `503 REWARDS_UNAVAILABLE` : le service de
+remises ne répond pas, ou les remises sont désactivées. Réessayer plus tard ;
+pour la saisie de code, renvoyer **la même** demande avec **le même**
+`Idempotency-Key`. Au moment de l'écriture, les deux routes de parrainage
+répondent ce `503` sur le staging tant que DiddiGo n'a pas reçu les droits
+d'accès nécessaires (non vérifié après déploiement).
 
 ## 4. Quand la remise change entre le devis et la commande
 
-La note produit demande : « si la remise change entre-temps, l'appli le dit
-avant la validation ». Aujourd'hui le serveur ne peut le dire qu'**après** la
-commande. Trois cas existent :
+Décision du 25 novembre : **le prix affiché est le prix payé** tant que le devis
+est valide (15 minutes). (V2) DiddiGo donne au service de remises la fin de
+validité du devis ; jusqu'à cette heure, la remise du devis est gardée à la
+commande, même si la campagne s'arrête ou atteint son budget entre-temps.
 
 | Cas | Ce que fait DiddiGo | Ce que voit l'appli |
 |---|---|---|
-| Le droit du client ne couvre plus toute la remise (presque épuisé, deux commandes en même temps) | La course est créée avec une remise plus petite | `rewards.discount_amount_minor` de la course < celui du devis |
-| Il ne reste plus rien | La course est créée au plein tarif | `rewards.discount_amount_minor` = 0, `client_payable_amount` = plein tarif |
-| Le service de remises refuse ou ne répond pas à la commande | La commande échoue | Erreur `REWARDS_OPERATION_FAILED` ou `503 REWARDS_UNAVAILABLE` |
+| Cas normal (V2) | La course est créée avec la remise du devis | `rewards.discount_amount_minor` de la course = celui du devis |
+| L'offre a déjà servi pour une autre commande (V2, seule exception) | La commande est refusée, rien n'est créé ni débité | `409 REWARDS_OFFER_ALREADY_USED` : redemander un devis, réafficher le prix |
+| Devis expiré | La commande est refusée | `409 QUOTE_EXPIRED` : redemander un devis |
+| Le droit ne couvre plus qu'une partie de la remise (cas rare, droit utilisé en partie entre-temps) | La course est créée avec la remise restante | `rewards.discount_amount_minor` de la course < celui du devis |
+| Le service de remises refuse autrement ou ne répond pas à la commande | La commande échoue | Erreur `REWARDS_OPERATION_FAILED` ou `503 REWARDS_UNAVAILABLE` |
 
-Ce que l'appli doit faire en attendant mieux :
+Ce que l'appli doit faire :
 
 1. Garder le `discount_amount_minor` du devis.
-2. Après `POST /v1/rides`, lire `GET /v1/rides/{ride_id}`.
-3. Si la remise de la course est plus petite que celle du devis, **prévenir le
-   client tout de suite** avec le nouveau montant à payer, et lui laisser
-   annuler (`POST /v1/rides/{ride_id}/cancel`).
+2. Sur `409 REWARDS_OFFER_ALREADY_USED` : écran 04 de la maquette (« Le prix a
+   changé, avant que tu commandes »), après un nouveau devis.
+3. Après `POST /v1/rides`, lire `GET /v1/rides/{ride_id}`. Si la remise de la
+   course est plus petite que celle du devis (cas rare ci-dessus), prévenir le
+   client tout de suite avec le nouveau montant, et lui laisser annuler
+   (`POST /v1/rides/{ride_id}/cancel`).
 
-Limite connue : le client est prévenu après avoir validé, pas avant. C'est un
-écart avec la note produit. Une évolution est proposée en section 8.
-
-Non vérifié : après un échec de commande dû aux remises, on ne sait pas si le
-devis peut être réutilisé. Dans le doute, redemander un devis.
+Après un échec de commande dû aux remises, la course n'existe pas et le devis
+n'est pas consommé ; mais pour `REWARDS_OFFER_ALREADY_USED` il échouera de
+nouveau : redemander un devis.
 
 ## 5. Motif de refus
 
@@ -248,9 +364,14 @@ Le seul motif disponible est `rewards.reason` dans le devis :
   changer, et il n'est pas fait pour être montré au client.
 
 Les quatre motifs de la note produit (code expiré, non éligible, déjà utilisé,
-budget épuisé) ne sont donc pas distinguables aujourd'hui. En attendant :
+budget épuisé) ne sont pas distinguables **au devis**. En attendant :
 afficher un message unique du type « Cette offre ne s'applique pas à cette
 course », et prévoir dans la maquette l'emplacement des quatre messages précis.
+
+(V2) Avec l'offre automatique, le devis n'a pas de motif : pas d'offre = pas de
+bloc `rewards`, rien à dire. Les motifs stables sont dans « Mes offres »
+(`state: "refused"` + `reason`, section 3.5) et dans la réponse de saisie d'un
+code.
 
 ## 6. Un seul appui, une seule action
 
@@ -260,6 +381,7 @@ course », et prévoir dans la maquette l'emplacement des quatre messages préci
 | Commander (`POST /v1/rides`) | Un devis ne sert qu'une fois : le second envoi répond `409 QUOTE_ALREADY_USED`. Un client ne peut pas avoir deux courses actives : `409 ACTIVE_RIDE_ALREADY_EXISTS` | Désactiver le bouton dès l'appui. Sur l'une de ces deux erreurs, ou après une coupure réseau, appeler `GET /v1/rides/active/current` et reprendre la course existante au lieu de recommander |
 | Préparer le paiement (`prepare`) | Pas d'en-tête `Idempotency-Key` sur cette route | Désactiver le bouton ; après une coupure, relire `GET /v1/payments/{ride_id}` avant de renvoyer |
 | Confirmer les espèces (chauffeur) | Voir section 7 | Désactiver le bouton ; relire le paiement après une coupure |
+| Saisir un code de parrainage (V2) | `Idempotency-Key` obligatoire : même clé = même réponse, une seule application | Créer la clé à l'appui ; la garder pour réessayer après une coupure ou un `503` ; une nouvelle clé pour un autre code |
 
 Devis expiré : `409 QUOTE_EXPIRED`. Redemander un devis et réafficher le prix,
 la remise peut avoir changé.
@@ -297,31 +419,28 @@ Ne pas l'utiliser pour l'écran « bloqué / retirable » de la note produit.
 
 ## 8. Ce qui manque, et à qui le demander
 
-Ces points ne sont ni dans DiddiGo ni ouverts à l'appli ailleurs : le service
-de remises (DiddiRewards) n'a que des routes de service à service, aucune route
-pour un utilisateur connecté.
+Avec la V2, la liste des offres, la saisie d'un code de parrainage, mon code,
+les textes et le prix garanti existent (sections 3 et 4). Il reste :
 
 | Manque | Conséquence pour l'appli | Proposition |
 |---|---|---|
-| Liste des offres du client (titre, texte, condition, date de fin, services, progression) | Pas d'écran « Mes offres », et pas de `campaign_id` à envoyer au devis | Route à créer ; propriétaire à décider (PM) |
-| Saisie d'un code promo ou de parrainage | Pas d'écran de saisie branchable | Route à créer côté remises |
-| Mon code de parrainage | Pas d'écran de partage branchable | Route à créer côté remises |
-| Motifs de refus sous forme de codes | Un seul message générique (section 5) | Codes stables dans `rewards.reason` |
-| Remise réelle connue avant la validation | Écart avec la règle « le prix affiché est le prix payé » (section 4) | Faire refuser la commande par `POST /v1/rides` quand la remise a baissé, avec le nouveau prix et le motif, pour que le client confirme (DiddiGo, voir section 10) |
-| Bonus professionnels : bloqué, retirable, en cours de versement, historique, repris | Aucun écran bonus branchable | Routes à créer ; lien avec le wallet chauffeur à décider |
-| Pourcentage, plafond, textes d'offre | Ne pas les afficher | Fournis par la future liste des offres |
+| Code promo (autre que parrainage) | Pas d'écran de saisie de code promo | À décider (PM) |
+| Lien de partage du parrainage | `link` vaut `null` : partager le code seul | Format décidé (`diddifree.com/r/<code>`), fabrication à décider |
+| Liste nominative des filleuls | Seulement des nombres (`referred_count`, `pending_count`) | Choix assumé : pas de noms |
+| Progression d'une offre client (« 4 courses sur 10 ») | `progress` vaut `null` | Pas d'objectif sur les offres client aujourd'hui |
+| Motif au devis automatique | Pas de message au devis quand aucune offre ne s'applique | Motifs stables dans « Mes offres » |
+| Bonus professionnels : bloqué, retirable, en cours de versement, historique | Aucun écran bonus branchable | En cours côté DiddiGo (tickets 049, 069) |
 
 États de la note produit, côté client DiddiGo, avec ce qui existe :
 
-| État | Disponible aujourd'hui ? |
+| État | Disponible ? |
 |---|---|
-| Disponible | Seulement « une remise s'applique à ce devis » (`eligible: true`) |
-| En cours (progression) | Non |
-| Utilisable | Oui, au devis : `discount_amount_minor` |
-| Utilisé | Oui, par course : `discount_amount_minor` > 0 sur une course payée |
-| Expiré | Non (seulement l'expiration du devis, `expires_at`) |
-| Refusé | Partiel : `eligible: false` + texte libre |
-| Annulé ou repris | Non visible par le client |
+| Disponible, En cours (progression) | Non : jamais renvoyés pour un client aujourd'hui |
+| Utilisable | (V2) Oui : `state: "usable"` dans « Mes offres », et le bloc `offer` du devis |
+| Utilisé | (V2) Oui : `state: "used"`, et `history` |
+| Expiré | (V2) Oui : `state: "expired"` |
+| Refusé | (V2) Oui : `state: "refused"` + `reason` |
+| Repris après remboursement | (V2) Oui : `state: "given_back"` |
 | Bloqué, Retirable, En cours de versement (professionnels) | Non |
 
 ## 9. Ce que vous pouvez construire dès maintenant
@@ -329,10 +448,12 @@ pour un utilisateur connecté.
 1. Le bloc « détail du prix » (prix initial, remise, à payer) sur le devis, la
    course en cours, l'écran de paiement, le reçu et l'historique.
 2. L'écran de fin de course chauffeur avec le montant à encaisser.
-3. Le message « votre remise a changé » après la commande (section 4).
-4. Les messages de refus, avec un texte générique pour l'instant.
-5. Les maquettes de la liste des offres, de la saisie de code, du parrainage et
-   des bonus professionnels, en attendant les routes de la section 8.
+3. (V2) Le nom, le pourcentage, le plafond et le rang de l'offre sur le devis
+   et le reçu (`rewards.offer`).
+4. (V2) L'écran 04 « le prix a changé » sur `409 REWARDS_OFFER_ALREADY_USED`.
+5. (V2) « Mes offres » avec l'historique, la saisie d'un code de parrainage et
+   « mon code ».
+6. Les maquettes des bonus professionnels, en attendant leurs routes.
 
 Pour tester sur le staging : une campagne de test existe
 (`ce99efdd-3e7f-4efd-85d3-09f4260afc8d`, comptes review). Demander à l'équipe de
@@ -345,56 +466,52 @@ Maquettes lues : fichier « DiddiFree — Compte unique · Utilisateur / Pro »,
 de ce document). Pour chaque écran : ce qu'il affiche, et si le serveur le
 fournit aujourd'hui.
 
-Légende : **Oui** = fourni par DiddiGo aujourd'hui. **Montants seuls** = les
-francs sont fournis, pas les libellés. **Non** = aucune route.
+Légende : **Oui** = fourni par DiddiGo aujourd'hui. **V2** = fourni après le
+déploiement du ticket 040. **Montants seuls** = les francs sont fournis, pas les
+libellés. **Non** = aucune route.
 
 ### Section 01 — Mes offres, le prix réel, ce qui change (client)
 
 | Écran | Ce que l'écran affiche | Fourni ? |
 |---|---|---|
-| 01 Mes offres — disponibles | Liste d'offres : nom, valeur (« −50 % »), nombre d'usages, condition, plafond, progression (« 1 utilisée sur 3 »), date de fin, service, badge d'état ; compteur « Disponibles · 4 » ; onglet Historique | **Non** |
-| 02 Détail — les six réponses | Les six réponses en phrases, catégories de véhicule concernées (« Standard, Confort et Moto »), date et heure de fin | **Non** |
+| 01 Mes offres — disponibles | Liste d'offres : nom, valeur (« −50 % »), nombre d'usages, condition, plafond, progression (« 1 utilisée sur 3 »), date de fin, service, badge d'état ; compteur « Disponibles · 4 » ; onglet Historique | **V2** : `GET /v1/me/offers` (section 3.5). Compteur « Disponibles » = offres `usable`. Progression : non (`progress` vaut `null`) |
+| 02 Détail — les six réponses | Les six réponses en phrases, catégories de véhicule concernées (« Standard, Confort et Moto »), date et heure de fin | **V2 en partie** : `GET /v1/me/offers/{offer_id}` (nom, texte, valeur, plafond, usages, date de fin, services). Pas les catégories de véhicule |
 | 03 Estimation — remise appliquée | Prix barré 1 500 F, prix remisé 750 F, ligne « −750 F », bouton « Commander · 750 FCFA » | **Montants seuls** : `estimated_fare`, `rewards.discount_amount_minor`, `rewards.final_amount_minor` (section 3.1) |
-| 03, même écran | Nom de l'offre (« Bienvenue »), pourcentage (« −50 % »), rang (« 2e course sur 3 »), plafond (« 1 000 F max ») | **Non** |
-| 04 Remise modifiée avant validation | « Le prix a changé — avant que tu commandes », motif (« n'a plus de budget »), avant / maintenant, « Rien n'a été débité », boutons « Commander à 1 500 FCFA » et « Ne pas commander » | **Non, et le serveur fait aujourd'hui autre chose** : voir ci-dessous |
+| 03, même écran | Nom de l'offre (« Bienvenue »), pourcentage (« −50 % »), rang (« 2e course sur 3 »), plafond (« 1 000 F max ») | **V2** : `rewards.offer` (section 3.1) |
+| 04 Remise modifiée avant validation | « Le prix a changé — avant que tu commandes », motif (« n'a plus de budget »), avant / maintenant, « Rien n'a été débité », boutons « Commander à 1 500 FCFA » et « Ne pas commander » | **V2 en partie** : sur `409 REWARDS_OFFER_ALREADY_USED` rien n'est créé ; l'appli redemande un devis pour « maintenant ». Le motif « n'a plus de budget » n'arrive plus à cet endroit : un devis valide garde sa remise (section 4) |
 | 05 Reçu — prix, remise, payé | Prix de la course, remise, « Payé en espèces » | **Oui** : `gross_amount`, `discount_amount_minor`, `client_payable_amount` (section 3.4) |
-| 05, même écran | Nom et pourcentage de l'offre, « Il te reste 1 course à −50 % jusqu'au 31 déc. » | **Non** |
+| 05, même écran | Nom et pourcentage de l'offre, « Il te reste 1 course à −50 % jusqu'au 31 déc. » | **V2** : `rewards.offer` de la course (figé à la commande). « Il te reste » : `uses_left` au moment de la commande ; pour la valeur à jour, lire `GET /v1/me/offers/{offer_id}` |
 | 06 Panier (DiddiFood) | Hors DiddiGo. À noter pour DiddiGo : « Retirer » un code pour le garder suppose que le client peut choisir de ne pas appliquer une offre. DiddiGo ne le permet pas aujourd'hui | **Non** |
-| 07 Planche des sept états client | Disponible, en cours, utilisable, utilisée, expirée, refusée (avec motif), reprise après remboursement | **Non** (seul « une remise s'applique à ce devis » existe) |
+| 07 Planche des sept états client | Disponible, en cours, utilisable, utilisée, expirée, refusée (avec motif), reprise après remboursement | **V2 en partie** : `usable`, `used`, `expired`, `refused` (avec motif), `given_back`. Pas « disponible » ni « en cours » |
 
-Trois écarts entre ces maquettes et le serveur, à trancher avant de brancher :
+Les trois écarts relevés en V1 sont traités par la V2 :
 
-1. **« Rien à saisir : la remise s'applique seule »** (écran 02). Aujourd'hui
-   DiddiGo n'applique une remise que si l'appli envoie un `campaign_id`. Pour
-   tenir cette promesse, le serveur doit choisir lui-même l'offre du client au
-   devis. Ce n'est pas fait.
-2. **« Le prix a changé, avant que tu commandes »** (écran 04). Aujourd'hui, si
-   la remise a baissé, DiddiGo **crée quand même la course** avec la remise
-   réduite (section 4). L'écran 04 demande l'inverse : ne rien créer, montrer
-   l'ancien et le nouveau prix avec le motif, et attendre l'accord du client.
-   Il faut une évolution de `POST /v1/rides` : refuser la commande avec une
-   erreur dédiée qui porte le nouveau prix et le motif. Tant qu'elle n'existe
-   pas, l'appli ne peut afficher cet écran qu'après coup, avec « Annuler la
-   course » à la place de « Ne pas commander », et la phrase « Rien n'a été
-   débité » reste vraie (le paiement n'a lieu qu'en fin de course).
-3. **Pourcentage, nom, rang et plafond de l'offre** (écrans 03 et 05). Le
-   serveur ne renvoie que des francs. Ces libellés ne doivent pas être déduits
-   par l'appli (un « −50 % » plafonné à 1 000 F ne se recalcule pas à partir
-   de −750 F).
+1. **« Rien à saisir : la remise s'applique seule »** (écran 02). DiddiGo
+   demande lui-même la meilleure offre du client à chaque devis (section 3.1),
+   une fois le réglage serveur activé.
+2. **« Le prix a changé, avant que tu commandes »** (écran 04). Un devis valide
+   garde sa remise. La seule exception (offre déjà servie pour une autre
+   commande) est refusée **avant** la création de la course :
+   `409 REWARDS_OFFER_ALREADY_USED`, rien n'est créé ni débité. L'appli
+   redemande un devis pour afficher « maintenant » (section 4). L'erreur ne
+   porte pas le nouveau prix : il vient du nouveau devis.
+3. **Pourcentage, nom, rang et plafond de l'offre** (écrans 03 et 05). Fournis
+   par `rewards.offer`. Ne toujours rien déduire des francs (un « −50 % »
+   plafonné à 1 000 F ne se recalcule pas à partir de −750 F).
 
 ### Section 02 — Saisir un code, parrainer, comprendre un refus (client)
 
 | Écran | Ce que l'écran affiche | Fourni ? |
 |---|---|---|
-| Code · vérification | Envoi d'un code, un seul envoi même après double appui (« demande idempotente côté serveur ») | **Non** |
-| Code · accepté | Ce que le code donne, où, jusqu'à quand, ce que gagne le parrain | **Non** |
-| Code · refusé | Motif en clair : expiré, non éligible, déjà utilisé, budget épuisé (« le texte exact vient du serveur ») | **Non** |
-| Parrainage · mon code | Mon code, gain des deux côtés, limites (« 10 amis par mois », « plafonnée à 1 000 F ») seulement si elles existent | **Non** |
-| Parrainage · suivi | Liste des filleuls avec état (gagnée, en attente, non éligible) et compteur | **Non** |
-| Offre · reprise | Commande remboursée, remise reprise, code de nouveau utilisable | **Non** |
+| Code · vérification | Envoi d'un code, un seul envoi même après double appui (« demande idempotente côté serveur ») | **V2** : `POST /v1/me/referral/code` avec `Idempotency-Key`, codes de parrainage seulement |
+| Code · accepté | Ce que le code donne, où, jusqu'à quand, ce que gagne le parrain | **V2** : `offer_id` de la réponse, puis `GET /v1/me/offers/{offer_id}` |
+| Code · refusé | Motif en clair : expiré, non éligible, déjà utilisé, budget épuisé (« le texte exact vient du serveur ») | **V2** : un code stable dans `reason` ; le texte affiché est à vous |
+| Parrainage · mon code | Mon code, gain des deux côtés, limites (« 10 amis par mois », « plafonnée à 1 000 F ») seulement si elles existent | **V2** : `GET /v1/me/referral` (code, gain du parrain, `max_referrals`, `ends_at`). Lien : `null` pour l'instant |
+| Parrainage · suivi | Liste des filleuls avec état (gagnée, en attente, non éligible) et compteur | **V2 en partie** : compteurs seulement (`referred_count`, `pending_count`), pas de liste |
+| Offre · reprise | Commande remboursée, remise reprise, code de nouveau utilisable | **V2** : `state: "given_back"` dans « Mes offres » et dans `history` |
 
-Le service de remises a déjà des routes de parrainage, mais de service à
-service seulement : l'appli ne peut pas les appeler.
+(V2) DiddiGo relaie les routes de parrainage du service de remises : l'appli
+appelle DiddiGo, jamais le service de remises directement.
 
 ### Section 03 — Bonus professionnels (chauffeur, livreur, restaurant)
 
@@ -426,17 +543,16 @@ branchement.
 
 ## 11. Questions ouvertes
 
-- D'où l'appli obtient-elle `campaign_id` ? (bloquant pour le branchement)
-- Une seule campagne par devis aujourd'hui. Que faire si le client a plusieurs
-  offres : le serveur choisit-il la meilleure, ou le client choisit-il ?
-- Qui expose les routes « offres », « codes » et « bonus » à l'appli : chaque
-  service (DiddiGo, DiddiFood, DiddiSend) ou une porte commune ?
-- Le client doit-il pouvoir refuser une remise réduite avant la création de la
-  course ? La maquette 04 dit oui ; le serveur fait aujourd'hui l'inverse
-  (sections 4 et 10).
-- Le serveur doit-il choisir seul l'offre au devis (« rien à saisir »,
-  maquette 02), sans `campaign_id` envoyé par l'appli ?
+Réglées le 25 novembre (décisions et ticket 040) : l'appli n'envoie plus de
+`campaign_id` ; le serveur choisit la meilleure offre ; chaque service relaie
+les offres et codes à l'appli (DiddiGo pour les courses) ; le client ne commande
+pas une remise plus petite sans le savoir (section 4).
+
+Encore ouvertes :
+
+- Code promo autre que parrainage : existe-t-il, et où le saisir ?
+- Lien de partage du parrainage : qui fabrique la page `diddifree.com/r/<code>` ?
 - Bonus professionnels : il est décidé (25 novembre) que chaque service paie
   le bonus dans son propre portefeuille, donc dans le wallet DiddiGo pour un
-  chauffeur. Ce qui reste ouvert : le solde bloqué, les paliers, les états et
-  la progression des maquettes de la section 04 (ticket PM 037).
+  chauffeur, avec un seul solde. Les routes de l'appli chauffeur sont en cours
+  côté DiddiGo (tickets 049 et 069).

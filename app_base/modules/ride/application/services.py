@@ -197,6 +197,8 @@ class RideService:
                     campaign_id=campaign_id,
                     amount_initial_minor=int(quote.estimated_fare),
                     request_id=request_id or str(quote.id),
+                    # Price shown = price paid while this quote is valid (decision 2026-11-25, point 1).
+                    honour_until=iso_utc(quote.expires_at),
                 )
             except ApiError as exc:
                 # Une promotion indisponible ne doit jamais empecher un devis : plein tarif, raison explicite.
@@ -217,7 +219,12 @@ class RideService:
                     quote.rewards_entitlement_id = None
                     quote.rewards_discount_amount = Decimal("0")
                     quote.rewards_final_amount = quote.estimated_fare
-                elif not campaign_id:
+                else:
+                    # Kept to be sent back at reserve, and the offer to show (ticket 040).
+                    quote.rewards_quote_id = _optional_uuid(rewards_quote, "quote_id")
+                    offer = rewards_quote.get("offer")
+                    quote.rewards_offer = offer if isinstance(offer, dict) else None
+                if quote.rewards_entitlement_id is not None and not campaign_id:
                     # Rewards chose the offer: keep the campaign it names (None on an older Rewards).
                     quote.rewards_campaign_id = str(rewards_quote.get("campaign_id") or "") or None
                 if not campaign_id and quote.rewards_entitlement_id is None:
@@ -249,6 +256,8 @@ class RideService:
                 "final_amount_minor": int(quote.rewards_final_amount or quote.estimated_fare),
                 "currency": "XOF",
                 "reason": quote.rewards_reason,
+                # Display data from Rewards, relayed untouched; null when no offer applies.
+                "offer": quote.rewards_offer,
             }
         return response
 
@@ -310,6 +319,8 @@ class RideService:
             rewards_campaign_version_id=quote.rewards_campaign_version_id,
             rewards_discount_amount=quote.rewards_discount_amount,
             rewards_status="quoted" if quote.rewards_entitlement_id else None,
+            # Frozen at order time: the receipt shows the offer as it was when ordered.
+            rewards_offer=_frozen_offer(quote.rewards_offer) if quote.rewards_entitlement_id else None,
             requested_at=now,
         )
         await self.ride_repo.save(ride)
@@ -321,20 +332,38 @@ class RideService:
             and ride.rewards_discount_amount is not None
             and ride.rewards_discount_amount > 0
         ):
-            reservation = await self.diddirewards.reserve(
-                consumer_id=passenger_user_id,
-                entitlement_id=ride.rewards_entitlement_id,
-                ride_id=ride.id,
-                requested_amount_minor=int(ride.rewards_discount_amount),
-                idempotency_key=f"diddigo:ride:{ride.id}:rewards-reserve:v1",
-                request_id=str(ride.id),
-                # No expires_at: the quote expiry says nothing about when the ride is paid.
-                # DiddiGo closes every reservation itself (confirm or release, ticket 014).
-            )
+            try:
+                reservation = await self.diddirewards.reserve(
+                    consumer_id=passenger_user_id,
+                    entitlement_id=ride.rewards_entitlement_id,
+                    ride_id=ride.id,
+                    requested_amount_minor=int(ride.rewards_discount_amount),
+                    idempotency_key=f"diddigo:ride:{ride.id}:rewards-reserve:v1",
+                    request_id=str(ride.id),
+                    # No expires_at: the quote expiry says nothing about when the ride is paid.
+                    # DiddiGo closes every reservation itself (confirm or release, ticket 014).
+                    quote_id=quote.rewards_quote_id,
+                )
+            except ApiError as exc:
+                if _rewards_refusal_code(exc) == "right_used_up":
+                    # The only case where the quoted discount is not honoured (decision 2026-11-25,
+                    # point 1): the right was used up by another order. The error rolls the request
+                    # back, so the ride is not created and the quote is not consumed.
+                    log_event(
+                        "rewards.reservation.right_used_up", level="warning",
+                        quote_id=quote.id, passenger_user_id=passenger_user_id,
+                    )
+                    raise ApiError(
+                        409,
+                        "REWARDS_OFFER_ALREADY_USED",
+                        "Cette offre a deja servi pour une autre commande. Demandez un nouveau devis.",
+                    ) from exc
+                raise
             ride.rewards_reservation_id = _required_uuid(reservation, "reservation_id")
             ride.rewards_status = "reserved"
-            # Rewards may reserve less than the quote (entitlement nearly used up, two rides at once).
-            # The ride discount must be what was really reserved, or the later confirm is refused.
+            # With quote_honoured=true Rewards reserves exactly the quoted discount. Otherwise
+            # (quote expired on Rewards side, right partly used, older Rewards) it may reserve
+            # less, and the ride discount must be what was really reserved or the confirm is refused.
             quoted_amount = ride.rewards_discount_amount
             reserved_amount = _money_value(reservation, "reserved_amount_minor")
             if reserved_amount is None:
@@ -345,10 +374,12 @@ class RideService:
                 ride.rewards_discount_amount = reserved_amount
                 log_event(
                     "rewards.reservation.partial",
-                    level="warning",
+                    level="error" if reservation.get("quote_honoured") is True else "warning",
                     ride_id=ride.id,
                     quoted=quoted_amount,
                     reserved=reserved_amount,
+                    quote_honoured=reservation.get("quote_honoured"),
+                    quote_reason=reservation.get("quote_reason"),
                 )
             await self.ride_repo.save(ride)
             if ride.rewards_discount_amount <= 0:
@@ -1501,6 +1532,8 @@ def _ride_detail_payload(ride: Ride, driver: dict | None, *, viewer_role: str) -
             "discount_amount_minor": discount_amount,
             "client_payable_amount": client_payable_amount,
             "status": ride.rewards_status,
+            # The customer's offer is not shown to the driver.
+            "offer": ride.rewards_offer if viewer_role in {"admin", "passenger"} else None,
         },
         "currency": ride.currency,
         "distance_km": float(ride.distance_km) if ride.distance_km is not None else None,
@@ -1687,6 +1720,27 @@ def _required_uuid(payload: dict, field: str) -> UUID:
         return UUID(str(value))
     except (TypeError, ValueError) as exc:
         raise ApiError(502, "REWARDS_INVALID_RESPONSE", f"DiddiRewards n'a pas fourni {field}.") from exc
+
+
+def _frozen_offer(offer: dict | None) -> dict | None:
+    """The offer as stored on the ride: every field untouched except `history`.
+
+    `history` lists the customer's other discounted orders; it belongs to "my offers",
+    not to this ride's receipt.
+    """
+    if not isinstance(offer, dict):
+        return None
+    return {key: value for key, value in offer.items() if key != "history"}
+
+
+def _rewards_refusal_code(exc: ApiError) -> str | None:
+    """Stable code of a Rewards refusal: body `{"detail": {"code": ...}}` (contract 061)."""
+    details = exc.details if isinstance(exc.details, dict) else {}
+    detail = details.get("detail")
+    if isinstance(detail, dict):
+        code = detail.get("code")
+        return str(code) if code else None
+    return None
 
 
 def _optional_uuid(payload: dict, field: str) -> UUID | None:

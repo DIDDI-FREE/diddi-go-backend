@@ -698,6 +698,7 @@ class SqlAlchemyRideRepository:
         row.rewards_reservation_id = ride.rewards_reservation_id
         row.rewards_consumption_id = ride.rewards_consumption_id
         row.rewards_status = ride.rewards_status
+        row.rewards_offer = ride.rewards_offer
         row.start_code_hash = ride.start_code_hash
         row.start_code_attempts = ride.start_code_attempts
         row.start_code_blocked_at = ride.start_code_blocked_at
@@ -785,6 +786,7 @@ class SqlAlchemyRideRepository:
             rewards_reservation_id=row.rewards_reservation_id,
             rewards_consumption_id=row.rewards_consumption_id,
             rewards_status=row.rewards_status,
+            rewards_offer=row.rewards_offer,
             start_code_hash=row.start_code_hash,
             start_code_attempts=row.start_code_attempts,
             start_code_blocked_at=row.start_code_blocked_at,
@@ -839,6 +841,8 @@ class SqlAlchemyRideQuoteRepository:
             rewards_discount_amount=quote.rewards_discount_amount,
             rewards_final_amount=quote.rewards_final_amount,
             rewards_reason=quote.rewards_reason,
+            rewards_quote_id=quote.rewards_quote_id,
+            rewards_offer=quote.rewards_offer,
         )
         self._session.add(row)
         await self._session.flush()
@@ -911,6 +915,8 @@ class SqlAlchemyRideQuoteRepository:
             if row.rewards_final_amount is not None
             else None,
             rewards_reason=row.rewards_reason,
+            rewards_quote_id=row.rewards_quote_id,
+            rewards_offer=row.rewards_offer,
             created_at=row.created_at,
         )
 

@@ -427,7 +427,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 ## Inventaire HTTP
 
 <!-- generated:http-inventory:start -->
-143 chemins ; 157 opérations HTTP.
+147 chemins ; 161 opérations HTTP.
 
 | Méthode | Chemin | Opération | Réponses documentées |
 |---|---|---|---|
@@ -547,6 +547,10 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 | GET | `/v1/me/emergency-contact` | Get My Emergency Contact | 200 |
 | PUT | `/v1/me/emergency-contact` | Upsert My Emergency Contact | 200, 422 |
 | DELETE | `/v1/me/emergency-contact` | Delete My Emergency Contact | 200 |
+| GET | `/v1/me/offers` | List My Offers | 200, 422 |
+| GET | `/v1/me/offers/{offer_id}` | Get My Offer | 200, 422 |
+| GET | `/v1/me/referral` | Get My Referral | 200, 422 |
+| POST | `/v1/me/referral/code` | Apply Referral Code | 200, 422 |
 | GET | `/v1/me/scores` | Get My Scores | 200 |
 | GET | `/v1/partners/me` | Get My Partners | 200 |
 | GET | `/v1/passenger/debts` | List Passenger Debts | 200, 422 |

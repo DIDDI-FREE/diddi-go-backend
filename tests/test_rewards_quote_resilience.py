@@ -214,6 +214,7 @@ def test_ride_detail_exposes_gross_discount_and_payable_amount(viewer_role: str)
         "discount_amount_minor": 246,
         "client_payable_amount": 988,
         "status": "reserved",
+        "offer": None,
     }
 
 

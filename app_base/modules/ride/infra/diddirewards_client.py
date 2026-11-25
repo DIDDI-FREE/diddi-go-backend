@@ -39,9 +39,19 @@ class DiddiRewardsClient:
         await self._headers()
 
     async def quote(
-        self, *, consumer_id: UUID, campaign_id: str | None, amount_initial_minor: int, request_id: str
+        self,
+        *,
+        consumer_id: UUID,
+        campaign_id: str | None,
+        amount_initial_minor: int,
+        request_id: str,
+        honour_until: str | None = None,
     ) -> dict[str, Any]:
-        """Quote a discount. Without `campaign_id` Rewards picks the customer's best offer (ticket 040)."""
+        """Quote a discount. Without `campaign_id` Rewards picks the customer's best offer (ticket 040).
+
+        `honour_until` is DiddiGo's own quote expiry: until then Rewards gives the quoted
+        discount at reserve when the answer's `quote_id` is sent back.
+        """
         payload: dict[str, Any] = {
             "consumer_id": str(consumer_id),
             "service_code": "go",
@@ -50,6 +60,8 @@ class DiddiRewardsClient:
         }
         if campaign_id:
             payload["campaign_id"] = campaign_id
+        if honour_until:
+            payload["honour_until"] = honour_until
         return await self._post(
             "/internal/v1/rewards/integrations/diddigo/benefits/quote",
             payload,
@@ -66,6 +78,7 @@ class DiddiRewardsClient:
         idempotency_key: str,
         request_id: str,
         expires_at: str | None = None,
+        quote_id: UUID | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "consumer_id": str(consumer_id),
@@ -75,6 +88,9 @@ class DiddiRewardsClient:
         }
         if expires_at:
             payload["expires_at"] = expires_at
+        if quote_id:
+            # Quote still valid: Rewards reserves the amount it stored at quote, not ours (ticket 040).
+            payload["quote_id"] = str(quote_id)
         return await self._post(
             "/internal/v1/rewards/integrations/diddigo/benefits/reserve",
             payload,
@@ -173,6 +189,35 @@ class DiddiRewardsClient:
             idempotency_key=idempotency_key,
         )
 
+    async def consumer_offers(self, *, consumer_id: UUID, request_id: str) -> dict[str, Any]:
+        """Every offer of the customer valid on rides, all states, history included (ticket 040)."""
+        return await self._request(
+            "GET",
+            f"/internal/v1/rewards/integrations/diddigo/consumers/{consumer_id}/offers",
+            None,
+            request_id=request_id,
+        )
+
+    async def my_referral_code(self, *, consumer_id: UUID, request_id: str) -> dict[str, Any]:
+        """The customer's own referral code; Rewards creates it on the first ask (ticket 040)."""
+        return await self._request(
+            "GET",
+            f"/internal/v1/rewards/integrations/diddigo/consumers/{consumer_id}/referral-code",
+            None,
+            request_id=request_id,
+        )
+
+    async def apply_referral_code(
+        self, *, consumer_id: UUID, code: str, idempotency_key: str, request_id: str
+    ) -> dict[str, Any]:
+        """A code typed by the customer. Rewards answers 200 accepted or refused (ticket 040)."""
+        return await self._post(
+            f"/internal/v1/rewards/integrations/diddigo/consumers/{consumer_id}/referral-code/apply",
+            {"code": code},
+            request_id=request_id,
+            idempotency_key=idempotency_key,
+        )
+
     async def _post(
         self,
         path: str,
@@ -181,15 +226,30 @@ class DiddiRewardsClient:
         request_id: str,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
+        return await self._request("POST", path, payload, request_id=request_id, idempotency_key=idempotency_key)
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None,
+        *,
+        request_id: str,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
         if not self.configured:
             raise ApiError(503, ErrorCode.PAYMENT_CONFIGURATION_MISSING, "DiddiRewards n'est pas configure.")
         headers = await self._headers()
-        headers.update({"X-Request-ID": request_id, "Content-Type": "application/json"})
+        headers["X-Request-ID"] = request_id
+        if payload is not None:
+            headers["Content-Type"] = "application/json"
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
         try:
             async with httpx.AsyncClient(timeout=self.timeout_seconds, transport=self.transport) as client:
-                response = await client.post(f"{self.base_url.rstrip('/')}{path}", json=payload, headers=headers)
+                response = await client.request(
+                    method, f"{self.base_url.rstrip('/')}{path}", json=payload, headers=headers
+                )
         except httpx.HTTPError as exc:
             raise ApiError(503, "REWARDS_UNAVAILABLE", "DiddiRewards est indisponible.") from exc
         if response.status_code >= 400:

@@ -268,6 +268,7 @@ class RideModel(Base):
     rewards_reservation_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     rewards_consumption_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
     rewards_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    rewards_offer: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     start_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     start_code_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     start_code_blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -325,6 +326,8 @@ class RideQuoteModel(Base):
     rewards_discount_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     rewards_final_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     rewards_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    rewards_quote_id: Mapped[UUID | None] = mapped_column(_PG_UUID, nullable=True)
+    rewards_offer: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
 
 
