@@ -1183,6 +1183,35 @@ class PaymentService:
                     created_at=datetime.now(UTC),
                 ),
             )
+            # DiddiFree pays the discount, the driver gets the full price (decision D6, ticket 039).
+            # In cash the driver only collected the discounted amount, so the discount is credited
+            # to his wallet. Its own entry type makes it idempotent per ride, like the commission.
+            discount = ride.rewards_discount_amount or Decimal("0")
+            if discount > 0:
+                credited = await self.payment_repo.record_ledger_entry_once(
+                    DriverLedgerEntry(
+                        id=DriverLedgerEntry.new_id(),
+                        driver_id=ride.driver_id,
+                        amount=discount,
+                        currency=ride.currency,
+                        direction=WalletEntryDirection.CREDIT,
+                        entry_type=WalletEntryType.REWARDS_DISCOUNT,
+                        status=WalletEntryStatus.CONFIRMED,
+                        reference_type="ride",
+                        reference_id=ride.id,
+                        description="Remise DIDDI rendue au chauffeur sur course cash",
+                        created_at=datetime.now(UTC),
+                    ),
+                )
+                if credited is not None:
+                    log_event(
+                        "payment.cash.rewards_discount_credited",
+                        ride_id=ride.id,
+                        driver_id=ride.driver_id,
+                        amount=discount,
+                        rewards_reservation_id=ride.rewards_reservation_id,
+                        rewards_campaign_id=ride.rewards_campaign_id,
+                    )
             return
         is_digital_payment = ride.payment_method.value == PaymentMethod.MOBILE_MONEY.value
         if is_digital_payment and payment_status is PaymentStatus.SUCCEEDED:

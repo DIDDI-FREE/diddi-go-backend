@@ -76,6 +76,8 @@ class WalletEntryType(str, Enum):
     WITHDRAWAL_SUCCEEDED = "withdrawal_succeeded"
     WITHDRAWAL_RELEASED = "withdrawal_released"
     REFUND = "refund"
+    # Discount DiddiFree gave the passenger on a cash ride, given back to the driver (ticket 039).
+    REWARDS_DISCOUNT = "rewards_discount"
 
 
 class TopupStatus(str, Enum):
