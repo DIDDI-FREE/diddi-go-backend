@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
@@ -321,6 +321,8 @@ class RideRewardsResponse(BaseModel):
     discount_amount_minor: int = 0
     client_payable_amount: int | None = None
     status: str | None = None
+    # Offer block relayed from DiddiRewards, frozen at order time (ticket 040). Null without offer.
+    offer: dict[str, Any] | None = None
 
 
 class RideEarlyStopResponse(BaseModel):

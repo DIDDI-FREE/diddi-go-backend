@@ -211,6 +211,8 @@ class Ride:
     rewards_reservation_id: UUID | None = None
     rewards_consumption_id: UUID | None = None
     rewards_status: str | None = None
+    # Offer block relayed by Rewards, frozen when the ride is ordered (ticket 040).
+    rewards_offer: dict | None = None
     start_code_hash: str | None = None
     start_code_attempts: int = 0
     start_code_blocked_at: datetime | None = None
@@ -442,6 +444,9 @@ class RideQuote:
     rewards_discount_amount: Decimal | None = None
     rewards_final_amount: Decimal | None = None
     rewards_reason: str | None = None
+    # Rewards quote reference, sent back at reserve so the quoted discount is given (ticket 040).
+    rewards_quote_id: UUID | None = None
+    rewards_offer: dict | None = None
     created_at: datetime | None = None
 
     @staticmethod

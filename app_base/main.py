@@ -45,6 +45,7 @@ from app_base.modules.ride.presentation.driver_internal_router import router as 
 from app_base.modules.ride.presentation.driver_router import admin_vehicle_router
 from app_base.modules.ride.presentation.driver_router import router as driver_router
 from app_base.modules.ride.presentation.kyc_internal_router import router as kyc_internal_router
+from app_base.modules.ride.presentation.rewards_router import router as me_offers_router
 from app_base.modules.ride.presentation.router import places_router
 from app_base.modules.ride.presentation.router import router as ride_router
 from app_base.modules.ride.presentation.score_contract_router import router as score_contract_router
@@ -75,6 +76,7 @@ app.include_router(auth_router, prefix="/v1")
 app.include_router(notification_router, prefix="/v1")
 app.include_router(observability_router, prefix="/v1")
 app.include_router(capabilities_router, prefix="/v1")
+app.include_router(me_offers_router, prefix="/v1")
 app.include_router(pro_router, prefix="/v1")
 app.include_router(places_router, prefix="/v1")
 app.include_router(ride_router, prefix="/v1")

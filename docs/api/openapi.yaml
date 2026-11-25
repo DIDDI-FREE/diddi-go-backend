@@ -711,6 +711,262 @@ paths:
         retry: UNKNOWN — ne pas supposer une idempotence métier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
         dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /v1/me/offers:
+    get:
+      tags:
+      - me-offers
+      summary: List My Offers
+      description: Every offer of the customer valid on rides, all states, history included, newest first.
+      operationId: list_my_offers_v1_me_offers_get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: X-Request-ID
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Request-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List My Offers V1 Me Offers Get
+        '422':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+              examples:
+                validation:
+                  summary: Exemple synthétique de validation locale
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La requête est invalide.
+                      details:
+                        violations:
+                        - loc:
+                          - query
+                          - q
+                          msg: Field required
+                          type: missing
+      x-contract:
+        source: app.openapi() ; opération list_my_offers_v1_me_offers_get
+        purpose: List My Offers
+        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
+        state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
+        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
+        response: UNKNOWN — champs de succès non spécifiés.
+        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
+        retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
+        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
+        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /v1/me/offers/{offer_id}:
+    get:
+      tags:
+      - me-offers
+      summary: Get My Offer
+      description: One offer of the list. 404 `REWARDS_OFFER_NOT_FOUND` if the customer has no such offer.
+      operationId: get_my_offer_v1_me_offers__offer_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: offer_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Offer Id
+      - name: X-Request-ID
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Request-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get My Offer V1 Me Offers  Offer Id  Get
+        '422':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+              examples:
+                validation:
+                  summary: Exemple synthétique de validation locale
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La requête est invalide.
+                      details:
+                        violations:
+                        - loc:
+                          - query
+                          - q
+                          msg: Field required
+                          type: missing
+      x-contract:
+        source: app.openapi() ; opération get_my_offer_v1_me_offers__offer_id__get
+        purpose: Get My Offer
+        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
+        state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
+        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
+        response: UNKNOWN — champs de succès non spécifiés.
+        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
+        retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
+        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
+        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /v1/me/referral/code:
+    post:
+      tags:
+      - me-offers
+      summary: Apply Referral Code
+      description: 'A code typed by the customer. 200 with `accepted`, or `refused` and a reason of the fixed list.
+
+
+        On 503 `REWARDS_UNAVAILABLE`, send the same request again with the same `Idempotency-Key`.'
+      operationId: apply_referral_code_v1_me_referral_code_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 100
+          title: Idempotency-Key
+      - name: X-Request-ID
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Request-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferralCodeApplyRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Apply Referral Code V1 Me Referral Code Post
+        '422':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+              examples:
+                validation:
+                  summary: Exemple synthétique de validation locale
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La requête est invalide.
+                      details:
+                        violations:
+                        - loc:
+                          - query
+                          - q
+                          msg: Field required
+                          type: missing
+      x-contract:
+        source: app.openapi() ; opération apply_referral_code_v1_me_referral_code_post
+        purpose: Apply Referral Code
+        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
+        state-before-after: UNKNOWN — vérifier la précondition et la transition de cette opération.
+        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
+        response: UNKNOWN — champs de succès non spécifiés.
+        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
+        retry: UNKNOWN — ne pas supposer une idempotence métier.
+        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
+        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /v1/me/referral:
+    get:
+      tags:
+      - me-offers
+      summary: Get My Referral
+      description: My referral code, the link to share (null for now), the limits and the friends count.
+      operationId: get_my_referral_v1_me_referral_get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: X-Request-ID
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Request-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get My Referral V1 Me Referral Get
+        '422':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+              examples:
+                validation:
+                  summary: Exemple synthétique de validation locale
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La requête est invalide.
+                      details:
+                        violations:
+                        - loc:
+                          - query
+                          - q
+                          msg: Field required
+                          type: missing
+      x-contract:
+        source: app.openapi() ; opération get_my_referral_v1_me_referral_get
+        purpose: Get My Referral
+        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
+        state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
+        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
+        response: UNKNOWN — champs de succès non spécifiés.
+        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
+        retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
+        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
+        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
   /v1/pro/metiers:
     get:
       tags:
@@ -10379,7 +10635,7 @@ paths:
                 type: object
                 title: Response Health Health Get
       x-contract:
-        source: app_base/main.py:103
+        source: app_base/main.py:105
         purpose: Health
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
@@ -10400,7 +10656,7 @@ paths:
             application/json:
               schema: {}
       x-contract:
-        source: app_base/main.py:108
+        source: app_base/main.py:110
         purpose: Readiness
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
@@ -13172,6 +13428,17 @@ components:
       - metiers
       - consumer
       title: ProMetiersResponse
+    ReferralCodeApplyRequest:
+      properties:
+        code:
+          type: string
+          maxLength: 80
+          minLength: 1
+          title: Code
+      type: object
+      required:
+      - code
+      title: ReferralCodeApplyRequest
     RefreshRequest:
       properties:
         refresh_token:
@@ -13871,6 +14138,12 @@ components:
           - type: string
           - type: 'null'
           title: Status
+        offer:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Offer
       type: object
       title: RideRewardsResponse
     RideScoreMetricsResponse:
