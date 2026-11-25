@@ -418,9 +418,10 @@ branchement.
 ## 11. Questions ouvertes
 
 - D'où l'appli obtient-elle `campaign_id` ? (bloquant pour le branchement)
-- Course en espèces avec remise : qui rend la remise au chauffeur, et comment
-  le voit-il dans son wallet ? (aujourd'hui rien dans DiddiGo ; non vérifié
-  ailleurs)
+- Course en espèces avec remise : la règle est décidée (25 novembre : DIDDI paie
+  la remise, le professionnel reçoit toujours le prix complet), mais DiddiGo ne
+  l'applique pas encore en espèces. Comment le chauffeur verra-t-il la remise
+  rendue dans son wallet ? (ticket PM 034)
 - Une seule campagne par devis aujourd'hui. Que faire si le client a plusieurs
   offres : le serveur choisit-il la meilleure, ou le client choisit-il ?
 - Qui expose les routes « offres », « codes » et « bonus » à l'appli : chaque
@@ -430,6 +431,7 @@ branchement.
   (sections 4 et 10).
 - Le serveur doit-il choisir seul l'offre au devis (« rien à saisir »,
   maquette 02), sans `campaign_id` envoyé par l'appli ?
-- Les bonus professionnels entrent-ils dans le portefeuille DiddiGo (solde
-  bloqué, mouvements bonus, retrait plafonné), comme sur les maquettes de la
-  section 04 ?
+- Bonus professionnels : il est décidé (25 novembre) que chaque service paie
+  le bonus dans son propre portefeuille, donc dans le wallet DiddiGo pour un
+  chauffeur. Ce qui reste ouvert : le solde bloqué, les paliers, les états et
+  la progression des maquettes de la section 04 (ticket PM 037).
