@@ -310,7 +310,8 @@ class SqlAlchemyPaymentRepository:
 
     async def enqueue_rewards_event(self, *, event_type: str, ride_id: UUID, payload: dict) -> str:
         now = datetime.now(UTC)
-        event_id = str(payload.get("event_id") or f"diddigo:{event_type}:{ride_id}")
+        # Facts protocol: the outbox key is the fact_id, which is also Rewards' Idempotency-Key.
+        event_id = str(payload.get("fact_id") or payload.get("event_id") or f"diddigo:{event_type}:{ride_id}")
         stmt = insert(orm.RewardsEventOutboxModel).values(
                 id=uuid4(),
                 event_id=event_id,
@@ -326,13 +327,18 @@ class SqlAlchemyPaymentRepository:
         await self._session.flush()
         return event_id
 
-    async def list_due_rewards_events(self, *, now: datetime, limit: int) -> list[orm.RewardsEventOutboxModel]:
+    async def list_due_rewards_events(
+        self, *, now: datetime, limit: int, event_types: tuple[str, ...] | None = None
+    ) -> list[orm.RewardsEventOutboxModel]:
+        conditions = [
+            orm.RewardsEventOutboxModel.status.in_(["pending", "retry"]),
+            orm.RewardsEventOutboxModel.next_attempt_at <= now,
+        ]
+        if event_types is not None:
+            conditions.append(orm.RewardsEventOutboxModel.event_type.in_(event_types))
         result = await self._session.execute(
             select(orm.RewardsEventOutboxModel)
-            .where(
-                orm.RewardsEventOutboxModel.status.in_(["pending", "retry"]),
-                orm.RewardsEventOutboxModel.next_attempt_at <= now,
-            )
+            .where(*conditions)
             .order_by(orm.RewardsEventOutboxModel.next_attempt_at)
             .limit(limit)
             .with_for_update(skip_locked=True)
@@ -345,6 +351,29 @@ class SqlAlchemyPaymentRepository:
         event.delivered_at = now
         event.last_error = None
         await self._session.flush()
+
+    async def mark_rewards_event_failed(
+        self, event: orm.RewardsEventOutboxModel, *, now: datetime, error: str
+    ) -> None:
+        """Refused for good by Rewards (a bug on our side): kept for a human, never resent."""
+        event.status = "failed"
+        event.attempts += 1
+        event.last_error = error[:2000]
+        await self._session.flush()
+
+    async def find_ledger_entry(
+        self, *, driver_id: UUID, entry_type: str, reference_type: str, reference_id: UUID
+    ) -> DriverLedgerEntry | None:
+        result = await self._session.execute(
+            select(orm.DriverLedgerEntryModel).where(
+                orm.DriverLedgerEntryModel.driver_id == driver_id,
+                orm.DriverLedgerEntryModel.entry_type == entry_type,
+                orm.DriverLedgerEntryModel.reference_type == reference_type,
+                orm.DriverLedgerEntryModel.reference_id == reference_id,
+            )
+        )
+        row = result.scalar_one_or_none()
+        return self._ledger_to_domain(row) if row is not None else None
 
     async def mark_rewards_event_retry(
         self,

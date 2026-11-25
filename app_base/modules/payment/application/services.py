@@ -944,41 +944,70 @@ class PaymentService:
             log_event("rewards.reconciliation.deferred", level="error", ride_id=ride.id)
 
     async def _enqueue_rewards_event(self, ride, payment) -> None:
-        if ride.rewards_reservation_id is None:
-            return
-        event_type = None
-        if payment.status in {PaymentStatus.COLLECTED, PaymentStatus.SUCCEEDED}:
-            event_type = "ride.payment_confirmed"
-        elif payment.status in {PaymentStatus.REFUNDED, PaymentStatus.PARTIALLY_REFUNDED}:
-            event_type = "ride.refunded"
-        elif payment.status is PaymentStatus.CANCELLED:
-            event_type = "ride.cancelled"
-        if event_type is None:
+        """Queue the fact Rewards must hear about this ride (facts protocol v1, Rewards contract 069).
+
+        Every paid ride is reported, with or without a discount: Rewards decides what it is worth
+        (referral qualification, ticket 066; driver bonuses, ticket 049). The fact is built now
+        and sent unchanged by the `rewards-events` worker until Rewards accepts it.
+        """
+        fact = await self._rewards_fact(ride, payment)
+        if fact is None:
             return
         enqueue = getattr(self.payment_repo, "enqueue_rewards_event", None)
         if enqueue is None:
             return
-        event_id = f"diddigo:{event_type}:{ride.id}:{payment.id}"
-        await enqueue(
-            event_type=event_type,
-            ride_id=ride.id,
-            payload={
-                "event_id": event_id,
-                "event_type": event_type,
-                "ride_id": str(ride.id),
-                "reservation_id": str(ride.rewards_reservation_id),
-                "consumption_id": str(ride.rewards_consumption_id) if ride.rewards_consumption_id else None,
-                "applied_discount_minor": int(ride.rewards_discount_amount or 0),
-                "client_paid_minor": int(payment.amount),
-                "driver_payout_minor": int(ride.driver_payout_estimate or 0),
-                "diddi_contribution_minor": int(ride.rewards_discount_amount or 0),
-                "refund_amount_minor": int(payment.amount)
-                if event_type == "ride.refunded"
-                else None,
-                "reason": payment.status.value,
-                "payment_reference": str(payment.payment_intent_id or payment.business_reference or payment.id),
-            },
-        )
+        await enqueue(event_type=fact["type"], ride_id=ride.id, payload=fact)
+
+    async def _rewards_fact(self, ride, payment) -> dict | None:
+        now = datetime.now(UTC)
+        common = {
+            "schema_version": "1",
+            "order_id": str(ride.id),
+            "customer_id": str(ride.passenger_user_id),
+        }
+        if payment.status in {PaymentStatus.COLLECTED, PaymentStatus.SUCCEEDED}:
+            occurred_at = _aware(payment.collected_at or payment.paid_at) or now
+            driver_user_id = None
+            if ride.driver_id is not None:
+                lookup = getattr(self.ride_repo, "driver_user_id", None)
+                driver_user_id = await lookup(ride.driver_id) if lookup is not None else None
+            return {
+                **common,
+                "fact_id": f"diddigo:order.paid:{ride.id}",
+                "type": "order.paid",
+                "occurred_at": _iso_utc(min(occurred_at, now)),
+                # Total before any Rewards discount, and the discount the customer got.
+                "amount_minor": int(ride.final_fare or ride.estimated_fare or 0),
+                "discount_minor": int(ride.rewards_discount_amount or 0),
+                "currency": ride.currency,
+                "payment_method": "cash" if payment.method is PaymentMethod.CASH else "online",
+                "professional_id": str(driver_user_id) if driver_user_id else None,
+                "parent": None,
+                "rewards_reservation_id": str(ride.rewards_reservation_id) if ride.rewards_reservation_id else None,
+            }
+        if payment.status is PaymentStatus.REFUNDED:
+            return {
+                **common,
+                "fact_id": f"diddigo:order.refunded:{ride.id}",
+                "type": "order.refunded",
+                "occurred_at": _iso_utc(now),
+                "refunded_amount_minor": int(payment.amount),
+                "currency": payment.currency,
+                "full": True,
+            }
+        if payment.status is PaymentStatus.PARTIALLY_REFUNDED:
+            # DiddiGo does not record how much was given back, and a partial refund changes no
+            # count in Rewards (facts decision, amendment 3): nothing is reported.
+            log_event("rewards.fact.partial_refund_not_reported", level="warning", ride_id=ride.id)
+            return None
+        if payment.status is PaymentStatus.CANCELLED:
+            return {
+                **common,
+                "fact_id": f"diddigo:order.cancelled:{ride.id}",
+                "type": "order.cancelled",
+                "occurred_at": _iso_utc(now),
+            }
+        return None
 
     async def _apply_topup_status(
         self,
@@ -1292,6 +1321,17 @@ def _external_payment_payload(payment: Transaction, *, next_action: dict | None,
         },
         ride,
     )
+
+
+def _aware(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def _iso_utc(value: datetime) -> str:
+    # Rewards refuses an occurred_at more than 5 minutes in the future: callers never pass one.
+    return _aware(value).astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _with_ride_amounts(payload: dict, ride) -> dict:
