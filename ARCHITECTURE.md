@@ -63,7 +63,7 @@ Each module is a vertical slice: `presentation/` (routers, schemas) → `applica
   - partner: `partners`, `partner_members`, `partner_driver_links`, `vehicle_assignments`.
 - Migrations: `alembic/versions/`. The DB URL comes from `DATABASE_URL` (settings), not from `alembic.ini`. The app never calls `create_all` (`app_base/core/database.py`).
 - Redis: runtime state only (driver positions, offers, idempotency keys, return contexts, breakdown cache). The Rewards stream can use a second Redis (`DIDDI_REWARDS_EVENTS_REDIS_URL`).
-- `users` rows are also written on every authenticated request in identity mode ("shadow user" upsert in `core/auth_deps.py`).
+- `users` rows are also written on every authenticated request in identity mode ("shadow user" upsert in `core/auth_deps.py`). The row is created with the DiddiFreeID `created_at`; without a readable one, a new user is refused (`502 IDENTITY_PROFILE_INVALID`, ticket 046), no date is guessed. An existing row's `created_at` is never rewritten.
 
 ## 7. Run and test
 From the repo root (PowerShell). Commands are taken from `README.md`, `app_base/README.md`, `docker-compose.local.yml` and `.github/workflows/tests.yml`. They were not executed during this check.
