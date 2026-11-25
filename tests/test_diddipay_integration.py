@@ -716,6 +716,51 @@ async def test_cash_confirmation_debits_driver_commission_once() -> None:
 
 
 @pytest.mark.asyncio
+async def test_cash_ride_with_discount_credits_the_discount_to_the_driver_once() -> None:
+    """Ticket 039 / decision D6: DiddiFree pays the discount, the driver gets the full price.
+
+    Staging ride fd8257d4: price 1234, commission 222, driver share 1012, discount 246. The passenger
+    hands over 988 in cash; the wallet must move by -222 + 246 = +24 so the driver ends with 1012.
+    """
+    ride = make_completed_ride()
+    ride.payment_method = RidePaymentMethod.CASH
+    ride.estimated_fare = ride.final_fare = Decimal("1234")
+    ride.platform_commission = Decimal("222")
+    ride.driver_payout_estimate = Decimal("1012")
+    ride.rewards_discount_amount = Decimal("246")
+    repo = FakePaymentRepo()
+    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddipay=FakeDiddiPay(uuid4()))
+
+    await service.confirm_cash(ride.id, Decimal("988"), collected_by=ride.driver_id)
+    await service.confirm_cash(ride.id, Decimal("988"), collected_by=ride.driver_id)
+
+    by_type = {entry.entry_type: entry for entry in repo.ledger}
+    assert set(by_type) == {WalletEntryType.PLATFORM_COMMISSION, WalletEntryType.REWARDS_DISCOUNT}
+    assert len(repo.ledger) == 2
+    credit = by_type[WalletEntryType.REWARDS_DISCOUNT]
+    assert credit.direction is WalletEntryDirection.CREDIT
+    assert credit.amount == Decimal("246")
+    assert (credit.reference_type, credit.reference_id) == ("ride", ride.id)
+    assert repo.wallets[ride.driver_id].balance == Decimal("24")
+    cash_in_hand = Decimal("988")
+    assert cash_in_hand + repo.wallets[ride.driver_id].balance == ride.driver_payout_estimate
+
+
+@pytest.mark.asyncio
+async def test_cash_ride_with_zero_discount_gets_no_discount_credit() -> None:
+    ride = make_completed_ride()
+    ride.payment_method = RidePaymentMethod.CASH
+    ride.rewards_reservation_id = uuid4()
+    ride.rewards_discount_amount = Decimal("0")
+    repo = FakePaymentRepo()
+    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddipay=FakeDiddiPay(uuid4()))
+
+    await service.confirm_cash(ride.id, Decimal("3100"), collected_by=ride.driver_id)
+
+    assert [entry.entry_type for entry in repo.ledger] == [WalletEntryType.PLATFORM_COMMISSION]
+
+
+@pytest.mark.asyncio
 async def test_driver_wallet_blocks_online_when_balance_is_below_minimum(monkeypatch) -> None:
     user_id = uuid4()
     driver_id = uuid4()

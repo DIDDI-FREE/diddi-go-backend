@@ -272,14 +272,17 @@ Se baser sur `code`, jamais sur `message`.
 - `POST /v1/payments/{ride_id}/confirm-cash` avec `{"amount_collected": 988}`.
   Le serveur refuse (`422 AMOUNT_MISMATCH`) un montant qui s'écarte de plus de
   200 F ou de plus de 10 % du montant attendu (la plus grande des deux limites).
-- **Rémunération du chauffeur sur une course remisée : point ouvert.**
-  En Mobile Money, le chauffeur est crédité de sa rémunération complète : la
-  remise ne lui coûte rien. En espèces, il encaisse le montant remisé et la
-  commission complète est prélevée sur son wallet ; le code DiddiGo ne lui
-  recrédite pas la remise aujourd'hui. Tant que ce point n'est pas tranché
-  (section 11), **ne pas écrire** « Remise offerte par DIDDI » ni promettre un
-  montant de gain sur l'écran chauffeur : afficher seulement le montant à
-  encaisser.
+- **Rémunération du chauffeur sur une course remisée.** DIDDI paie la remise,
+  le chauffeur reçoit toujours le prix complet (décision du 25 novembre).
+  En Mobile Money, son wallet est crédité de sa rémunération complète. En
+  espèces, il encaisse le montant remisé, la commission est prélevée sur son
+  wallet et **la remise lui est recréditée** dans le même wallet (ticket 039).
+  Exemple : prix 1 234 F, commission 222 F, remise 246 F. Il encaisse 988 F,
+  son wallet bouge de −222 F + 246 F = +24 F, il a bien 1 012 F au total.
+- Dans `GET /v1/drivers/me/wallet/ledger`, cette ligne a le type
+  `rewards_discount`, `direction: "credit"`, `reference_type: "ride"`. Prévoir
+  un libellé du type « Remise DIDDI ». D'autres types pourront s'ajouter :
+  garder un libellé par défaut pour un type inconnu.
 
 Bonus professionnels (bonus d'accueil, bonus de performance) : rien n'est
 exposé à l'appli. Dans le wallet chauffeur (`GET /v1/drivers/me/wallet`),
@@ -418,10 +421,6 @@ branchement.
 ## 11. Questions ouvertes
 
 - D'où l'appli obtient-elle `campaign_id` ? (bloquant pour le branchement)
-- Course en espèces avec remise : la règle est décidée (25 novembre : DIDDI paie
-  la remise, le professionnel reçoit toujours le prix complet), mais DiddiGo ne
-  l'applique pas encore en espèces. Comment le chauffeur verra-t-il la remise
-  rendue dans son wallet ? (ticket PM 034)
 - Une seule campagne par devis aujourd'hui. Que faire si le client a plusieurs
   offres : le serveur choisit-il la meilleure, ou le client choisit-il ?
 - Qui expose les routes « offres », « codes » et « bonus » à l'appli : chaque
