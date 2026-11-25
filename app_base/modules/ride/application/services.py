@@ -186,7 +186,10 @@ class RideService:
             expires_at=now + timedelta(seconds=settings.ride_quote_ttl_seconds),
             created_at=now,
         )
-        if campaign_id and settings.diddi_rewards_enabled and self.diddirewards is not None:
+        # Offers apply by themselves (ticket 040): with auto-quote on, Rewards is asked at every
+        # estimate and picks the customer's best offer. A campaign_id sent by the app is still honoured.
+        ask_rewards = bool(campaign_id) or settings.diddi_rewards_auto_quote_enabled
+        if ask_rewards and settings.diddi_rewards_enabled and self.diddirewards is not None:
             quote.rewards_campaign_id = campaign_id
             try:
                 rewards_quote = await self.diddirewards.quote(
@@ -201,7 +204,8 @@ class RideService:
                     "ride.quote.rewards_unavailable", quote_id=quote.id, campaign_id=campaign_id,
                     error_code=exc.code, status_code=exc.status_code,
                 )
-                quote.rewards_reason = "rewards_unavailable"
+                # Nothing was asked by the app: no rewards block, plain full price.
+                quote.rewards_reason = "rewards_unavailable" if campaign_id else None
             else:
                 # Non eligible : Rewards renvoie eligible=false sans entitlement_id ; ce n'est pas une erreur.
                 quote.rewards_entitlement_id = _optional_uuid(rewards_quote, "entitlement_id")
@@ -213,6 +217,12 @@ class RideService:
                     quote.rewards_entitlement_id = None
                     quote.rewards_discount_amount = Decimal("0")
                     quote.rewards_final_amount = quote.estimated_fare
+                elif not campaign_id:
+                    # Rewards chose the offer: keep the campaign it names (None on an older Rewards).
+                    quote.rewards_campaign_id = str(rewards_quote.get("campaign_id") or "") or None
+                if not campaign_id and quote.rewards_entitlement_id is None:
+                    # The app asked for nothing and nothing applies: no "offer refused" message to show.
+                    quote.rewards_reason = None
         await self.quote_repo.save(quote)
         log_event(
             "ride.quote.addresses", quote_id=quote.id,
@@ -225,7 +235,7 @@ class RideService:
             "tariff_version": quote.tariff_version,
             "expires_at": iso_utc(quote.expires_at),
         }
-        if quote.rewards_campaign_id is not None:
+        if quote.rewards_campaign_id is not None or quote.rewards_entitlement_id is not None:
             response["rewards"] = {
                 "campaign_id": quote.rewards_campaign_id,
                 "eligible": quote.rewards_entitlement_id is not None

@@ -68,8 +68,14 @@ dans certains noms de champs ne veut **pas** dire centimes : `246` = 246 F.
 }
 ```
 
-`campaign_id` est optionnel. Sans lui, la réponse n'a pas de bloc `rewards` et
-le prix est le plein tarif.
+`campaign_id` est optionnel, et **l'appli n'a pas à l'envoyer** : il est décidé
+(25 novembre) que l'offre s'applique seule. Quand le réglage serveur
+`DIDDI_REWARDS_AUTO_QUOTE_ENABLED` est actif, DiddiGo demande lui-même la
+meilleure offre du client à chaque devis. S'il y en a une, la réponse contient
+le bloc `rewards` ci-dessous ; sinon elle n'a pas de bloc `rewards` et le prix
+est le plein tarif, sans message à afficher. Ce réglage est **inactif** tant que
+le service de remises n'est pas à jour : d'ici là, aucune remise n'arrive sans
+`campaign_id`.
 
 Réponse avec remise (extrait) :
 
