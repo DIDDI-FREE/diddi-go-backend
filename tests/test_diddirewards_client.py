@@ -1,3 +1,4 @@
+import json
 from uuid import UUID
 
 import httpx
@@ -76,12 +77,24 @@ async def test_reserve_sends_idempotency_key() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_release_uses_idempotent_contract_and_accepts_no_content() -> None:
+async def test_release_uses_the_common_reservation_route() -> None:
+    """Ticket 016: reservation id in the URL, only `reason` in the body, answer 200 with the reservation."""
     seen: dict = {}
+    reservation_id = UUID("33333333-3333-3333-3333-333333333333")
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen["request"] = request
-        return httpx.Response(204)
+        return httpx.Response(
+            200,
+            json={
+                "reservation_id": str(reservation_id),
+                "entitlement_id": "55555555-5555-5555-5555-555555555555",
+                "operation_id": "diddigo:ride:release:1",
+                "reserved_amount_minor": 246,
+                "status": "released",
+                "duplicate": False,
+            },
+        )
 
     client = DiddiRewardsClient(
         base_url="http://rewards.test",
@@ -89,17 +102,42 @@ async def test_release_uses_idempotent_contract_and_accepts_no_content() -> None
         transport=httpx.MockTransport(handler),
     )
     result = await client.release(
-        reservation_id=UUID("33333333-3333-3333-3333-333333333333"),
+        reservation_id=reservation_id,
         ride_id=UUID("44444444-4444-4444-4444-444444444444"),
         reason="no_driver_found",
         idempotency_key="diddigo:ride:release:1",
         request_id="request-release-1",
     )
 
-    assert result == {}
-    assert seen["request"].url.path.endswith("/benefits/release")
+    assert result["status"] == "released"
+    assert seen["request"].url.path == (
+        f"/internal/v1/rewards/integrations/diddigo/benefits/reservations/{reservation_id}/release"
+    )
     assert seen["request"].headers["Idempotency-Key"] == "diddigo:ride:release:1"
-    assert b'"reason":"no_driver_found"' in seen["request"].content
+    assert json.loads(seen["request"].content) == {"reason": "no_driver_found"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_release_reason_is_cut_to_the_rewards_limit() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["request"] = request
+        return httpx.Response(200, json={"status": "released", "duplicate": True})
+
+    client = DiddiRewardsClient(
+        base_url="http://rewards.test", service_token="secret-token", transport=httpx.MockTransport(handler)
+    )
+    await client.release(
+        reservation_id=UUID("33333333-3333-3333-3333-333333333333"),
+        ride_id=UUID("44444444-4444-4444-4444-444444444444"),
+        reason="x" * 400,
+        idempotency_key="diddigo:ride:release:2",
+        request_id="request-release-2",
+    )
+
+    assert len(json.loads(seen["request"].content)["reason"]) == 180
 
 
 @pytest.mark.unit

@@ -88,9 +88,12 @@ class DiddiRewardsClient:
         idempotency_key: str,
         request_id: str,
     ) -> dict[str, Any]:
+        # Common release route shared by every service (ticket 016). The reservation is already
+        # tied to the ride by its reserve Idempotency-Key, so `ride_id` is not sent any more.
+        # Answer: 200 with the reservation; already released or expired gives `duplicate: true`.
         return await self._post(
-            "/internal/v1/rewards/integrations/diddigo/benefits/release",
-            {"reservation_id": str(reservation_id), "ride_id": str(ride_id), "reason": reason},
+            f"/internal/v1/rewards/integrations/diddigo/benefits/reservations/{reservation_id}/release",
+            {"reason": reason[:180]},
             request_id=request_id,
             idempotency_key=idempotency_key,
         )
