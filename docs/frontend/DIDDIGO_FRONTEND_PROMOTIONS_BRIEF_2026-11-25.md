@@ -1,7 +1,7 @@
 # DiddiGo - Promotions et remises : spécification frontend
 
 Date : 2026-11-25
-Version : V2 (ticket 040 : offres automatiques, prix garanti, bloc `offer`, routes « Mes offres » et parrainage)
+Version : V3 (V2 = ticket 040 : offres automatiques, prix garanti, bloc `offer`, « Mes offres », parrainage ; V3 = ticket 049 : bonus chauffeur)
 Pour : équipes Frontend et UI/UX (appli client, appli chauffeur)
 Source produit : « Promotions et bonus DIDDI — Note pour les équipes Frontend et UI/UX » (18 novembre 2026)
 
@@ -28,7 +28,7 @@ exacts restent dans `/openapi.json`.
 | Savoir pourquoi une offre ne s'applique pas | **(V2) Partiel** : codes stables dans « Mes offres » (`state`, `reason`) ; au devis automatique, pas de message |
 | Code promo (autre que parrainage) | **N'existe pas** |
 | Progression d'une offre client (« 4 courses sur 10 ») | **N'existe pas** (`progress` vaut `null`) |
-| Bonus professionnel : bloqué, retirable, historique | **N'existe pas** |
+| Bonus chauffeur : bloqué, débloqué, versé, progression, date limite | **(V3) Prêt** : `GET /v1/drivers/me/bonuses` (section 7.1) ; versé = ligne `rewards_bonus` du wallet |
 
 À retenir :
 - Avant la V2, l'appli ne pouvait afficher une remise que si elle connaissait un
@@ -412,10 +412,53 @@ Se baser sur `code`, jamais sur `message`.
   un libellé du type « Remise DIDDI ». D'autres types pourront s'ajouter :
   garder un libellé par défaut pour un type inconnu.
 
-Bonus professionnels (bonus d'accueil, bonus de performance) : rien n'est
-exposé à l'appli. Dans le wallet chauffeur (`GET /v1/drivers/me/wallet`),
-`reserved_balance` est l'argent d'un **retrait en cours**, pas un bonus bloqué.
-Ne pas l'utiliser pour l'écran « bloqué / retirable » de la note produit.
+### 7.1 Bonus chauffeur (V3, ticket 049)
+
+`GET /v1/drivers/me/bonuses` (jeton du chauffeur ; il faut un profil chauffeur,
+validé ou non). Réponse `{"bonuses": [ … ]}`, relayée telle quelle depuis le
+service de remises. Exemple construit d'après le contrat :
+
+```json
+{"bonuses": [{
+  "offer_id": "…", "name": "Bonus d'accueil", "description": "…",
+  "kind": "stepped", "state": "withdrawable",
+  "total_amount_minor": 10000, "unlocked_amount_minor": 3000,
+  "locked_amount_minor": 7000, "paying_amount_minor": 2000,
+  "paid_amount_minor": 1000, "expired_amount_minor": 0,
+  "progress": {"current": 3, "target": 10, "counts": "…"},
+  "window_start": "account_created", "window_start_at": "…", "deadline_at": "…"
+}]}
+```
+
+| Élément de la maquette | Champ |
+|---|---|
+| Nom, texte | `name`, `description` |
+| Total du bonus | `total_amount_minor` |
+| Bloqué (pas encore gagné) | `locked_amount_minor` |
+| Débloqué | `unlocked_amount_minor` |
+| En cours de versement | `paying_amount_minor` |
+| Versé dans le wallet | `paid_amount_minor` |
+| Expiré | `expired_amount_minor` |
+| Progression (« 3 / 10 courses ») | `progress.current` / `progress.target` ; `progress.counts` dit ce qui compte |
+| Date limite | `deadline_at` (`null` = sans date) |
+| Paliers ou seuil | `kind` : `stepped` (un montant par course) ou `threshold` (tout à l'objectif) |
+
+`state` (liste fixe) : `available`, `in_progress`, `locked`, `paying`,
+`withdrawable`, `paid`, `expired`. `frozen` existe mais n'est jamais renvoyé
+aujourd'hui. Un bonus auquel le chauffeur n'a pas droit n'est pas listé.
+
+Erreurs : `404 DRIVER_PROFILE_NOT_FOUND` (pas de profil chauffeur),
+`503 REWARDS_UNAVAILABLE` (réessayer plus tard).
+
+**Un seul solde.** Un bonus versé est une ligne du wallet, type
+`rewards_bonus`, `direction: "credit"`, `reference_type: "rewards_action"`,
+`description` = « Bonus DIDDI : <nom de l'offre> ». Il entre dans le solde
+retirable comme les autres gains. Il n'y a **pas** de solde bloqué dans le
+wallet : le « bloqué » de la maquette se lit dans `GET /v1/drivers/me/bonuses`
+(`locked_amount_minor`), il n'est pas dans le wallet. `reserved_balance` reste
+l'argent d'un **retrait en cours** : ne pas l'utiliser pour les bonus.
+
+**Rien n'est repris.** Une course remboursée ne retire pas un bonus déjà versé.
 
 ## 8. Ce qui manque, et à qui le demander
 
@@ -429,7 +472,6 @@ les textes et le prix garanti existent (sections 3 et 4). Il reste :
 | Liste nominative des filleuls | Seulement des nombres (`referred_count`, `pending_count`) | Choix assumé : pas de noms |
 | Progression d'une offre client (« 4 courses sur 10 ») | `progress` vaut `null` | Pas d'objectif sur les offres client aujourd'hui |
 | Motif au devis automatique | Pas de message au devis quand aucune offre ne s'applique | Motifs stables dans « Mes offres » |
-| Bonus professionnels : bloqué, retirable, en cours de versement, historique | Aucun écran bonus branchable | En cours côté DiddiGo (tickets 049, 069) |
 
 États de la note produit, côté client DiddiGo, avec ce qui existe :
 
@@ -441,7 +483,7 @@ les textes et le prix garanti existent (sections 3 et 4). Il reste :
 | Expiré | (V2) Oui : `state: "expired"` |
 | Refusé | (V2) Oui : `state: "refused"` + `reason` |
 | Repris après remboursement | (V2) Oui : `state: "given_back"` |
-| Bloqué, Retirable, En cours de versement (professionnels) | Non |
+| Bloqué, Retirable, En cours de versement (chauffeur) | (V3) Oui : `state` et montants de `GET /v1/drivers/me/bonuses` |
 
 ## 9. Ce que vous pouvez construire dès maintenant
 
@@ -517,29 +559,28 @@ appelle DiddiGo, jamais le service de remises directement.
 
 | Écran | Ce que l'écran affiche | Fourni ? |
 |---|---|---|
-| Bonus · vue d'ensemble | Totaux « Retirable » et « Bloqué », liste des bonus avec progression et date de fin | **Non** |
-| Bonus d'accueil · paliers | Dix paliers de 1 000 F, débloqués ou non, règle d'expiration | **Non** |
-| Bonus de performance · en cours | « 32 / 50 courses », temps restant, ce qui compte et ne compte pas | **Non** |
-| Bonus · en cours de versement | Étapes : objectif atteint, bonus validé, versement en cours | **Non** |
-| Bonus · historique et planche des neuf états | Versé, débloqué, repris, expiré, gelé | **Non** |
-| Bonus · suivi sur l'accueil | Pastille « Objectif semaine · 32/50 », « Bonus débloqué aujourd'hui » | **Non**. « Gagné aujourd'hui » existe déjà (`GET /v1/drivers/me/wallet/earnings`), sans les bonus |
+| Bonus · vue d'ensemble | Totaux « Retirable » et « Bloqué », liste des bonus avec progression et date de fin | **V3** : `GET /v1/drivers/me/bonuses` (section 7.1). « Retirable » = solde du wallet ; « Bloqué » = somme des `locked_amount_minor` |
+| Bonus d'accueil · paliers | Dix paliers de 1 000 F, débloqués ou non, règle d'expiration | **V3 en partie** : `kind: "stepped"`, montants et `progress` ; pas la liste palier par palier ni le texte de la règle |
+| Bonus de performance · en cours | « 32 / 50 courses », temps restant, ce qui compte et ne compte pas | **V3** : `progress`, `deadline_at`, `progress.counts` |
+| Bonus · en cours de versement | Étapes : objectif atteint, bonus validé, versement en cours | **V3** : `state: "paying"`, `paying_amount_minor` |
+| Bonus · historique et planche des neuf états | Versé, débloqué, repris, expiré, gelé | **V3 en partie** : `state` (sept valeurs) et les lignes `rewards_bonus` du wallet. « Repris » n'existe pas (rien n'est repris), « gelé » jamais renvoyé |
+| Bonus · suivi sur l'accueil | Pastille « Objectif semaine · 32/50 », « Bonus débloqué aujourd'hui » | **V3 en partie** : `progress` de `GET /v1/drivers/me/bonuses`. « Gagné aujourd'hui » (`GET /v1/drivers/me/wallet/earnings`) ne compte pas les bonus (non vérifié) |
 
 ### Section 04 — Portefeuille professionnel
 
 | Écran | Ce que l'écran affiche | Fourni ? |
 |---|---|---|
 | Portefeuille · deux soldes | « Solde retirable » | **Oui** : `available_balance` de `GET /v1/drivers/me/wallet` |
-| même écran | « Bonus bloqué 6 000 F », progression, « Il te reste 6 courses » | **Non**. Ne pas utiliser `reserved_balance` (retrait en cours) |
+| même écran | « Bonus bloqué 6 000 F », progression, « Il te reste 6 courses » | **V3** : somme des `locked_amount_minor` et `progress` de `GET /v1/drivers/me/bonuses` (pas dans le wallet). Ne pas utiliser `reserved_balance` (retrait en cours) |
 | Portefeuille · mouvements | Liste des mouvements, filtre « Retraits » | **Oui** : `GET /v1/drivers/me/wallet/ledger` |
-| même écran | Filtre « Bonus », lignes débloqué / versé / repris avec l'offre d'origine | **Non** : le wallet DiddiGo n'a aucun mouvement de type bonus |
+| même écran | Filtre « Bonus », lignes débloqué / versé / repris avec l'offre d'origine | **V3 en partie** : lignes `rewards_bonus` (versé), nom de l'offre dans `description`. Pas de ligne « débloqué » ni « repris » |
 | Retrait · plafonné au retirable | Montant, frais, « Tu reçois » | **Oui** : parcours de retrait existant (brief du 10 octobre) |
-| même écran | « Les 6 000 F de bonus bloqué ne peuvent pas être retirés » | **Non** |
-| Mouvement · bonus repris | Montant repris, raison, offre, « Contester ce mouvement » | **Non** |
+| même écran | « Les 6 000 F de bonus bloqué ne peuvent pas être retirés » | **V3** : vrai par construction (le bloqué n'est pas dans le wallet) ; montant = somme des `locked_amount_minor` |
+| Mouvement · bonus repris | Montant repris, raison, offre, « Contester ce mouvement » | **Sans objet** : rien n'est repris (décision du 25 novembre) |
 
-Ces maquettes placent les bonus dans le portefeuille DiddiGo. Aujourd'hui les
-bonus n'y entrent pas : ni solde bloqué, ni mouvement bonus. C'est une
-décision d'architecture à prendre (question ouverte ci-dessous), pas un simple
-branchement.
+(V3) Décidé le 25 novembre : un seul solde. Un bonus versé entre dans le
+wallet DiddiGo comme une ligne `rewards_bonus` ; la part encore bloquée reste
+côté service de remises et se lit dans `GET /v1/drivers/me/bonuses`.
 
 ## 11. Questions ouvertes
 
@@ -552,7 +593,3 @@ Encore ouvertes :
 
 - Code promo autre que parrainage : existe-t-il, et où le saisir ?
 - Lien de partage du parrainage : qui fabrique la page `diddifree.com/r/<code>` ?
-- Bonus professionnels : il est décidé (25 novembre) que chaque service paie
-  le bonus dans son propre portefeuille, donc dans le wallet DiddiGo pour un
-  chauffeur, avec un seul solde. Les routes de l'appli chauffeur sont en cours
-  côté DiddiGo (tickets 049 et 069).

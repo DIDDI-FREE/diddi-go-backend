@@ -68,6 +68,7 @@ Les champs détaillés sont dans x-contract de openapi.yaml. Une correction du c
 | `GET /v1/me/offers/{offer_id}` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `POST /v1/me/referral/code` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |
 | `GET /v1/me/referral` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
+| `GET /v1/drivers/me/bonuses` | roles, state-before-after, request, response, errors, side-effects, dependency-failure |
 | `GET /v1/pro/metiers` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `GET /v1/places/search` | roles, state-before-after, request, errors, side-effects, dependency-failure |
 | `POST /v1/rides/pricing/estimate` | roles, state-before-after, request, response, errors, retry, side-effects, dependency-failure |

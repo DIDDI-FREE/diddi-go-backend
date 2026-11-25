@@ -60,6 +60,20 @@ class RewardsOffersService:
             "referral.read", user_id, self._client().my_referral_code(consumer_id=user_id, request_id=request_id)
         )
 
+    async def driver_bonuses(self, user_id: UUID, *, request_id: str) -> dict[str, Any]:
+        """The driver's bonuses and progress (ticket 049 point 4, Rewards contract 057 point 3).
+
+        Relayed untouched. The money of a bonus is in the normal wallet balance once paid
+        (`rewards_bonus` lines): there is no blocked balance in DiddiGo (decision point 11).
+        """
+        answer = await self._call(
+            "bonuses.read",
+            user_id,
+            self._client().professional_bonuses(professional_id=user_id, request_id=request_id),
+        )
+        bonuses = answer.get("bonuses")
+        return {"bonuses": bonuses if isinstance(bonuses, list) else []}
+
     def _client(self) -> DiddiRewardsClient:
         if not settings.diddi_rewards_enabled or self.diddirewards is None:
             raise ApiError(503, "REWARDS_UNAVAILABLE", UNAVAILABLE_MESSAGE)

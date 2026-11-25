@@ -427,7 +427,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 ## Inventaire HTTP
 
 <!-- generated:http-inventory:start -->
-147 chemins ; 161 opérations HTTP.
+148 chemins ; 162 opérations HTTP.
 
 | Méthode | Chemin | Opération | Réponses documentées |
 |---|---|---|---|
@@ -520,6 +520,7 @@ Ces enums sont observés dans le code ; les matrices complètes de transitions, 
 | GET | `/v1/drivers/kyc` | List Driver Kyc Queue | 200, 422 |
 | POST | `/v1/drivers/kyc/resubmit` | Resubmit Kyc | 200, 422 |
 | GET | `/v1/drivers/me` | Get My Profile | 200 |
+| GET | `/v1/drivers/me/bonuses` | Get My Driver Bonuses | 200, 422 |
 | PATCH | `/v1/drivers/me/profile-photo` | Update My Profile Photo | 200, 422 |
 | PUT | `/v1/drivers/me/vehicle` | Update My Vehicle | 200, 422 |
 | GET | `/v1/drivers/me/wallet` | Get My Wallet | 200 |
