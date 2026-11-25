@@ -196,6 +196,11 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("DIDDI_REWARDS_SERVICE_SCOPES"),
     )
     diddi_rewards_enabled: bool = Field(default=False, validation_alias=AliasChoices("DIDDI_REWARDS_ENABLED"))
+    # Ticket 040: ask Rewards for the customer's best offer at every estimate, without a campaign_id
+    # from the app. Off until the Rewards stack accepts a quote without campaign_id.
+    diddi_rewards_auto_quote_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("DIDDI_REWARDS_AUTO_QUOTE_ENABLED")
+    )
     diddi_rewards_campaign_id: str | None = Field(
         default=None, validation_alias=AliasChoices("DIDDI_REWARDS_CAMPAIGN_ID")
     )

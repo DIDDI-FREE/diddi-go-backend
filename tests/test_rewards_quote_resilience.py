@@ -294,3 +294,104 @@ async def test_reservation_without_amount_keeps_quoted_discount(monkeypatch: pyt
     ride, quote = await _ride_with(RewardsReserving(available=None), monkeypatch)
     assert ride.rewards_discount_amount == quote.rewards_discount_amount
     assert ride.rewards_status == "reserved"
+
+
+class RewardsPickingBestOffer:
+    """Rewards asked without campaign_id (ticket 040): it picks the customer's best offer itself."""
+
+    campaign_id = "22222222-2222-2222-2222-222222222222"
+
+    def __init__(self, *, eligible: bool = True, error: ApiError | None = None) -> None:
+        self.eligible = eligible
+        self.error = error
+        self.calls: list[dict] = []
+
+    async def quote(self, **kwargs) -> dict:
+        self.calls.append(kwargs)
+        if self.error is not None:
+            raise self.error
+        fare = kwargs["amount_initial_minor"]
+        if not self.eligible:
+            return {
+                "eligible": False, "entitlement_id": None, "campaign_version_id": None,
+                "discount_amount_minor": 0, "final_amount_minor": fare, "reason": "No eligible entitlement",
+            }
+        return {
+            "eligible": True, "entitlement_id": str(uuid4()), "campaign_version_id": str(uuid4()),
+            "campaign_id": self.campaign_id, "discount_amount_minor": 100, "final_amount_minor": fare - 100,
+            "reason": None,
+        }
+
+
+async def _auto_quote(rewards, monkeypatch: pytest.MonkeyPatch, *, auto: bool = True) -> tuple[dict, object]:
+    monkeypatch.setattr(ride_services.settings, "diddi_rewards_enabled", True)
+    monkeypatch.setattr(ride_services.settings, "diddi_rewards_auto_quote_enabled", auto)
+    service, quotes, _ = service_with_repositories()
+    service.diddirewards = rewards
+    result = await service.create_quote(
+        passenger_user_id=uuid4(),
+        pickup=GeoPoint(lat=5.35, lng=-4.01),
+        pickup_address="Cocody",
+        dropoff=GeoPoint(lat=5.32, lng=-4.02),
+        dropoff_address="Plateau",
+        vehicle_category="standard",
+        comfort_level="standard",
+    )
+    return result, next(iter(quotes.quotes.values()))
+
+
+@pytest.mark.asyncio
+async def test_auto_quote_applies_the_best_offer_without_campaign_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    rewards = RewardsPickingBestOffer()
+    result, quote = await _auto_quote(rewards, monkeypatch)
+
+    assert len(rewards.calls) == 1 and rewards.calls[0]["campaign_id"] is None
+    assert result["rewards"]["eligible"] is True
+    assert result["rewards"]["campaign_id"] == rewards.campaign_id
+    assert result["rewards"]["discount_amount_minor"] == 100
+    assert result["rewards"]["final_amount_minor"] == result["estimated_fare"] - 100
+    assert quote.rewards_campaign_id == rewards.campaign_id
+
+
+@pytest.mark.asyncio
+async def test_auto_quote_with_no_offer_is_a_plain_full_price_estimate(monkeypatch: pytest.MonkeyPatch) -> None:
+    result, quote = await _auto_quote(RewardsPickingBestOffer(eligible=False), monkeypatch)
+
+    assert "rewards" not in result
+    assert quote.rewards_entitlement_id is None and quote.rewards_reason is None
+
+
+@pytest.mark.asyncio
+async def test_auto_quote_survives_rewards_outage_without_a_rewards_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    rewards = RewardsPickingBestOffer(error=ApiError(422, "REWARDS_OPERATION_FAILED", "campaign_id required"))
+    result, quote = await _auto_quote(rewards, monkeypatch)
+
+    assert result["estimated_fare"] > 0
+    assert "rewards" not in result
+    assert quote.rewards_reason is None
+
+
+@pytest.mark.asyncio
+async def test_auto_quote_off_never_calls_rewards_without_campaign_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    rewards = RewardsPickingBestOffer()
+    result, _ = await _auto_quote(rewards, monkeypatch, auto=False)
+
+    assert rewards.calls == []
+    assert "rewards" not in result
+
+
+@pytest.mark.asyncio
+async def test_client_quote_omits_campaign_id_when_none() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = request.content
+        return httpx.Response(200, json={"eligible": False, "discount_amount_minor": 0, "final_amount_minor": 1000})
+
+    client = DiddiRewardsClient(
+        base_url="http://rewards.test", service_token="tok", transport=httpx.MockTransport(handler)
+    )
+    await client.quote(consumer_id=uuid4(), campaign_id=None, amount_initial_minor=1000, request_id="r1")
+
+    assert b"campaign_id" not in seen["body"]
+    assert b'"service_code":"go"' in seen["body"]

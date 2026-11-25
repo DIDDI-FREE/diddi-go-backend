@@ -39,17 +39,20 @@ class DiddiRewardsClient:
         await self._headers()
 
     async def quote(
-        self, *, consumer_id: UUID, campaign_id: str, amount_initial_minor: int, request_id: str
+        self, *, consumer_id: UUID, campaign_id: str | None, amount_initial_minor: int, request_id: str
     ) -> dict[str, Any]:
+        """Quote a discount. Without `campaign_id` Rewards picks the customer's best offer (ticket 040)."""
+        payload: dict[str, Any] = {
+            "consumer_id": str(consumer_id),
+            "service_code": "go",
+            "amount_initial_minor": amount_initial_minor,
+            "currency": "XOF",
+        }
+        if campaign_id:
+            payload["campaign_id"] = campaign_id
         return await self._post(
             "/internal/v1/rewards/integrations/diddigo/benefits/quote",
-            {
-                "consumer_id": str(consumer_id),
-                "campaign_id": campaign_id,
-                "service_code": "go",
-                "amount_initial_minor": amount_initial_minor,
-                "currency": "XOF",
-            },
+            payload,
             request_id=request_id,
         )
 
