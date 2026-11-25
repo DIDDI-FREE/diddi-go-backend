@@ -318,7 +318,8 @@ class RideService:
                 requested_amount_minor=int(ride.rewards_discount_amount),
                 idempotency_key=f"diddigo:ride:{ride.id}:rewards-reserve:v1",
                 request_id=str(ride.id),
-                expires_at=iso_utc(quote.expires_at),
+                # No expires_at: the quote expiry says nothing about when the ride is paid.
+                # DiddiGo closes every reservation itself (confirm or release, ticket 014).
             )
             ride.rewards_reservation_id = _required_uuid(reservation, "reservation_id")
             ride.rewards_status = "reserved"
