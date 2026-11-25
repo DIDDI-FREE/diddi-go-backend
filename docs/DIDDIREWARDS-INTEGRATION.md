@@ -7,7 +7,7 @@ DiddiGo possède un client S2S dédié pour le contrat explicite DiddiGo :
 ```text
 POST /internal/v1/rewards/integrations/diddigo/benefits/quote
 POST /internal/v1/rewards/integrations/diddigo/benefits/reserve
-POST /internal/v1/rewards/integrations/diddigo/benefits/release
+POST /internal/v1/rewards/integrations/diddigo/benefits/reservations/{reservation_id}/release
 POST /internal/v1/rewards/integrations/diddigo/benefits/confirm
 POST /internal/v1/rewards/integrations/diddigo/benefits/correct
 POST /internal/v1/rewards/integrations/diddigo/reconciliation
@@ -49,7 +49,7 @@ Une réservation non consommée doit être libérée quand DiddiGo termine la
 course par absence de chauffeur ou annulation :
 
 ```http
-POST /internal/v1/rewards/integrations/diddigo/benefits/release
+POST /internal/v1/rewards/integrations/diddigo/benefits/reservations/<reservation-id>/release
 Authorization: Bearer <service-token>
 X-Client-ID: diddigo
 X-Request-ID: <request-id>
@@ -59,16 +59,15 @@ Content-Type: application/json
 
 ```json
 {
-  "reservation_id": "uuid",
-  "ride_id": "uuid",
   "reason": "no_driver_found"
 }
 ```
 
-Le contrat proposé utilise `204` en succès, une répétition idempotente, `409`
-si la réservation est déjà consommée et `404` si elle est inconnue. Le
-endpoint doit être implémenté et publié par DiddiRewards ; DiddiGo ne partage
-pas sa base avec Rewards.
+Depuis le ticket 016 (2026-11-25), DiddiGo appelle la route commune à tous les
+services : identifiant de réservation dans l'URL, `reason` seul dans le corps,
+scope `diddirewards:benefits:reserve`. Réponse `200` avec la réservation ;
+une réservation déjà libérée ou expirée répond `200` avec `duplicate: true`.
+L'ancienne route de commande `benefits/release` n'est plus appelée.
 
 ## Flux automatique après paiement
 
