@@ -19,6 +19,7 @@ garanties dans cette enveloppe.
 | 403 | `RIDE_NOT_OWNED_BY_USER`, `FORBIDDEN_ROLE` | Ne pas rejouer ; retirer l'action de l'interface. |
 | 403 | `DRIVER_PROFILE_REQUIRED`, `DRIVER_NOT_VERIFIED`, `VEHICLE_NOT_VERIFIED` | Afficher le parcours chauffeur/KYC ou KYV. |
 | 403 | `DRIVER_BALANCE_TOO_LOW` | Ouvrir la recharge du wallet chauffeur. |
+| 502 | `IDENTITY_PROFILE_INVALID` | Premiere connexion a DiddiGo refusee : le profil DiddiFreeID est absent ou sa date de creation (`created_at`) manque ou est illisible. `message` dit exactement quoi ; `details.problem` vaut `profile_missing`, `missing` ou `unreadable`. Pas de nouvel essai utile : signaler le probleme (cote DiddiFreeID). |
 
 ## Course, devis et matching
 

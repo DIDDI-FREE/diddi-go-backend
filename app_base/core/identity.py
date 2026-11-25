@@ -165,7 +165,58 @@ def identity_payload_to_user_model(payload: dict, profile: dict | None = None):
         raise ApiError(401, "TOKEN_INVALID", "Claim `is_review_account` invalide.")
     user.is_review_account = review_flag
     user.requested_role = data.get("requested_role")
-    now = datetime.now(UTC)
-    user.created_at = data.get("created_at") or now
-    user.updated_at = data.get("updated_at") or now
+    # Account creation date from DiddiFreeID (ticket 046). Only used when DiddiGo creates its
+    # local copy of the user; a problem is kept here and raised only for a new user.
+    user.created_at, user.identity_created_at_problem = _profile_created_at(profile)
+    # DiddiGo's own "last changed" time, not a DiddiFreeID field.
+    user.updated_at = datetime.now(UTC)
     return user
+
+
+def _profile_created_at(profile: dict | None) -> tuple[datetime | None, dict | None]:
+    """Read `created_at` of a DiddiFreeID profile. Returns (date, None) or (None, problem).
+
+    The problem says exactly what is wrong, for the error answer and the logs.
+    """
+    if profile is None:
+        return None, {
+            "problem": "profile_missing",
+            "message": (
+                "DiddiFreeID n'a renvoye aucun profil pour cet utilisateur (reponse 404, ou URL du profil "
+                "non configuree dans DiddiGo). DiddiGo ne peut pas creer le compte sans la date de creation "
+                "du compte DiddiFreeID (champ created_at)."
+            ),
+        }
+    if "created_at" not in profile or profile.get("created_at") is None:
+        return None, {
+            "problem": "missing",
+            "message": (
+                "Le profil DiddiFreeID ne contient pas le champ created_at (date de creation du compte), "
+                "ou il vaut null. DiddiGo ne peut pas creer le compte sans cette date."
+            ),
+        }
+    value = profile["created_at"]
+    if not isinstance(value, str):
+        return None, {
+            "problem": "unreadable",
+            "received": repr(value)[:80],
+            "message": (
+                f"Le champ created_at du profil DiddiFreeID n'est pas un texte de date mais {type(value).__name__} "
+                f"({repr(value)[:80]}). Attendu : une date ISO 8601 en UTC, par exemple 2026-09-21T13:00:00Z."
+            ),
+        }
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        parsed = None
+    if parsed is None or parsed.tzinfo is None:
+        reason = "n'est pas une date ISO 8601 lisible" if parsed is None else "n'a pas de fuseau horaire"
+        return None, {
+            "problem": "unreadable",
+            "received": value[:80],
+            "message": (
+                f"Le champ created_at du profil DiddiFreeID vaut '{value[:80]}', qui {reason}. "
+                "Attendu : une date ISO 8601 en UTC, par exemple 2026-09-21T13:00:00Z."
+            ),
+        }
+    return parsed.astimezone(UTC), None

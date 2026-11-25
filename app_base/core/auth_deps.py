@@ -205,6 +205,20 @@ async def require_business_driver(
 
 
 async def _upsert_identity_shadow_user(user: UserModel, repo: SqlAlchemyUserRepository) -> None:
+    problem = getattr(user, "identity_created_at_problem", None)
+    if problem is not None and await repo.find_by_id(user.id) is None:
+        # A new user's local copy needs the real DiddiFreeID creation date: no guessed date
+        # is ever stored (ticket 046). Existing users never use it again, so they log in normally.
+        log_event(
+            "auth.identity_profile.invalid", level="error", user_id=user.id,
+            field="created_at", problem=problem["problem"], received=problem.get("received"),
+        )
+        raise ApiError(
+            502,
+            "IDENTITY_PROFILE_INVALID",
+            problem["message"],
+            {"field": "created_at", **{key: value for key, value in problem.items() if key != "message"}},
+        )
     shadow = User(
         id=user.id,
         phone=user.phone or _shadow_phone(user.id),
