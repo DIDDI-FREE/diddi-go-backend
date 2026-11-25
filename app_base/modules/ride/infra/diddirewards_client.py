@@ -218,6 +218,53 @@ class DiddiRewardsClient:
             idempotency_key=idempotency_key,
         )
 
+    async def report_fact(self, *, fact: dict[str, Any], request_id: str) -> dict[str, Any]:
+        """Facts protocol v1 (Rewards contract 069): `Idempotency-Key` must equal `fact_id`."""
+        return await self._post(
+            "/internal/v1/rewards/integrations/diddigo/facts",
+            fact,
+            request_id=request_id,
+            idempotency_key=str(fact["fact_id"]),
+        )
+
+    async def pending_actions(self, *, request_id: str) -> dict[str, Any]:
+        """Actions Rewards still waits for (wallet credits not confirmed yet)."""
+        return await self._request(
+            "GET", "/internal/v1/rewards/integrations/diddigo/actions?status=pending", None, request_id=request_id
+        )
+
+    async def action_done(
+        self,
+        *,
+        action_id: UUID,
+        status: str,
+        reference: str | None,
+        reason: str | None,
+        idempotency_key: str,
+        request_id: str,
+    ) -> dict[str, Any]:
+        """Confirm an action: `done` with our wallet entry id, or `failed` (it comes back as pending)."""
+        body: dict[str, Any] = {"status": status}
+        if reference:
+            body["reference"] = reference
+        if reason:
+            body["reason"] = reason[:180]
+        return await self._post(
+            f"/internal/v1/rewards/integrations/diddigo/actions/{action_id}/done",
+            body,
+            request_id=request_id,
+            idempotency_key=idempotency_key,
+        )
+
+    async def professional_bonuses(self, *, professional_id: UUID, request_id: str) -> dict[str, Any]:
+        """A driver's bonuses and progress, for the driver app (Rewards contract 057, point 3)."""
+        return await self._request(
+            "GET",
+            f"/internal/v1/rewards/integrations/diddigo/professionals/{professional_id}/bonuses",
+            None,
+            request_id=request_id,
+        )
+
     async def _post(
         self,
         path: str,

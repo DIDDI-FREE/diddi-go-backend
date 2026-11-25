@@ -154,7 +154,7 @@ class FakePaymentRepo:
 
     async def enqueue_rewards_event(self, *, event_type, ride_id, payload):
         self.rewards_events.append({"event_type": event_type, "ride_id": ride_id, "payload": payload})
-        return payload["event_id"]
+        return payload["fact_id"]
 
     async def get_or_create_wallet(self, driver_id, *, currency="XOF"):
         from app_base.modules.payment.domain.entities import DriverWallet
@@ -337,12 +337,16 @@ def make_completed_ride() -> Ride:
 
 
 @pytest.mark.asyncio
-async def test_rewards_event_id_distinguishes_payment_operations() -> None:
+async def test_paid_ride_queues_an_order_paid_fact() -> None:
+    """Facts protocol v1 (ticket 069): every paid ride, discount or not, total before discount."""
     ride = make_completed_ride()
     ride.rewards_reservation_id = uuid4()
     ride.rewards_discount_amount = Decimal("246")
+    driver_user_id = uuid4()
+    ride_repo = FakeRideRepo(ride)
+    ride_repo.driver_user_id = lambda _profile_id: _async_value(driver_user_id)
     repo = FakePaymentRepo()
-    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride))
+    service = PaymentService(payment_repo=repo, ride_repo=ride_repo)
     payment = Transaction(
         id=uuid4(),
         ride_id=ride.id,
@@ -355,9 +359,42 @@ async def test_rewards_event_id_distinguishes_payment_operations() -> None:
     await service._enqueue_rewards_event(ride, payment)
 
     event = repo.rewards_events[0]
-    assert event["event_type"] == "ride.payment_confirmed"
-    assert event["payload"]["event_id"].endswith(f":{payment.id}")
-    assert event["payload"]["client_paid_minor"] == 2854
+    fact = event["payload"]
+    assert event["event_type"] == "order.paid"
+    assert fact["fact_id"] == f"diddigo:order.paid:{ride.id}"
+    assert fact["schema_version"] == "1"
+    assert fact["customer_id"] == str(ride.passenger_user_id)
+    assert fact["amount_minor"] == 3100 and fact["discount_minor"] == 246
+    assert fact["payment_method"] == "online"
+    assert fact["professional_id"] == str(driver_user_id)
+    assert fact["rewards_reservation_id"] == str(ride.rewards_reservation_id)
+    assert fact["occurred_at"].endswith("Z")
+
+
+@pytest.mark.asyncio
+async def test_ride_without_discount_is_reported_too_and_refund_and_cancel_have_their_facts() -> None:
+    ride = make_completed_ride()
+    repo = FakePaymentRepo()
+    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride))
+    base = dict(ride_id=ride.id, amount=Decimal("3100"), currency="XOF", method=PaymentDomainMethod.CASH)
+
+    await service._enqueue_rewards_event(ride, Transaction(id=uuid4(), status=PaymentStatus.COLLECTED, **base))
+    await service._enqueue_rewards_event(ride, Transaction(id=uuid4(), status=PaymentStatus.REFUNDED, **base))
+    await service._enqueue_rewards_event(
+        ride, Transaction(id=uuid4(), status=PaymentStatus.PARTIALLY_REFUNDED, **base)
+    )
+    await service._enqueue_rewards_event(ride, Transaction(id=uuid4(), status=PaymentStatus.CANCELLED, **base))
+    await service._enqueue_rewards_event(ride, Transaction(id=uuid4(), status=PaymentStatus.PENDING, **base))
+
+    facts = [event["payload"] for event in repo.rewards_events]
+    assert [fact["type"] for fact in facts] == ["order.paid", "order.refunded", "order.cancelled"]
+    assert facts[0]["discount_minor"] == 0 and facts[0]["payment_method"] == "cash"
+    assert facts[0]["professional_id"] is None  # fake repo cannot resolve the driver
+    assert facts[1]["full"] is True and facts[1]["refunded_amount_minor"] == 3100
+
+
+async def _async_value(value):
+    return value
 
 
 @pytest.mark.asyncio

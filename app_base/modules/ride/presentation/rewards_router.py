@@ -12,10 +12,14 @@ from fastapi import APIRouter, Depends, Header, Request
 from pydantic import BaseModel, Field
 
 from app_base.core.auth_deps import get_current_active_user
+from app_base.core.deps import driver_profile_repo
+from app_base.core.errors import ApiError
 from app_base.modules.auth.infra.models import UserModel
 from app_base.modules.ride.application.rewards_offers import RewardsOffersService
+from app_base.modules.ride.infra.repositories import SqlAlchemyDriverProfileRepository
 
 router = APIRouter(prefix="/me", tags=["me-offers"])
+driver_bonuses_router = APIRouter(prefix="/drivers/me", tags=["driver-bonuses"])
 
 
 class ReferralCodeApplyRequest(BaseModel):
@@ -79,3 +83,20 @@ async def get_my_referral(
 ) -> dict:
     """My referral code, the link to share (null for now), the limits and the friends count."""
     return await service.my_referral(current_user.id, request_id=_request_id(request_id))
+
+
+@driver_bonuses_router.get("/bonuses")
+async def get_my_driver_bonuses(
+    service: RewardsOffersService = Depends(rewards_offers_service),
+    current_user: UserModel = Depends(get_current_active_user),
+    drivers: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
+    request_id: str | None = Header(default=None, alias="X-Request-ID"),
+) -> dict:
+    """The driver's bonuses and progress (ticket 049): locked, unlocked, paying, paid, deadline, state.
+
+    Any driver profile, active or not: a driver waiting for validation can see what is coming.
+    Paid bonuses are also wallet lines of type `rewards_bonus` (`GET /v1/drivers/me/wallet/ledger`).
+    """
+    if await drivers.find_by_user_id(current_user.id) is None:
+        raise ApiError(404, "DRIVER_PROFILE_NOT_FOUND", "Aucun profil chauffeur pour ce compte.")
+    return await service.driver_bonuses(current_user.id, request_id=_request_id(request_id))

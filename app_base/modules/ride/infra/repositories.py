@@ -117,6 +117,13 @@ class SqlAlchemyRideRepository:
             return None
         return self._to_domain(row)
 
+    async def driver_user_id(self, driver_profile_id: UUID) -> UUID | None:
+        """DiddiFreeID user id of a driver profile (the id other modules know the driver by)."""
+        result = await self._session.execute(
+            select(orm.DriverProfileModel.user_id).where(orm.DriverProfileModel.id == driver_profile_id)
+        )
+        return result.scalar_one_or_none()
+
     async def find_active_by_driver_user_id(self, user_id: UUID) -> Ride | None:
         result = await self._session.execute(
             select(orm.RideModel)
