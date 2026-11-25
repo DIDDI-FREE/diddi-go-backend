@@ -95,9 +95,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.diddirewards = DiddiRewardsClient()
     if settings.diddi_rewards_enabled:
         await app.state.diddirewards.validate_service_access()
-    app.state.rewards_events_redis = app.state.redis
-    if settings.diddi_rewards_events_redis_url and settings.diddi_rewards_events_redis_url != settings.redis_url:
-        app.state.rewards_events_redis = create_redis_pool(settings.diddi_rewards_events_redis_url)
 
     app.state.payment_reconciliation_task = None
     register_worker("payment-reconciliation", settings.payment_reconciliation_enabled)
@@ -107,11 +104,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             name="payment-reconciliation",
         )
 
-    app.state.rewards_events_task = asyncio.create_task(
-        rewards_events_loop(app.state.rewards_events_redis),
-        name="rewards-events",
-    )
-    register_worker("rewards-events", True)
+    # Facts protocol with Rewards (tickets 049, 066, 069): reports paid / refunded / cancelled
+    # rides and pays the bonuses Rewards answers with. Replaces the Redis stream (ticket 064).
+    app.state.rewards_events_task = None
+    register_worker("rewards-events", settings.diddi_rewards_enabled)
+    if settings.diddi_rewards_enabled:
+        app.state.rewards_events_task = asyncio.create_task(
+            rewards_events_loop(app.state.diddirewards),
+            name="rewards-events",
+        )
 
     # Closes Rewards reservations a failed confirm/release left open (ticket 014).
     app.state.rewards_reservations_task = None
@@ -145,8 +146,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             rewards_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await rewards_task
-        if app.state.rewards_events_redis is not app.state.redis:
-            await app.state.rewards_events_redis.aclose()
         reservations_task: asyncio.Task | None = app.state.rewards_reservations_task
         if reservations_task is not None:
             reservations_task.cancel()

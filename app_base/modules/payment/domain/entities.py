@@ -78,6 +78,8 @@ class WalletEntryType(str, Enum):
     REFUND = "refund"
     # Discount DiddiFree gave the passenger on a cash ride, given back to the driver (ticket 039).
     REWARDS_DISCOUNT = "rewards_discount"
+    # Bonus Rewards asked DiddiGo to pay a driver (facts protocol, tickets 049 and 069).
+    REWARDS_BONUS = "rewards_bonus"
 
 
 class TopupStatus(str, Enum):

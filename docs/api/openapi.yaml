@@ -967,6 +967,69 @@ paths:
         retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
         side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
         dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
+  /v1/drivers/me/bonuses:
+    get:
+      tags:
+      - driver-bonuses
+      summary: Get My Driver Bonuses
+      description: 'The driver''s bonuses and progress (ticket 049): locked, unlocked, paying, paid, deadline, state.
+
+
+        Any driver profile, active or not: a driver waiting for validation can see what is coming.
+
+        Paid bonuses are also wallet lines of type `rewards_bonus` (`GET /v1/drivers/me/wallet/ledger`).'
+      operationId: get_my_driver_bonuses_v1_drivers_me_bonuses_get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: X-Request-ID
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Request-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get My Driver Bonuses V1 Drivers Me Bonuses Get
+        '422':
+          description: 'Erreur locale : lire error.code ; liste de codes propre à l''opération non exhaustive.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+              examples:
+                validation:
+                  summary: Exemple synthétique de validation locale
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: La requête est invalide.
+                      details:
+                        violations:
+                        - loc:
+                          - query
+                          - q
+                          msg: Field required
+                          type: missing
+      x-contract:
+        source: app.openapi() ; opération get_my_driver_bonuses_v1_drivers_me_bonuses_get
+        purpose: Get My Driver Bonuses
+        roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
+        state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
+        request: Paramètres et requestBody ci-dessus ; exemple complet UNKNOWN.
+        response: UNKNOWN — champs de succès non spécifiés.
+        errors: Catalogue partiel ; codes/details exhaustifs UNKNOWN.
+        retry: Lecture à renouveler ; consommation des contextes de retour à vérifier.
+        side-effects: UNKNOWN — consulter le parcours dans API_CONTRACT.md.
+        dependency-failure: Handlers 500/503 locaux ; comportement spécifique et timeout UNKNOWN.
   /v1/pro/metiers:
     get:
       tags:
@@ -10635,7 +10698,7 @@ paths:
                 type: object
                 title: Response Health Health Get
       x-contract:
-        source: app_base/main.py:105
+        source: app_base/main.py:107
         purpose: Health
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.
@@ -10656,7 +10719,7 @@ paths:
             application/json:
               schema: {}
       x-contract:
-        source: app_base/main.py:110
+        source: app_base/main.py:112
         purpose: Readiness
         roles: UNKNOWN — voir dépendances de la route ; security ne définit pas les rôles.
         state-before-after: N/A pour une lecture simple ; effets des retours navigateur UNKNOWN.

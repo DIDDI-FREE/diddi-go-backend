@@ -193,3 +193,38 @@ async def test_confirm_correct_and_reconciliation_use_contract_routes() -> None:
         "/internal/v1/rewards/integrations/diddigo/benefits/correct",
         "/internal/v1/rewards/integrations/diddigo/reconciliation",
     ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_facts_protocol_routes_and_keys() -> None:
+    """Contract 069: Idempotency-Key = fact_id; actions list and confirm; contract 057 read route."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"actions": []})
+
+    client = DiddiRewardsClient(
+        base_url="http://rewards.test", service_token="secret-token", transport=httpx.MockTransport(handler)
+    )
+    action_id = UUID("77777777-7777-7777-7777-777777777777")
+    professional_id = UUID("88888888-8888-8888-8888-888888888888")
+    await client.report_fact(fact={"fact_id": "diddigo:order.paid:r1", "type": "order.paid"}, request_id="r1")
+    await client.pending_actions(request_id="r2")
+    await client.action_done(
+        action_id=action_id, status="done", reference="entry-1", reason=None, idempotency_key="k1", request_id="r3"
+    )
+    await client.professional_bonuses(professional_id=professional_id, request_id="r4")
+
+    base = "/internal/v1/rewards/integrations/diddigo"
+    assert [(r.method, r.url.path) for r in seen] == [
+        ("POST", f"{base}/facts"),
+        ("GET", f"{base}/actions"),
+        ("POST", f"{base}/actions/{action_id}/done"),
+        ("GET", f"{base}/professionals/{professional_id}/bonuses"),
+    ]
+    assert seen[0].headers["Idempotency-Key"] == "diddigo:order.paid:r1"
+    assert seen[1].url.params["status"] == "pending"
+    assert json.loads(seen[2].content) == {"status": "done", "reference": "entry-1"}
+    assert seen[2].headers["Idempotency-Key"] == "k1"
