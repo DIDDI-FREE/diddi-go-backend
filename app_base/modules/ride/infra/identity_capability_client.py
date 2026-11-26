@@ -4,9 +4,11 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
+from datetime import UTC
 
 import httpx
 
+from app_base.core.settings import settings
 from app_base.modules.ride.domain.capability_projection import DriverCapabilityProjectionEvent
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,7 @@ class IdentityCapabilityClient:
     _access_token: str | None = field(default=None, init=False, repr=False)
     _token_expires_at: float = field(default=0, init=False, repr=False)
     _token_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
+    _other_tokens: dict[str, tuple[str, float]] = field(default_factory=dict, init=False, repr=False)
 
     @property
     def configured(self) -> bool:
@@ -92,7 +95,52 @@ class IdentityCapabilityClient:
                 conflict=response.status_code == 409,
             )
 
-    async def _service_token(self) -> str:
+    async def send_driver_access_status(self, event, *, scope: str | None = None) -> None:
+        """Ticket 084: set the driver's access status in DiddiFreeID (`enabled`, `suspended`, `rejected`).
+
+        PROVISIONAL path and body: they follow PM ticket 083 as written; DiddiFreeID chooses
+        the final route and scope in its contract-change. `enabled_at` is sent only by the
+        one-time back-fill (the driver's real approval date).
+        """
+        scope = scope or settings.identity_driver_access_scope
+        if not self.configured or not scope:
+            raise CapabilityDeliveryError(
+                "DiddiFreeID service credentials or IDENTITY_DRIVER_ACCESS_SCOPE are missing",
+                error_code="IDENTITY_SERVICE_CREDENTIALS_MISSING",
+            )
+        body = {"access_status": event.access_status, "reason": event.reason, "event_id": event.event_id}
+        if event.enabled_at is not None:
+            body["enabled_at"] = event.enabled_at.astimezone(UTC).isoformat().replace("+00:00", "Z")
+        try:
+            token = await self._service_token(scope)
+            response = await self._http().patch(
+                f"/identity/v1/pro/internal/users/{event.user_id}/capabilities/diddigo/driver/access",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "X-Client-ID": str(self.client_id),
+                    "Idempotency-Key": event.event_id,
+                    "X-Request-ID": event.event_id,
+                },
+                json=body,
+            )
+        except (httpx.HTTPError, ValueError, KeyError) as exc:
+            if isinstance(exc, httpx.HTTPStatusError):
+                raise CapabilityDeliveryError(
+                    f"DiddiFreeID returned HTTP {exc.response.status_code}",
+                    status_code=exc.response.status_code,
+                    error_code=_error_payload(exc.response),
+                ) from exc
+            raise CapabilityDeliveryError(str(exc), error_code=type(exc).__name__) from exc
+        if response.status_code >= 400:
+            raise CapabilityDeliveryError(
+                f"DiddiFreeID returned HTTP {response.status_code}",
+                status_code=response.status_code,
+                error_code=_error_payload(response),
+            )
+
+    async def _service_token(self, scope: str = "capabilities:write") -> str:
+        if scope != "capabilities:write":
+            return await self._scoped_token(scope)
         now = time.monotonic()
         if self._access_token and now < self._token_expires_at:
             return self._access_token
@@ -100,26 +148,43 @@ class IdentityCapabilityClient:
             now = time.monotonic()
             if self._access_token and now < self._token_expires_at:
                 return self._access_token
-            response = await self._http().post(
-                "/identity/v1/auth/service/token",
-                headers={"X-Client-ID": str(self.client_id)},
-                data={
-                    "grant_type": "client_credentials",
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "audience": "diddifree-id",
-                    "scope": "capabilities:write",
-                },
-            )
-            response.raise_for_status()
-            payload = response.json()
-            token = payload["access_token"]
-            if not isinstance(token, str) or not token:
-                raise ValueError("DiddiFreeID token response has no access_token")
-            expires_in = max(int(payload.get("expires_in", 600)), 1)
+            token, expires_at = await self._request_token(scope)
             self._access_token = token
-            self._token_expires_at = time.monotonic() + max(expires_in - 30, 1)
+            self._token_expires_at = expires_at
             return token
+
+    async def _scoped_token(self, scope: str) -> str:
+        """A token for another scope, cached apart: a missing grant never breaks capabilities:write."""
+        cached = self._other_tokens.get(scope)
+        if cached and time.monotonic() < cached[1]:
+            return cached[0]
+        async with self._token_lock:
+            cached = self._other_tokens.get(scope)
+            if cached and time.monotonic() < cached[1]:
+                return cached[0]
+            token, expires_at = await self._request_token(scope)
+            self._other_tokens[scope] = (token, expires_at)
+            return token
+
+    async def _request_token(self, scope: str) -> tuple[str, float]:
+        response = await self._http().post(
+            "/identity/v1/auth/service/token",
+            headers={"X-Client-ID": str(self.client_id)},
+            data={
+                "grant_type": "client_credentials",
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "audience": "diddifree-id",
+                "scope": scope,
+            },
+        )
+        response.raise_for_status()
+        payload = response.json()
+        token = payload["access_token"]
+        if not isinstance(token, str) or not token:
+            raise ValueError("DiddiFreeID token response has no access_token")
+        expires_in = max(int(payload.get("expires_in", 600)), 1)
+        return token, time.monotonic() + max(expires_in - 30, 1)
 
     async def close(self) -> None:
         if self._client is not None:

@@ -631,6 +631,32 @@ class DriverCapabilityProjectionEventModel(Base):
     )
 
 
+class DriverAccessStatusEventModel(Base):
+    """A driver access status to send to DiddiFreeID (ticket 084), kept until accepted."""
+
+    __tablename__ = "driver_access_status_events"
+    __table_args__ = (
+        UniqueConstraint("event_id", name="uq_driver_access_status_event_id"),
+        Index("idx_driver_access_status_due", "status", "next_attempt_at"),
+        Index("idx_driver_access_status_user", "user_id", "created_at"),
+        {"schema": "ride"},
+    )
+
+    id: Mapped[UUID] = mapped_column(_PG_UUID, primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    user_id: Mapped[UUID] = mapped_column(_PG_UUID, nullable=False)
+    access_status: Mapped[str] = mapped_column(String(30), nullable=False)
+    enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reason: Mapped[str] = mapped_column(String(180), nullable=False)
+    source: Mapped[str] = mapped_column(String(30), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class DriverPriorityEventModel(Base):
     """Append-only driver priority ledger (SCRUM-63 Phase 3). Keyed by
     driver_profile id; summed over a sliding window at dispatch time."""
