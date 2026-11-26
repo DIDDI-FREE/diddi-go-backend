@@ -929,8 +929,64 @@ async def test_driver_topup_get_keeps_checkout_next_action() -> None:
         amount=Decimal("4500"),
         method="diddipay",
         customer_email="driver@example.com",
+        mobile_money_network="orange",
     )
     fetched = await wallet_service.get_topup(driver_user_id=user_id, topup_id=UUID(created["id"]))
 
     assert created["next_action"] == CHECKOUT_ACTION
     assert fetched["next_action"] == CHECKOUT_ACTION
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("network", ["orange", "mtn", "moov", "wave"])
+async def test_driver_topup_sends_the_chosen_mobile_money_network(network) -> None:
+    """A top-up must name the operator to charge (PawaPay refused network=None)."""
+    user_id, driver_id = uuid4(), uuid4()
+    gateway = FakeDiddiPay(uuid4())
+    wallet_service = DriverWalletService(
+        payment_repo=FakePaymentRepo(),
+        driver_repo=FakeDriverRepo(driver_id=driver_id, user_id=user_id),
+        diddipay=gateway,
+    )
+    await wallet_service.create_topup(
+        driver_user_id=user_id, amount=Decimal("15000"), method="mobile_money",
+        customer_email="driver@example.com", mobile_money_network=network,
+    )
+    assert gateway.last_payload["network"] == network
+    assert gateway.last_payload["channel"] == "mobile_money"
+
+
+@pytest.mark.asyncio
+async def test_old_wave_topup_method_still_sends_wave() -> None:
+    user_id, driver_id = uuid4(), uuid4()
+    gateway = FakeDiddiPay(uuid4())
+    wallet_service = DriverWalletService(
+        payment_repo=FakePaymentRepo(),
+        driver_repo=FakeDriverRepo(driver_id=driver_id, user_id=user_id),
+        diddipay=gateway,
+    )
+    await wallet_service.create_topup(
+        driver_user_id=user_id, amount=Decimal("15000"), method="wave", customer_email="driver@example.com",
+    )
+    assert gateway.last_payload["network"] == "wave"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["diddipay", "mobile_money"])
+async def test_topup_without_network_is_refused_before_anything_is_created(method) -> None:
+    user_id, driver_id = uuid4(), uuid4()
+    repo = FakePaymentRepo()
+    gateway = FakeDiddiPay(uuid4())
+    wallet_service = DriverWalletService(
+        payment_repo=repo,
+        driver_repo=FakeDriverRepo(driver_id=driver_id, user_id=user_id),
+        diddipay=gateway,
+    )
+    with pytest.raises(ApiError) as excinfo:
+        await wallet_service.create_topup(
+            driver_user_id=user_id, amount=Decimal("15000"), method=method, customer_email="driver@example.com",
+        )
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.details == {"field": "mobile_money_network", "allowed": ["orange", "wave", "mtn", "moov"]}
+    assert repo.topups == {}
+    assert getattr(gateway, "last_payload", None) is None

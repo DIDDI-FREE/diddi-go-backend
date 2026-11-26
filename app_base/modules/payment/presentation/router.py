@@ -247,6 +247,7 @@ async def create_driver_topup(
         method=payload.method,
         customer_email=payload.customer_email,
         customer_phone=payload.customer_phone or current_user.phone,
+        mobile_money_network=payload.mobile_money_network,
     )
 
 
