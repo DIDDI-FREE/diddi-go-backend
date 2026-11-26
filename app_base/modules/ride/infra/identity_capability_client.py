@@ -98,9 +98,10 @@ class IdentityCapabilityClient:
     async def send_driver_access_status(self, event, *, scope: str | None = None) -> None:
         """Ticket 084: set the driver's access status in DiddiFreeID (`enabled`, `suspended`, `rejected`).
 
-        PROVISIONAL path and body: they follow PM ticket 083 as written; DiddiFreeID chooses
-        the final route and scope in its contract-change. `enabled_at` is sent only by the
-        one-time back-fill (the driver's real approval date).
+        Route of the DiddiFreeID contract (ticket 083, `main` `5e9aa28`): scope
+        `capabilities:access:write`; the same `event_id` again answers 200 with no change.
+        `enabled_at` is sent only by the one-time back-fill (the driver's real approval date);
+        DiddiFreeID never uses it to replace a first validation date it already has.
         """
         scope = scope or settings.identity_driver_access_scope
         if not self.configured or not scope:

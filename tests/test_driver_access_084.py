@@ -254,9 +254,25 @@ async def test_client_uses_its_own_scope_token_and_sends_the_status() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_client_without_a_scope_does_not_call() -> None:
+async def test_client_without_a_scope_does_not_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app_base.modules.ride.infra import identity_capability_client as client_module
+
+    monkeypatch.setattr(client_module.settings, "identity_driver_access_scope", None)
+    calls: list = []
     client = IdentityCapabilityClient(base_url="http://id.test", client_id="diddigo", client_secret="s")
+    client._client = httpx.AsyncClient(
+        base_url="http://id.test", transport=httpx.MockTransport(lambda r: calls.append(r) or httpx.Response(200))
+    )
     event = FakeEvent(uuid4(), 1)
     event.reason, event.enabled_at = "kyc_approved", None
-    with pytest.raises(CapabilityDeliveryError):
+    with pytest.raises(CapabilityDeliveryError) as excinfo:
         await client.send_driver_access_status(event, scope=None)
+    assert excinfo.value.error_code == "IDENTITY_SERVICE_CREDENTIALS_MISSING"
+    assert calls == []  # nothing sent, not even a token request
+
+
+@pytest.mark.unit
+def test_default_scope_is_the_diddifreeid_contract_one() -> None:
+    from app_base.core.settings import settings
+
+    assert settings.identity_driver_access_scope == "capabilities:access:write"
