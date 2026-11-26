@@ -74,6 +74,7 @@ async def test_driver_earnings_sums_confirmed_business_buckets_in_abidjan_period
         "platform_commissions_xof": 3000,
         "withdrawals_succeeded_xof": 3000,
         "pending_or_disputed_xof": 500,
+        "bonuses_xof": 0,
         "available_balance_xof": 4200,
     }
 

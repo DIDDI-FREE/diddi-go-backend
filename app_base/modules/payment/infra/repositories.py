@@ -7,6 +7,7 @@ Maps between `payment.domain.entities.Transaction` and the ORM
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
@@ -548,14 +549,30 @@ class SqlAlchemyPaymentRepository:
         for row in withdrawals_result:
             bucket_date = row.bucket.date()
             current = buckets.get(bucket_date, DriverEarningsBucket(period_start=bucket_date))
-            buckets[bucket_date] = DriverEarningsBucket(
-                period_start=bucket_date,
-                ride_earnings=current.ride_earnings,
-                platform_commissions=current.platform_commissions,
-                withdrawals_succeeded=Decimal(str(row.total)),
-                pending_or_disputed=current.pending_or_disputed,
+            buckets[bucket_date] = replace(current, withdrawals_succeeded=Decimal(str(row.total)))
+
+        # Bonuses paid into the wallet (ticket 086): confirmed `rewards_bonus` credits, by the
+        # day they were credited, in the business timezone.
+        local_credit_at = func.timezone("Africa/Abidjan", orm.DriverLedgerEntryModel.created_at)
+        bonus_bucket = func.date_trunc(period, local_credit_at).label("bucket")
+        bonuses_result = await self._session.execute(
+            select(bonus_bucket, func.coalesce(func.sum(orm.DriverLedgerEntryModel.amount), 0).label("total"))
+            .where(
+                orm.DriverLedgerEntryModel.driver_id == driver_id,
+                orm.DriverLedgerEntryModel.entry_type == WalletEntryType.REWARDS_BONUS.value,
+                orm.DriverLedgerEntryModel.direction == WalletEntryDirection.CREDIT.value,
+                orm.DriverLedgerEntryModel.status == WalletEntryStatus.CONFIRMED.value,
+                local_credit_at >= utc_start,
+                local_credit_at < utc_end,
             )
-        return list(buckets.values())
+            .group_by(bonus_bucket)
+            .order_by(bonus_bucket)
+        )
+        for row in bonuses_result:
+            bucket_date = row.bucket.date()
+            current = buckets.get(bucket_date, DriverEarningsBucket(period_start=bucket_date))
+            buckets[bucket_date] = replace(current, bonuses=Decimal(str(row.total)))
+        return sorted(buckets.values(), key=lambda bucket: bucket.period_start)
 
     async def record_ledger_entry_once(self, entry: DriverLedgerEntry) -> DriverLedgerEntry | None:
         await self.get_or_create_wallet(entry.driver_id, currency=entry.currency)

@@ -564,7 +564,7 @@ appelle DiddiGo, jamais le service de remises directement.
 | Bonus de performance · en cours | « 32 / 50 courses », temps restant, ce qui compte et ne compte pas | **V3** : `progress`, `deadline_at`, `progress.counts` |
 | Bonus · en cours de versement | Étapes : objectif atteint, bonus validé, versement en cours | **V3** : `state: "paying"`, `paying_amount_minor` |
 | Bonus · historique et planche des neuf états | Versé, débloqué, repris, expiré, gelé | **V3 en partie** : `state` (sept valeurs) et les lignes `rewards_bonus` du wallet. « Repris » n'existe pas (rien n'est repris), « gelé » jamais renvoyé |
-| Bonus · suivi sur l'accueil | Pastille « Objectif semaine · 32/50 », « Bonus débloqué aujourd'hui » | **V3 en partie** : `progress` de `GET /v1/drivers/me/bonuses`. « Gagné aujourd'hui » (`GET /v1/drivers/me/wallet/earnings`) ne compte pas les bonus (non vérifié) |
+| Bonus · suivi sur l'accueil | Pastille « Objectif semaine · 32/50 », « Bonus débloqué aujourd'hui » | **V3 en partie** : `progress` de `GET /v1/drivers/me/bonuses`. « Gagné aujourd'hui » (`GET /v1/drivers/me/wallet/earnings`) : les bonus versés sont dans `bonuses_xof`, à part de `ride_earnings_xof` (ticket 086) |
 
 ### Section 04 — Portefeuille professionnel
 

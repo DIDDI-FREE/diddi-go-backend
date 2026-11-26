@@ -11188,6 +11188,10 @@ components:
         pending_or_disputed_xof:
           type: integer
           title: Pending Or Disputed Xof
+        bonuses_xof:
+          type: integer
+          title: Bonuses Xof
+          default: 0
       type: object
       required:
       - period_start
@@ -11251,6 +11255,10 @@ components:
         pending_or_disputed_xof:
           type: integer
           title: Pending Or Disputed Xof
+        bonuses_xof:
+          type: integer
+          title: Bonuses Xof
+          default: 0
         available_balance_xof:
           type: integer
           title: Available Balance Xof

@@ -232,6 +232,8 @@ class DriverEarningsBucket:
     platform_commissions: Decimal = Decimal("0")
     withdrawals_succeeded: Decimal = Decimal("0")
     pending_or_disputed: Decimal = Decimal("0")
+    # Bonuses paid into the wallet by Rewards actions (`rewards_bonus` lines), ticket 086.
+    bonuses: Decimal = Decimal("0")
 
 
 @dataclass

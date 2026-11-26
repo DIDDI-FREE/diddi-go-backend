@@ -163,6 +163,8 @@ class DriverEarningsTotalsResponse(BaseModel):
     platform_commissions_xof: int
     withdrawals_succeeded_xof: int
     pending_or_disputed_xof: int
+    # Bonuses paid into the wallet in the period (`rewards_bonus` lines), not in ride_earnings_xof.
+    bonuses_xof: int = 0
     available_balance_xof: int
 
 
@@ -172,6 +174,7 @@ class DriverEarningsBucketResponse(BaseModel):
     platform_commissions_xof: int
     withdrawals_succeeded_xof: int
     pending_or_disputed_xof: int
+    bonuses_xof: int = 0
 
 
 class DriverEarningsResponse(BaseModel):
