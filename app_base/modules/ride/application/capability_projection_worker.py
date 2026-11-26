@@ -14,9 +14,11 @@ from app_base.core.telemetry import worker_iteration
 from app_base.modules.ride.application.capability_projection import (
     DriverCapabilityProjectionDispatcher,
 )
+from app_base.modules.ride.application.driver_access_sync import DriverAccessStatusDispatcher
 from app_base.modules.ride.infra.capability_projection_repository import (
     SqlAlchemyDriverCapabilityProjectionRepository,
 )
+from app_base.modules.ride.infra.driver_access_repository import SqlAlchemyDriverAccessStatusRepository
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.infra.identity_capability_client import IdentityCapabilityClient
 
@@ -40,6 +42,13 @@ async def capability_projection_loop(
                         retry_max_seconds=settings.capability_projection_retry_max_seconds,
                     )
                     await dispatcher.deliver_due(batch_size=settings.capability_projection_batch_size)
+                    # Ticket 084: driver access statuses, same client and retry rules.
+                    await DriverAccessStatusDispatcher(
+                        SqlAlchemyDriverAccessStatusRepository(session),
+                        client,
+                        retry_base_seconds=settings.capability_projection_retry_base_seconds,
+                        retry_max_seconds=settings.capability_projection_retry_max_seconds,
+                    ).deliver_due(batch_size=settings.capability_projection_batch_size)
                     projection_metrics = await repository.projection_metrics(now=datetime.now(UTC))
                     for status in ("pending", "retry", "conflict", "dead_letter", "succeeded"):
                         set_value("diddigo_capability_projection_backlog", 0, {"status": status})

@@ -148,6 +148,16 @@ class Settings(BaseSettings):
     identity_service_client_id: str | None = None
     identity_service_client_secret: str | None = None
     identity_service_timeout_seconds: float = 5.0
+    # Ticket 084: send driver access statuses (enabled / suspended / rejected) to DiddiFreeID.
+    # Off until the human turns it on after the deploy: statuses wait in the queue meanwhile.
+    driver_access_status_sync_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("DRIVER_ACCESS_STATUS_SYNC_ENABLED")
+    )
+    # Scope of that route (DiddiFreeID contract, ticket 083), asked in its own token so a
+    # missing grant never breaks the existing status projection (`capabilities:write`).
+    identity_driver_access_scope: str | None = Field(
+        default="capabilities:access:write", validation_alias=AliasChoices("IDENTITY_DRIVER_ACCESS_SCOPE")
+    )
     capability_projection_enabled: bool = True
     capability_projection_delivery_interval_seconds: int = Field(default=5, ge=1, le=300)
     capability_projection_reconciliation_interval_seconds: int = Field(default=30, ge=10, le=86400)

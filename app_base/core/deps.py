@@ -51,9 +51,10 @@ from app_base.modules.payment.infra.diddipay_client import DiddiPayClient
 from app_base.modules.payment.infra.repositories import SqlAlchemyPaymentRepository
 from app_base.modules.ride.application.breakdown_service import RideBreakdownService
 from app_base.modules.ride.application.capability_projection import DurableDriverCapabilityPublisher
+from app_base.modules.ride.application.driver_access_sync import DriverAccessStatusPublisher
 from app_base.modules.ride.application.driver_online_eligibility import DriverOnlineEligibilityService
 from app_base.modules.ride.application.driver_provisioning_service import DriverProvisioningService
-from app_base.modules.ride.application.driver_service import DriverService
+from app_base.modules.ride.application.driver_service import KYC_DOCUMENT_TYPES, DriverService
 from app_base.modules.ride.application.emergency_contact_service import EmergencyContactService
 from app_base.modules.ride.application.emergency_notifications import EmergencyNotificationService
 from app_base.modules.ride.application.matching_service import MatchingService
@@ -70,6 +71,7 @@ from app_base.modules.ride.infra.capability_projection_repository import (
 from app_base.modules.ride.infra.diddifiles_client import DiddiFilesClient
 from app_base.modules.ride.infra.diddirewards_client import DiddiRewardsClient
 from app_base.modules.ride.infra.dispatch_config_store import SqlAlchemyDispatchConfigStore
+from app_base.modules.ride.infra.driver_access_repository import SqlAlchemyDriverAccessStatusRepository
 from app_base.modules.ride.infra.driver_location import RedisDriverLocationService
 from app_base.modules.ride.infra.identity_capability_client import IdentityCapabilityClient
 from app_base.modules.ride.infra.offer_store import RedisOfferStore
@@ -405,17 +407,28 @@ async def driver_online_eligibility_service(
     )
 
 
+async def driver_access_publisher(
+    session: AsyncSession = Depends(session_dep),
+) -> DriverAccessStatusPublisher:
+    # Ticket 084: same session as the KYC change, so the status is queued in the same commit.
+    return DriverAccessStatusPublisher(
+        SqlAlchemyDriverAccessStatusRepository(session), required_documents=set(KYC_DOCUMENT_TYPES)
+    )
+
+
 async def driver_service(
     driver_repo_dep: SqlAlchemyDriverProfileRepository = Depends(driver_profile_repo),
     vehicle_repo_dep: SqlAlchemyVehicleRepository = Depends(vehicle_repo),
     capability_publisher: DurableDriverCapabilityPublisher = Depends(capability_projection_publisher),
     online_eligibility: DriverOnlineEligibilityService = Depends(driver_online_eligibility_service),
+    access_publisher: DriverAccessStatusPublisher = Depends(driver_access_publisher),
 ) -> DriverService:
     return DriverService(
         driver_repo=driver_repo_dep,
         vehicle_repo=vehicle_repo_dep,
         capability_publisher=capability_publisher,
         online_eligibility=online_eligibility,
+        access_publisher=access_publisher,
     )
 
 

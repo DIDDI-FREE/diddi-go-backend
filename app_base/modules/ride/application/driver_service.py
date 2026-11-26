@@ -17,6 +17,7 @@ from uuid import UUID
 from app_base.core.error_codes import ErrorCode
 from app_base.core.errors import ApiError
 from app_base.core.observability import log_event
+from app_base.modules.ride.application.driver_access_sync import DriverAccessStatusPublisher
 from app_base.modules.ride.domain.entities import (
     ComfortLevel,
     DriverProfile,
@@ -61,6 +62,8 @@ class DriverService:
     driver_repo: DriverProfileRepository
     vehicle_repo: VehicleRepository
     capability_publisher: CapabilityStatusPublisher | None = None
+    # Ticket 084: tells DiddiFreeID when the driver becomes enabled, suspended or rejected.
+    access_publisher: DriverAccessStatusPublisher | None = None
     online_eligibility: DriverOnlineEligibilityService | None = None
 
     async def create_profile(
@@ -209,6 +212,7 @@ class DriverService:
         await self.driver_repo.save(profile)
         log_event("driver.kyc.resubmitted", driver_id=profile.id, user_id=user_id, status=profile.status.value)
         await self._publish_profile_status(profile)
+        await self._publish_access_status(profile, reason="kyc_resubmitted")
         return _profile_payload(profile)
 
     async def approve_kyc(
@@ -251,6 +255,7 @@ class DriverService:
             reviewed_by_user_id=reviewed_by_user_id,
         )
         await self._publish_profile_status(profile)
+        await self._publish_access_status(profile, reason="kyc_approved")
         return _profile_payload(profile)
 
     async def reject_kyc(
@@ -288,6 +293,7 @@ class DriverService:
             reviewed_by_user_id=reviewed_by_user_id,
         )
         await self._publish_profile_status(profile)
+        await self._publish_access_status(profile, reason="kyc_rejected")
         return _profile_payload(profile)
 
     async def update_my_profile_photo(self, *, user_id: UUID, profile_photo_file_id: UUID) -> dict:
@@ -618,6 +624,10 @@ class DriverService:
         profile = await self.driver_repo.find_by_id(driver_id)
         if profile is not None:
             await self._publish_profile_status(profile)
+
+    async def _publish_access_status(self, profile: DriverProfile, *, reason: str) -> None:
+        if self.access_publisher is not None:
+            await self.access_publisher.publish(profile, reason=reason)
 
     async def _publish_profile_status(self, profile: DriverProfile) -> None:
         if self.capability_publisher is None:
