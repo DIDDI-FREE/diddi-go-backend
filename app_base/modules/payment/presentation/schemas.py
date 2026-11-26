@@ -88,6 +88,9 @@ class DriverTopupRequest(BaseModel):
     method: str = Field(default="diddipay")
     customer_email: str = Field(min_length=3, max_length=255)
     customer_phone: str | None = Field(default=None, min_length=4, max_length=32)
+    # Operator to charge, as for ride payments. Required for mobile money top-ups; the old
+    # method "wave" implies "wave". Without it the processor cannot charge (PawaPay: 'network=None').
+    mobile_money_network: Literal["orange", "wave", "mtn", "moov"] | None = None
 
 
 class DriverWithdrawalQuoteRequest(BaseModel):

@@ -34,6 +34,8 @@ from app_base.modules.ride.domain.entities import Ride
 from app_base.modules.ride.domain.interfaces import DriverProfileRepository
 from app_base.shared_kernel.contracts.sms import SmsProvider
 
+MOBILE_MONEY_NETWORKS = ("orange", "wave", "mtn", "moov")
+
 
 @dataclass
 class DriverWalletService:
@@ -151,6 +153,7 @@ class DriverWalletService:
         method: str,
         customer_email: str,
         customer_phone: str | None = None,
+        mobile_money_network: str | None = None,
     ) -> dict:
         driver_id = await self._driver_id_for_user(driver_user_id)
         if amount <= 0:
@@ -167,6 +170,16 @@ class DriverWalletService:
                 ErrorCode.PAYMENT_EMAIL_REQUIRED,
                 "Un email client est requis pour initialiser une recharge DiddiPay/Paystack.",
                 {"field": "customer_email"},
+            )
+        # The operator to charge, as for ride payments. The old method "wave" implies "wave".
+        # Checked before anything is created: a top-up without it fails at the processor.
+        network = "wave" if payment_method is PaymentMethod.WAVE else mobile_money_network
+        if network not in MOBILE_MONEY_NETWORKS:
+            raise ApiError(
+                422,
+                ErrorCode.INVALID_PAYMENT_METHOD,
+                "Un reseau mobile money valide est requis pour la recharge.",
+                {"field": "mobile_money_network", "allowed": list(MOBILE_MONEY_NETWORKS)},
             )
 
         topup_id = DriverTopup.new_id()
@@ -190,7 +203,7 @@ class DriverWalletService:
                 "payer_user_id": str(driver_user_id),
                 "payee_user_id": None,
                 "channel": "mobile_money",
-                "network": "wave" if payment_method is PaymentMethod.WAVE else None,
+                "network": network,
                 "customer_email": customer_email,
                 "customer_phone": customer_phone,
                 "callback_url": callback_url,

@@ -11923,6 +11923,16 @@ components:
             minLength: 4
           - type: 'null'
           title: Customer Phone
+        mobile_money_network:
+          anyOf:
+          - type: string
+            enum:
+            - orange
+            - wave
+            - mtn
+            - moov
+          - type: 'null'
+          title: Mobile Money Network
       additionalProperties: false
       type: object
       required:
