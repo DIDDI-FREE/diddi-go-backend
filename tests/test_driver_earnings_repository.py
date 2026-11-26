@@ -118,7 +118,60 @@ async def test_driver_earnings_endpoint_returns_typed_summary_for_authenticated_
     assert payload["timezone"] == "Africa/Abidjan"
     assert payload["summary"]["ride_earnings_xof"] == 8000
     assert payload["summary"]["platform_commissions_xof"] == 2000
+    assert payload["summary"]["bonuses_xof"] == 0
+    assert payload["buckets"][0]["bonuses_xof"] == 0
     assert payload["summary"]["available_balance_xof"] >= 0
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_real_postgres_driver_earnings_show_paid_bonuses_apart_from_rides() -> None:
+    """Ticket 086: confirmed `rewards_bonus` credits are summed per day in `bonuses`, not in rides."""
+    passenger_id, driver_user_id, driver_id, ride_id = uuid4(), uuid4(), uuid4(), uuid4()
+    day1 = datetime(2026, 10, 5, 12, tzinfo=UTC)
+    day2 = datetime(2026, 10, 6, 9, tzinfo=UTC)
+
+    def ledger(amount, when, *, entry_type="rewards_bonus", status="confirmed"):
+        return payment_orm.DriverLedgerEntryModel(
+            id=uuid4(), driver_id=driver_id, amount=Decimal(amount), currency="XOF", direction="credit",
+            entry_type=entry_type, status=status, reference_type="rewards_action", reference_id=uuid4(),
+            description="Bonus DIDDI : test", created_at=when,
+        )
+
+    async with async_session_factory() as session:
+        session.add_all([
+            UserModel(id=passenger_id, phone=f"+225{passenger_id.int % 10_000_000_000:010d}", role="user"),
+            UserModel(id=driver_user_id, phone=f"+225{driver_user_id.int % 10_000_000_000:010d}", role="user"),
+        ])
+        await session.flush()
+        session.add(ride_orm.DriverProfileModel(
+            id=driver_id, user_id=driver_user_id, license_number=f"LIC-{driver_id.hex[:12]}", status="active",
+        ))
+        session.add(_ride(ride_id, passenger_id, driver_id, Decimal("1000"), Decimal("200"), day1))
+        await session.flush()
+        session.add_all([
+            payment_orm.TransactionModel(
+                id=uuid4(), ride_id=ride_id, amount=Decimal("1200"), method="cash", status="collected",
+                collected_at=day1, created_at=day1,
+            ),
+            ledger("100", day1),
+            ledger("100", day1),
+            ledger("300", day2),
+            ledger("999", day2, entry_type="rewards_discount"),  # not a bonus
+            ledger("999", day2, status="pending"),  # not confirmed
+        ])
+        await session.commit()
+
+        result = await SqlAlchemyPaymentRepository(session).summarize_driver_earnings(
+            driver_id, period="day", start=datetime(2026, 10, 5, tzinfo=UTC), end=datetime(2026, 10, 7, tzinfo=UTC),
+        )
+
+    by_day = {bucket.period_start.isoformat(): bucket for bucket in result}
+    assert list(by_day) == ["2026-10-05", "2026-10-06"]
+    assert by_day["2026-10-05"].bonuses == Decimal("200")
+    assert by_day["2026-10-05"].ride_earnings == Decimal("1000")
+    assert by_day["2026-10-06"].bonuses == Decimal("300")
+    assert by_day["2026-10-06"].ride_earnings == Decimal("0")
     await engine.dispose()
 
 

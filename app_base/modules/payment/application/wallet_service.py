@@ -95,6 +95,7 @@ class DriverWalletService:
                 "platform_commissions_xof": sum(row["platform_commissions_xof"] for row in buckets),
                 "withdrawals_succeeded_xof": sum(row["withdrawals_succeeded_xof"] for row in buckets),
                 "pending_or_disputed_xof": sum(row["pending_or_disputed_xof"] for row in buckets),
+                "bonuses_xof": sum(row["bonuses_xof"] for row in buckets),
                 "available_balance_xof": int(wallet.balance),
             },
             "buckets": buckets,
@@ -670,6 +671,7 @@ def _earnings_bucket_payload(bucket) -> dict:
         "platform_commissions_xof": int(bucket.platform_commissions),
         "withdrawals_succeeded_xof": int(bucket.withdrawals_succeeded),
         "pending_or_disputed_xof": int(bucket.pending_or_disputed),
+        "bonuses_xof": int(getattr(bucket, "bonuses", 0) or 0),
     }
 
 
