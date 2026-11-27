@@ -100,6 +100,7 @@ async def test_lost_callback_on_ride_payment_settles_the_driver() -> None:
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
         mobile_money_network="wave",
+        customer_phone="+2250707000000",
     )
 
     gateway.read_status = "succeeded"
@@ -198,6 +199,7 @@ async def test_provider_error_does_not_abort_the_sweep() -> None:
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
         mobile_money_network="wave",
+        customer_phone="+2250707000000",
     )
     await _pending_topup(repo, topup_gateway)
 
