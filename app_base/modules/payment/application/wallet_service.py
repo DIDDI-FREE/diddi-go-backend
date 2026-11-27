@@ -181,6 +181,18 @@ class DriverWalletService:
                 "Un reseau mobile money valide est requis pour la recharge.",
                 {"field": "mobile_money_network", "allowed": list(MOBILE_MONEY_NETWORKS)},
             )
+        # The mobile money number to charge: the one the app sends, else the account phone.
+        # Without it the processor cannot charge (PawaPay: "customer_phone is required").
+        customer_phone = (customer_phone or "").strip() or None
+        if customer_phone is not None and customer_phone.startswith("+000"):
+            customer_phone = None  # placeholder phone of an account without one (shadow user)
+        if customer_phone is None:
+            raise ApiError(
+                422,
+                ErrorCode.INVALID_PAYMENT_METHOD,
+                "Le numero mobile money a debiter est requis pour la recharge.",
+                {"field": "customer_phone"},
+            )
 
         topup_id = DriverTopup.new_id()
         idempotency_key = f"diddigo:driver_topup:{topup_id}:v1"

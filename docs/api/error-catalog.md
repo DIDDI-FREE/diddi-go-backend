@@ -52,7 +52,7 @@ garanties dans cette enveloppe.
 |---:|---|---|
 | 409 | `PAYMENT_OPERATION_CONFLICT` | Relire la course et son paiement avant une nouvelle tentative. |
 | 409 | `RIDE_NOT_COMPLETED` | Attendre la fin effective de la course puis relire son montant final avant de preparer le paiement. |
-| 422 | `INVALID_PAYMENT_METHOD` | Afficher cash ou Mobile Money avec reseau obligatoire. Aussi pour une recharge chauffeur sans `mobile_money_network` (`details.field` = `mobile_money_network`, `details.allowed`) : demander l'operateur et renvoyer. |
+| 422 | `INVALID_PAYMENT_METHOD` | Afficher cash ou Mobile Money avec reseau obligatoire. Aussi pour une recharge chauffeur sans `mobile_money_network` (`details.field` = `mobile_money_network`, `details.allowed`) ou sans numero a debiter (`details.field` = `customer_phone`, ni dans la demande ni sur le compte) : demander l'information manquante et renvoyer. |
 | 503 | `PAYMENT_CONFIGURATION_MISSING`, `PAYMENT_PROVIDER_UNAVAILABLE` | Afficher une indisponibilite temporaire ; ne pas creer de doublon. |
 | 409 | `IDEMPOTENCY_CONFLICT`, `IDEMPOTENCY_IN_PROGRESS` | Conserver la meme cle pour le meme retry ; relire le paiement si le traitement est en cours. |
 | 409 | `WITHDRAWAL_PROFILE_PHONE_REQUIRED`, `WITHDRAWAL_QUOTE_ALREADY_USED`, `WITHDRAWAL_VERIFICATION_USED` | Completer le profil ou relire le retrait existant ; ne pas creer un second payout. |
