@@ -99,6 +99,23 @@ def _client_payable_amount(ride) -> Decimal:
     return max(Decimal("0"), gross - discount)
 
 
+def _require_mobile_money_phone(customer_phone: str | None) -> str:
+    """The mobile money number to charge: the one the app sends, else the account phone.
+
+    PawaPay cannot charge without it ("customer_phone is required by pawapay deposits").
+    The `+000...` placeholder of an account without a phone counts as none.
+    """
+    phone = (customer_phone or "").strip()
+    if not phone or phone.startswith("+000"):
+        raise ApiError(
+            422,
+            ErrorCode.INVALID_PAYMENT_METHOD,
+            "Le numero mobile money a debiter est requis.",
+            {"field": "customer_phone"},
+        )
+    return phone
+
+
 def _passenger_debt_payload(debt: PassengerDebt | None) -> dict:
     if debt is None:  # Defensive: the caller has just persisted a debt.
         raise RuntimeError("Passenger debt unexpectedly missing")
@@ -160,6 +177,7 @@ class PaymentService:
         mobile_money_network: str,
     ) -> dict:
         debt = await self._owned_open_debt(debt_id, passenger_user_id)
+        customer_phone = _require_mobile_money_phone(customer_phone)
         payment = await self._prepare_diddipay(
             debt.ride_id,
             PaymentMethod.MOBILE_MONEY,
@@ -359,6 +377,8 @@ class PaymentService:
                 "Un reseau mobile money valide est requis.",
                 {"field": "mobile_money_network", "allowed": ["orange", "wave", "mtn", "moov"]},
             )
+        if payment_method is PaymentMethod.MOBILE_MONEY:
+            customer_phone = _require_mobile_money_phone(customer_phone)
         if not customer_email and customer_phone:
             normalized_phone = "".join(character for character in customer_phone if character.isdigit())
             customer_email = f"{normalized_phone}@diddifree.com"
