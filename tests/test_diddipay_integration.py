@@ -534,6 +534,7 @@ async def test_prepare_wave_replaces_failed_intent_and_then_reuses_retry(monkeyp
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
         mobile_money_network="wave",
+        customer_phone="+2250707000000",
     )
     reused = await service.prepare_payment(
         ride.id,
@@ -541,6 +542,7 @@ async def test_prepare_wave_replaces_failed_intent_and_then_reuses_retry(monkeyp
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
         mobile_money_network="wave",
+        customer_phone="+2250707000000",
     )
 
     assert retried["payment_intent_id"] == str(retry_intent_id)
@@ -669,7 +671,9 @@ def test_expired_diddipay_intent_is_a_retryable_terminal_status() -> None:
 
 
 @pytest.mark.asyncio
-async def test_prepare_diddipay_requires_email() -> None:
+async def test_prepare_mobile_money_without_any_phone_or_email_asks_for_the_phone() -> None:
+    """Without a number to charge, the phone is asked first (PawaPay cannot charge without it;
+    with a phone, a missing email is derived from it, so PAYMENT_EMAIL_REQUIRED cannot happen)."""
     ride = make_completed_ride()
     service = PaymentService(
         payment_repo=FakePaymentRepo(),
@@ -686,7 +690,7 @@ async def test_prepare_diddipay_requires_email() -> None:
         )
 
     assert exc_info.value.status_code == 422
-    assert exc_info.value.code == "PAYMENT_EMAIL_REQUIRED"
+    assert exc_info.value.details == {"field": "customer_phone"}
 
 
 @pytest.mark.asyncio
@@ -701,6 +705,7 @@ async def test_diddipay_webhook_marks_payment_succeeded(monkeypatch) -> None:
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
         mobile_money_network="wave",
+        customer_phone="+2250707000000",
     )
 
     monkeypatch.setattr("app_base.modules.payment.application.services.settings.diddipay_callback_secret", "secret")
@@ -829,6 +834,7 @@ async def test_digital_payment_webhook_credits_driver_payout_once(monkeypatch) -
         payer_user_id=ride.passenger_user_id,
         customer_email="client@example.com",
         mobile_money_network="wave",
+        customer_phone="+2250707000000",
     )
 
     monkeypatch.setattr("app_base.modules.payment.application.services.settings.diddipay_callback_secret", "secret")
@@ -1032,3 +1038,49 @@ async def test_topup_sends_the_phone_to_charge() -> None:
         customer_email="driver@example.com", mobile_money_network="mtn", customer_phone=" +2250505000000 ",
     )
     assert gateway.last_payload["customer_phone"] == "+2250505000000"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phone", [None, "", "+000123456789012"])
+async def test_ride_mobile_money_without_a_real_phone_is_refused_before_anything(phone) -> None:
+    ride = make_completed_ride()
+    repo = FakePaymentRepo()
+    gateway = FakeDiddiPay(uuid4())
+    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddipay=gateway)
+    with pytest.raises(ApiError) as excinfo:
+        await service.prepare_payment(
+            ride.id, "mobile_money", payer_user_id=ride.passenger_user_id,
+            customer_email="client@example.com", mobile_money_network="orange", customer_phone=phone,
+        )
+    assert excinfo.value.status_code == 422 and excinfo.value.details == {"field": "customer_phone"}
+    assert gateway.last_payload is None
+
+
+@pytest.mark.asyncio
+async def test_ride_mobile_money_sends_the_number_chosen_by_the_customer() -> None:
+    ride = make_completed_ride()
+    gateway = FakeDiddiPay(uuid4())
+    service = PaymentService(payment_repo=FakePaymentRepo(), ride_repo=FakeRideRepo(ride), diddipay=gateway)
+    await service.prepare_payment(
+        ride.id, "mobile_money", payer_user_id=ride.passenger_user_id,
+        customer_email="client@example.com", mobile_money_network="mtn", customer_phone=" +2250505000000 ",
+    )
+    assert gateway.last_payload["customer_phone"] == "+2250505000000"
+
+
+@pytest.mark.asyncio
+async def test_debt_mobile_money_without_a_phone_is_refused_before_anything() -> None:
+    ride = make_completed_ride()
+    repo = FakePaymentRepo()
+    debt = PassengerDebt(id=uuid4(), passenger_user_id=ride.passenger_user_id, ride_id=ride.id, amount=Decimal("3100"))
+    repo.debts[debt.id] = debt
+    gateway = FakeDiddiPay(uuid4())
+    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddipay=gateway)
+    with pytest.raises(ApiError) as excinfo:
+        await service.prepare_passenger_debt_payment(
+            debt.id, passenger_user_id=ride.passenger_user_id, customer_email="client@example.com",
+            customer_phone=None, mobile_money_network="orange",
+        )
+    assert excinfo.value.status_code == 422 and excinfo.value.details == {"field": "customer_phone"}
+    assert gateway.last_payload is None
+    assert repo.debts[debt.id].status is PassengerDebtStatus.OPEN
