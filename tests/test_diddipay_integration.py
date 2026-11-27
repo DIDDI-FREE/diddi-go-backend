@@ -880,6 +880,7 @@ async def test_driver_topup_callback_credits_wallet_once(monkeypatch) -> None:
         amount=Decimal("5000"),
         method="wave",
         customer_email="driver@example.com",
+        customer_phone="+2250707000000",
     )
     assert gateway.last_payload["callback_url"] == "https://go.test/wallet/return?context=opaque-context"
     assert contexts.created == {
@@ -930,6 +931,7 @@ async def test_driver_topup_get_keeps_checkout_next_action() -> None:
         method="diddipay",
         customer_email="driver@example.com",
         mobile_money_network="orange",
+        customer_phone="+2250707000000",
     )
     fetched = await wallet_service.get_topup(driver_user_id=user_id, topup_id=UUID(created["id"]))
 
@@ -950,7 +952,7 @@ async def test_driver_topup_sends_the_chosen_mobile_money_network(network) -> No
     )
     await wallet_service.create_topup(
         driver_user_id=user_id, amount=Decimal("15000"), method="mobile_money",
-        customer_email="driver@example.com", mobile_money_network=network,
+        customer_email="driver@example.com", mobile_money_network=network, customer_phone="+2250707000000",
     )
     assert gateway.last_payload["network"] == network
     assert gateway.last_payload["channel"] == "mobile_money"
@@ -967,6 +969,7 @@ async def test_old_wave_topup_method_still_sends_wave() -> None:
     )
     await wallet_service.create_topup(
         driver_user_id=user_id, amount=Decimal("15000"), method="wave", customer_email="driver@example.com",
+        customer_phone="+2250707000000",
     )
     assert gateway.last_payload["network"] == "wave"
 
@@ -990,3 +993,42 @@ async def test_topup_without_network_is_refused_before_anything_is_created(metho
     assert excinfo.value.details == {"field": "mobile_money_network", "allowed": ["orange", "wave", "mtn", "moov"]}
     assert repo.topups == {}
     assert getattr(gateway, "last_payload", None) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phone", [None, "", "   ", "+000123456789012"])
+async def test_topup_without_a_real_phone_is_refused_before_anything_is_created(phone) -> None:
+    """PawaPay needs the mobile money number to charge ('customer_phone is required')."""
+    user_id, driver_id = uuid4(), uuid4()
+    repo = FakePaymentRepo()
+    gateway = FakeDiddiPay(uuid4())
+    wallet_service = DriverWalletService(
+        payment_repo=repo,
+        driver_repo=FakeDriverRepo(driver_id=driver_id, user_id=user_id),
+        diddipay=gateway,
+    )
+    with pytest.raises(ApiError) as excinfo:
+        await wallet_service.create_topup(
+            driver_user_id=user_id, amount=Decimal("15000"), method="mobile_money",
+            customer_email="driver@example.com", mobile_money_network="orange", customer_phone=phone,
+        )
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.details == {"field": "customer_phone"}
+    assert repo.topups == {}
+    assert gateway.last_payload is None
+
+
+@pytest.mark.asyncio
+async def test_topup_sends_the_phone_to_charge() -> None:
+    user_id, driver_id = uuid4(), uuid4()
+    gateway = FakeDiddiPay(uuid4())
+    wallet_service = DriverWalletService(
+        payment_repo=FakePaymentRepo(),
+        driver_repo=FakeDriverRepo(driver_id=driver_id, user_id=user_id),
+        diddipay=gateway,
+    )
+    await wallet_service.create_topup(
+        driver_user_id=user_id, amount=Decimal("15000"), method="mobile_money",
+        customer_email="driver@example.com", mobile_money_network="mtn", customer_phone=" +2250505000000 ",
+    )
+    assert gateway.last_payload["customer_phone"] == "+2250505000000"

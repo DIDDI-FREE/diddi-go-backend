@@ -46,6 +46,7 @@ async def _pending_topup(repo: FakePaymentRepo, gateway: FakeDiddiPay, *, amount
         amount=Decimal(amount),
         method="wave",
         customer_email="driver@example.com",
+        customer_phone="+2250707000000",
     )
     return driver_id, payload
 
