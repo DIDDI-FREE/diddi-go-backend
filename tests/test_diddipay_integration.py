@@ -1228,3 +1228,39 @@ async def test_payment_failed_and_cancelled_callbacks_are_applied(monkeypatch) -
         })
         assert result["status"] == "processed"
         assert repo.payment.status is expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("network", ["orange", "mtn", "moov"])
+async def test_no_phone_no_email_still_reaches_the_pawapay_page(network) -> None:
+    """Only Paystack needs an email: a PawaPay payment without phone nor email is sent as is."""
+    ride = make_completed_ride()
+    gateway = FakeDiddiPay(uuid4())
+    service = PaymentService(payment_repo=FakePaymentRepo(), ride_repo=FakeRideRepo(ride), diddipay=gateway)
+    await service.prepare_payment(
+        ride.id, "mobile_money", payer_user_id=ride.passenger_user_id, mobile_money_network=network,
+    )
+    assert gateway.last_payload["customer_email"] is None and gateway.last_payload["customer_phone"] is None
+
+    repo = FakePaymentRepo()
+    debt = PassengerDebt(id=uuid4(), passenger_user_id=ride.passenger_user_id, ride_id=ride.id, amount=Decimal("3100"))
+    repo.debts[debt.id] = debt
+    debt_gateway = FakeDiddiPay(uuid4())
+    debt_service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddipay=debt_gateway)
+    await debt_service.prepare_passenger_debt_payment(
+        debt.id, passenger_user_id=ride.passenger_user_id, customer_email=None, customer_phone=None,
+        mobile_money_network=network,
+    )
+    assert debt_gateway.last_payload["customer_email"] is None
+
+
+@pytest.mark.asyncio
+async def test_wave_without_phone_nor_email_is_still_refused() -> None:
+    ride = make_completed_ride()
+    service = PaymentService(
+        payment_repo=FakePaymentRepo(), ride_repo=FakeRideRepo(ride), diddipay=FakeDiddiPay(uuid4())
+    )
+    with pytest.raises(ApiError) as excinfo:
+        await service.prepare_payment(ride.id, "mobile_money", payer_user_id=ride.passenger_user_id,
+                                      mobile_money_network="wave")
+    assert excinfo.value.status_code == 422

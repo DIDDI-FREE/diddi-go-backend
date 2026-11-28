@@ -191,7 +191,9 @@ class PaymentService:
             debt.ride_id,
             PaymentMethod.MOBILE_MONEY,
             payer_user_id=passenger_user_id,
-            customer_email=customer_email or _fallback_customer_email(customer_phone),
+            customer_email=customer_email
+            or (None if customer_phone is None and mobile_money_network in NETWORKS_WITH_PAGE_PHONE_ENTRY
+                else _fallback_customer_email(customer_phone)),
             customer_phone=customer_phone,
             mobile_money_network=mobile_money_network,
         )
@@ -391,7 +393,12 @@ class PaymentService:
         if not customer_email and customer_phone:
             normalized_phone = "".join(character for character in customer_phone if character.isdigit())
             customer_email = f"{normalized_phone}@diddifree.com"
-        if not customer_email:
+        # Only Paystack needs an email. PawaPay networks (orange / mtn / moov) do not, and a
+        # customer without phone nor email must still reach PawaPay's page (DiddiPay 108).
+        pawapay_network = (
+            payment_method is PaymentMethod.MOBILE_MONEY and mobile_money_network in NETWORKS_WITH_PAGE_PHONE_ENTRY
+        )
+        if not customer_email and not pawapay_network:
             raise ApiError(
                 422,
                 ErrorCode.PAYMENT_EMAIL_REQUIRED,
@@ -1189,7 +1196,7 @@ class PaymentService:
         payment_method: PaymentMethod,
         *,
         payer_user_id: UUID,
-        customer_email: str,
+        customer_email: str | None,
         customer_phone: str | None,
         mobile_money_network: str | None,
     ) -> dict:
