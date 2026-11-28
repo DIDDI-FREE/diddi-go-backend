@@ -183,10 +183,12 @@ class DriverWalletService:
             )
         # The mobile money number to charge: the one the app sends, else the account phone.
         # Without it the processor cannot charge (PawaPay: "customer_phone is required").
+        # Without a number, the driver types it on PawaPay's page for orange / mtn / moov
+        # (DiddiPay ticket 108); Wave still needs it.
         customer_phone = (customer_phone or "").strip() or None
         if customer_phone is not None and customer_phone.startswith("+000"):
             customer_phone = None  # placeholder phone of an account without one (shadow user)
-        if customer_phone is None:
+        if customer_phone is None and network not in {"orange", "mtn", "moov"}:
             raise ApiError(
                 422,
                 ErrorCode.INVALID_PAYMENT_METHOD,

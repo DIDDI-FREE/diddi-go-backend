@@ -1003,7 +1003,7 @@ async def test_topup_without_network_is_refused_before_anything_is_created(metho
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("phone", [None, "", "   ", "+000123456789012"])
-async def test_topup_without_a_real_phone_is_refused_before_anything_is_created(phone) -> None:
+async def test_wave_topup_without_a_real_phone_is_refused_before_anything_is_created(phone) -> None:
     """PawaPay needs the mobile money number to charge ('customer_phone is required')."""
     user_id, driver_id = uuid4(), uuid4()
     repo = FakePaymentRepo()
@@ -1016,7 +1016,7 @@ async def test_topup_without_a_real_phone_is_refused_before_anything_is_created(
     with pytest.raises(ApiError) as excinfo:
         await wallet_service.create_topup(
             driver_user_id=user_id, amount=Decimal("15000"), method="mobile_money",
-            customer_email="driver@example.com", mobile_money_network="orange", customer_phone=phone,
+            customer_email="driver@example.com", mobile_money_network="wave", customer_phone=phone,
         )
     assert excinfo.value.status_code == 422
     assert excinfo.value.details == {"field": "customer_phone"}
@@ -1042,7 +1042,7 @@ async def test_topup_sends_the_phone_to_charge() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("phone", [None, "", "+000123456789012"])
-async def test_ride_mobile_money_without_a_real_phone_is_refused_before_anything(phone) -> None:
+async def test_wave_ride_without_a_real_phone_is_refused_before_anything(phone) -> None:
     ride = make_completed_ride()
     repo = FakePaymentRepo()
     gateway = FakeDiddiPay(uuid4())
@@ -1050,7 +1050,7 @@ async def test_ride_mobile_money_without_a_real_phone_is_refused_before_anything
     with pytest.raises(ApiError) as excinfo:
         await service.prepare_payment(
             ride.id, "mobile_money", payer_user_id=ride.passenger_user_id,
-            customer_email="client@example.com", mobile_money_network="orange", customer_phone=phone,
+            customer_email="client@example.com", mobile_money_network="wave", customer_phone=phone,
         )
     assert excinfo.value.status_code == 422 and excinfo.value.details == {"field": "customer_phone"}
     assert gateway.last_payload is None
@@ -1069,7 +1069,7 @@ async def test_ride_mobile_money_sends_the_number_chosen_by_the_customer() -> No
 
 
 @pytest.mark.asyncio
-async def test_debt_mobile_money_without_a_phone_is_refused_before_anything() -> None:
+async def test_wave_debt_without_a_phone_is_refused_before_anything() -> None:
     ride = make_completed_ride()
     repo = FakePaymentRepo()
     debt = PassengerDebt(id=uuid4(), passenger_user_id=ride.passenger_user_id, ride_id=ride.id, amount=Decimal("3100"))
@@ -1079,8 +1079,152 @@ async def test_debt_mobile_money_without_a_phone_is_refused_before_anything() ->
     with pytest.raises(ApiError) as excinfo:
         await service.prepare_passenger_debt_payment(
             debt.id, passenger_user_id=ride.passenger_user_id, customer_email="client@example.com",
-            customer_phone=None, mobile_money_network="orange",
+            customer_phone=None, mobile_money_network="wave",
         )
     assert excinfo.value.status_code == 422 and excinfo.value.details == {"field": "customer_phone"}
     assert gateway.last_payload is None
     assert repo.debts[debt.id].status is PassengerDebtStatus.OPEN
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("network", ["orange", "mtn", "moov"])
+async def test_without_a_number_pawapay_networks_go_to_the_page_with_no_phone(network) -> None:
+    """DiddiPay 108: the customer types the number on PawaPay's page."""
+    ride = make_completed_ride()
+    gateway = FakeDiddiPay(uuid4())
+    service = PaymentService(payment_repo=FakePaymentRepo(), ride_repo=FakeRideRepo(ride), diddipay=gateway)
+    await service.prepare_payment(
+        ride.id, "mobile_money", payer_user_id=ride.passenger_user_id,
+        customer_email="client@example.com", mobile_money_network=network, customer_phone="+000123456789012",
+    )
+    assert gateway.last_payload["customer_phone"] is None
+    assert gateway.last_payload["network"] == network
+
+    user_id, driver_id = uuid4(), uuid4()
+    topup_gateway = FakeDiddiPay(uuid4())
+    await DriverWalletService(
+        payment_repo=FakePaymentRepo(),
+        driver_repo=FakeDriverRepo(driver_id=driver_id, user_id=user_id),
+        diddipay=topup_gateway,
+    ).create_topup(
+        driver_user_id=user_id, amount=Decimal("1000"), method="mobile_money",
+        customer_email="driver@example.com", mobile_money_network=network,
+    )
+    assert topup_gateway.last_payload["customer_phone"] is None
+
+
+async def _paid_mobile_money_ride(monkeypatch, *, read_status="succeeded"):
+    """A mobile money ride paid 3100, driver credited 2852 (make_completed_ride)."""
+    ride = make_completed_ride()
+    intent_id = uuid4()
+    repo = FakePaymentRepo()
+    gateway = FakeDiddiPay(intent_id, read_status=read_status)
+    service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddipay=gateway)
+    await service.prepare_payment(
+        ride.id, "mobile_money", payer_user_id=ride.passenger_user_id, customer_email="client@example.com",
+        mobile_money_network="orange", customer_phone="+2250707000000",
+    )
+    monkeypatch.setattr("app_base.modules.payment.application.services.settings.diddipay_callback_secret", "secret")
+    await _send(service, "evt_paid", "payment.succeeded", {
+        "payment_intent_id": str(intent_id), "business_reference": f"diddigo:ride:{ride.id}",
+        "amount": 3100, "currency": "XOF", "status": "succeeded",
+    })
+    return ride, intent_id, repo, gateway, service
+
+
+async def _send(service, event_id, event_type, data):
+    raw = json.dumps({"id": event_id, "type": event_type, "occurred_at": datetime.now(UTC).isoformat(),
+                      "data": data}, separators=(",", ":")).encode()
+    signature = hmac.new(b"secret", raw, hashlib.sha256).hexdigest()
+    return await service.apply_diddipay_webhook(raw_body=raw, event_id_header=event_id, signature=signature)
+
+
+def _refund(intent_id, ride, *, amount, refund_id=None, recover=False, status="succeeded"):
+    return {
+        "event_version": "1", "refund_id": str(refund_id or uuid4()), "payment_intent_id": str(intent_id),
+        "business_reference": f"diddigo:ride:{ride.id}", "amount": amount, "currency": "XOF",
+        "status": status, "recover_from_payee": recover,
+    }
+
+
+@pytest.mark.asyncio
+async def test_full_refund_event_marks_the_ride_refunded_and_keeps_the_driver_paid(monkeypatch) -> None:
+    """Ticket 115: the refund event carries the refund status; DiddiGo re-reads the intent."""
+    ride, intent_id, repo, gateway, service = await _paid_mobile_money_ride(monkeypatch)
+    paid_balance = sum(e.amount for e in repo.ledger if e.driver_id == ride.driver_id)
+    gateway.read_status = "refunded"
+
+    result = await _send(service, "evt_refund", "diddipay.refund.succeeded.v1", _refund(intent_id, ride, amount=3100))
+
+    assert result["reference_type"] == "ride_refund"
+    assert repo.payment.status is PaymentStatus.REFUNDED
+    assert [e for e in repo.ledger if e.entry_type is WalletEntryType.REFUND] == []
+    assert sum(e.amount for e in repo.ledger if e.driver_id == ride.driver_id) == paid_balance
+    facts = [event["payload"] for event in repo.rewards_events]
+    assert [fact["type"] for fact in facts] == ["order.paid", "order.refunded"]
+
+
+@pytest.mark.asyncio
+async def test_partial_refund_event_is_accepted_not_rejected_for_its_amount(monkeypatch) -> None:
+    ride, intent_id, repo, gateway, service = await _paid_mobile_money_ride(monkeypatch)
+    gateway.read_status = "partially_refunded"
+    result = await _send(service, "evt_part", "diddipay.refund.succeeded.v1", _refund(intent_id, ride, amount=1550))
+    assert result["status"] == "processed"
+    assert repo.payment.status is PaymentStatus.PARTIALLY_REFUNDED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("refunded", "status", "debited"), [(3100, "refunded", 2852), (1550, "partially_refunded", 1426)]
+)
+async def test_admin_recovery_debits_the_driver_his_share_once(monkeypatch, refunded, status, debited) -> None:
+    """Ticket 125: recover_from_payee -> driver share x refunded / paid, once per refund."""
+    ride, intent_id, repo, gateway, service = await _paid_mobile_money_ride(monkeypatch)
+    gateway.read_status = status
+    refund_id = uuid4()
+    data = _refund(intent_id, ride, amount=refunded, refund_id=refund_id, recover=True)
+
+    await _send(service, "evt_r1", "diddipay.refund.succeeded.v1", data)
+    await _send(service, "evt_r2", "diddipay.refund.succeeded.v1", data)  # same refund, new event id
+
+    debits = [e for e in repo.ledger if e.entry_type is WalletEntryType.REFUND]
+    assert len(debits) == 1
+    assert debits[0].amount == Decimal(debited) and debits[0].direction is WalletEntryDirection.DEBIT
+    assert debits[0].reference_type == "diddipay_refund" and debits[0].reference_id == refund_id
+
+
+@pytest.mark.asyncio
+async def test_refund_not_finished_changes_nothing(monkeypatch) -> None:
+    ride, intent_id, repo, gateway, service = await _paid_mobile_money_ride(monkeypatch)
+    gateway.read_status = "succeeded"  # DiddiPay has not applied the refund to the intent yet
+    result = await _send(service, "evt_pend", "diddipay.refund.pending.v1",
+                         _refund(intent_id, ride, amount=3100, status="pending", recover=True))
+    assert result["status"] == "processed"
+    assert repo.payment.status is PaymentStatus.SUCCEEDED
+    assert [e for e in repo.ledger if e.entry_type is WalletEntryType.REFUND] == []
+
+
+@pytest.mark.asyncio
+async def test_payment_failed_and_cancelled_callbacks_are_applied(monkeypatch) -> None:
+    """DiddiPay 122: new event types, same data.status: DiddiGo applies them."""
+    for event_type, status, expected in [
+        ("payment.failed", "failed", PaymentStatus.FAILED),
+        ("payment.cancelled", "cancelled", PaymentStatus.CANCELLED),
+    ]:
+        ride = make_completed_ride()
+        intent_id = uuid4()
+        repo = FakePaymentRepo()
+        service = PaymentService(payment_repo=repo, ride_repo=FakeRideRepo(ride), diddipay=FakeDiddiPay(intent_id))
+        await service.prepare_payment(
+            ride.id, "mobile_money", payer_user_id=ride.passenger_user_id, customer_email="client@example.com",
+            mobile_money_network="mtn", customer_phone="+2250505000000",
+        )
+        monkeypatch.setattr(
+            "app_base.modules.payment.application.services.settings.diddipay_callback_secret", "secret"
+        )
+        result = await _send(service, f"evt_{status}", event_type, {
+            "payment_intent_id": str(intent_id), "business_reference": f"diddigo:ride:{ride.id}",
+            "amount": 3100, "currency": "XOF", "status": status, "failure_code": "X", "failure_message": "y",
+        })
+        assert result["status"] == "processed"
+        assert repo.payment.status is expected
