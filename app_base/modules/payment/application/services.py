@@ -12,7 +12,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from app_base.core.error_codes import ErrorCode
@@ -99,21 +99,30 @@ def _client_payable_amount(ride) -> Decimal:
     return max(Decimal("0"), gross - discount)
 
 
-def _require_mobile_money_phone(customer_phone: str | None) -> str:
+# Networks paid through PawaPay's payment page: without a number, the customer types it on
+# the page (DiddiPay ticket 108, live 2026-11-28). Wave does not use that page.
+NETWORKS_WITH_PAGE_PHONE_ENTRY = frozenset({"orange", "mtn", "moov"})
+
+
+def _require_mobile_money_phone(customer_phone: str | None, network: str | None) -> str | None:
     """The mobile money number to charge: the one the app sends, else the account phone.
 
-    PawaPay cannot charge without it ("customer_phone is required by pawapay deposits").
-    The `+000...` placeholder of an account without a phone counts as none.
+    The `+000...` placeholder of an account without a phone counts as none. Without a number:
+    None for orange / mtn / moov (the customer types it on PawaPay's page), 422 for the others.
     """
     phone = (customer_phone or "").strip()
-    if not phone or phone.startswith("+000"):
-        raise ApiError(
-            422,
-            ErrorCode.INVALID_PAYMENT_METHOD,
-            "Le numero mobile money a debiter est requis.",
-            {"field": "customer_phone"},
-        )
-    return phone
+    if phone.startswith("+000"):
+        phone = ""
+    if phone:
+        return phone
+    if network in NETWORKS_WITH_PAGE_PHONE_ENTRY:
+        return None
+    raise ApiError(
+        422,
+        ErrorCode.INVALID_PAYMENT_METHOD,
+        "Le numero mobile money a debiter est requis.",
+        {"field": "customer_phone"},
+    )
 
 
 def _passenger_debt_payload(debt: PassengerDebt | None) -> dict:
@@ -177,7 +186,7 @@ class PaymentService:
         mobile_money_network: str,
     ) -> dict:
         debt = await self._owned_open_debt(debt_id, passenger_user_id)
-        customer_phone = _require_mobile_money_phone(customer_phone)
+        customer_phone = _require_mobile_money_phone(customer_phone, mobile_money_network)
         payment = await self._prepare_diddipay(
             debt.ride_id,
             PaymentMethod.MOBILE_MONEY,
@@ -378,7 +387,7 @@ class PaymentService:
                 {"field": "mobile_money_network", "allowed": ["orange", "wave", "mtn", "moov"]},
             )
         if payment_method is PaymentMethod.MOBILE_MONEY:
-            customer_phone = _require_mobile_money_phone(customer_phone)
+            customer_phone = _require_mobile_money_phone(customer_phone, mobile_money_network)
         if not customer_email and customer_phone:
             normalized_phone = "".join(character for character in customer_phone if character.isdigit())
             customer_email = f"{normalized_phone}@diddifree.com"
@@ -434,6 +443,12 @@ class PaymentService:
         if not stored:
             log_event("payment.webhook.duplicate", event_id=event_id, payment_intent_id=intent_id)
             return {"status": "duplicate"}
+        event_type = str(payload.get("type") or "")
+        if event_type.startswith("diddipay.refund.") or data.get("refund_id"):
+            # A refund event carries the REFUND status and amount, not the payment's (ticket 115).
+            return await self._apply_refund_event(
+                event_id=event_id, event_type=event_type, data=data, intent_id=intent_id
+            )
         payout_id = UUID(str(data["payout_id"])) if data.get("payout_id") else None
         if payout_id is not None:
             withdrawal = await self.payment_repo.find_withdrawal_by_payout_id(payout_id)
@@ -524,6 +539,88 @@ class PaymentService:
             status=status.value,
         )
         return {"status": "processed", "payment_intent_id": str(intent_id), "reference_type": "driver_topup"}
+
+    async def _apply_refund_event(self, *, event_id: str, event_type: str, data: dict, intent_id: UUID | None) -> dict:
+        """Apply a `diddipay.refund.*` event to the ride (tickets 115 and 125).
+
+        The event's `status` and `amount` are the refund's, so DiddiGo re-reads the payment intent
+        (DiddiPay is the source of truth) and applies its status, `refunded` or
+        `partially_refunded`. That gives the Rewards discount back and reports the refund.
+        The driver keeps his earnings unless the refund says `recover_from_payee: true`
+        (human, 2026-11-28): then his share of the refunded part is debited once.
+        """
+        if intent_id is None:
+            raise ApiError(422, ErrorCode.PAYMENT_CALLBACK_INVALID, "PaymentIntent ID manquant.")
+        payment = await self.payment_repo.find_by_payment_intent_id(intent_id)
+        if payment is None:
+            # A refund of something else than a ride (a top-up): not handled, answered 2xx.
+            log_event("payment.refund.ignored", level="warning", event_id=event_id, payment_intent_id=intent_id)
+            return {"status": "ignored", "payment_intent_id": str(intent_id), "reason": "not_a_ride_payment"}
+        if data.get("business_reference") and data.get("business_reference") != payment.business_reference:
+            raise ApiError(409, ErrorCode.PAYMENT_OPERATION_CONFLICT, "Reference metier DiddiPay incoherente.")
+        intent = await (self.diddipay or DiddiPayClient()).get_payment_intent(intent_id)
+        if intent is None:
+            raise ApiError(404, ErrorCode.PAYMENT_INTENT_NOT_FOUND, "PaymentIntent DiddiPay introuvable.")
+        status = _payment_status_from_diddipay(str(intent.get("status") or ""))
+        if status not in {PaymentStatus.REFUNDED, PaymentStatus.PARTIALLY_REFUNDED}:
+            # Refund still pending or failed: nothing changes yet; a later event or re-read applies it.
+            log_event(
+                "payment.refund.not_applied", event_id=event_id, payment_intent_id=intent_id,
+                event_type=event_type, refund_status=data.get("status"), intent_status=status.value,
+            )
+            return {"status": "processed", "payment_intent_id": str(intent_id), "reference_type": "ride_refund"}
+        await self._apply_transaction_status(
+            payment, status=status, provider_status=str(intent.get("status") or ""), paid_at=None,
+        )
+        recovered = None
+        if data.get("recover_from_payee") is True and str(data.get("status") or "") == "succeeded":
+            recovered = await self._recover_refund_from_driver(payment, data)
+        log_event(
+            "payment.refund.applied", event_id=event_id, payment_intent_id=intent_id, status=status.value,
+            refunded_amount=intent.get("refunded_amount"), recover_from_payee=data.get("recover_from_payee"),
+            recovered_from_driver=recovered,
+        )
+        return {"status": "processed", "payment_intent_id": str(intent_id), "reference_type": "ride_refund"}
+
+    async def _recover_refund_from_driver(self, payment, data: dict) -> int | None:
+        """Debit the driver his share of the refunded part, once per refund (ticket 125).
+
+        Share = what he got for the ride x refunded amount / amount paid. Example: paid 988,
+        driver got 1 012, 494 refunded -> 506 debited. Full refund -> all of it.
+        """
+        ride = await self.ride_repo.find_by_id(payment.ride_id)
+        if ride is None or ride.driver_id is None or ride.driver_payout_estimate is None:
+            return None
+        try:
+            refund_id = UUID(str(data.get("refund_id")))
+            refunded = Decimal(str(data.get("amount")))
+        except (ValueError, ArithmeticError, TypeError):
+            log_event("payment.refund.recovery_skipped", level="error", reason="invalid_refund", ride_id=ride.id)
+            return None
+        paid = Decimal(str(payment.amount))
+        if paid <= 0 or refunded <= 0:
+            return None
+        share = (Decimal(str(ride.driver_payout_estimate)) * min(refunded, paid) / paid).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+        if share <= 0:
+            return None
+        entry = await self.payment_repo.record_ledger_entry_once(
+            DriverLedgerEntry(
+                id=DriverLedgerEntry.new_id(),
+                driver_id=ride.driver_id,
+                amount=share,
+                currency=ride.currency,
+                direction=WalletEntryDirection.DEBIT,
+                entry_type=WalletEntryType.REFUND,
+                status=WalletEntryStatus.CONFIRMED,
+                reference_type="diddipay_refund",
+                reference_id=refund_id,
+                description="Remboursement client repris au chauffeur (decision admin)",
+                created_at=datetime.now(UTC),
+            )
+        )
+        return int(share) if entry is not None else None
 
     # --- reconciliation ----------------------------------------------------
     #
